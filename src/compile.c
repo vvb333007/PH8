@@ -4377,7 +4377,7 @@ static sxi32 PH7_CompileFunction(ph7_gen_state *pGen) {
       if name is __get() then add two class attributes as well
       private $__get;
       private static $__gets;
-
+           XXX
       via PH7_NewClassAttr(pGen->pVm, pName, nLine, iProtection, iFlags) and
           PH7_ClassInstallAttr(pClass, pAttr);
       These 'hidden' class attributes are required fot __get() magic method to work and be able to return value
@@ -5544,7 +5544,7 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
 
           if ((nKwrd & VM_FUNC_RET_MASK) != 0) {
 #if FIXEDTYPELOG
-            fprintf(stderr,"fixed type attribute\n");
+            fprintf(stderr,"fixed type attribute %08x found\n", nKwrd & VM_FUNC_RET_MASK);
 #endif
             iAttrflags |= PH7_CLASS_ATTR_FIXEDTYPE;
             iFixedType = nKwrd;
@@ -5599,7 +5599,7 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
             nKwrd = SX_PTR_TO_INT(pGen->pIn->pUserData);
             if ((nKwrd & VM_FUNC_RET_MASK) != 0) {
 #if FIXEDTYPELOG
-              fprintf(stderr,"fixed type attribute\n");
+              fprintf(stderr,"fixed type attribute %08x found\n", nKwrd & VM_FUNC_RET_MASK);
 #endif
               iAttrflags |= PH7_CLASS_ATTR_FIXEDTYPE;
               iFixedType = nKwrd;
@@ -5703,7 +5703,7 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
           
           pGen->pIn++;
 #if FIXEDTYPELOG
-          fprintf(stderr,"fixed type attribute\n");
+          fprintf(stderr,"fixed type attribute %08x\n", nKwrd);
 #endif
           iAttrflags |= PH7_CLASS_ATTR_FIXEDTYPE;
           iFixedType = nKwrd;

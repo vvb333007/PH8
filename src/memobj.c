@@ -393,11 +393,13 @@ static sxi32 MemObjTryIntger(ph7_value *pObj) {
  * Convert a ph7_value to type integer.Invalidate any prior representations.
  */
 PH7_PRIVATE sxi32 PH7_MemObjToInteger(ph7_value *pObj) {
+    puts("memobj to integer");
   if ((pObj->iFlags & MEMOBJ_INT) == 0) {
     /* Preform the conversion */
     pObj->x.iVal = MemObjIntValue(&(*pObj));
     /* Invalidate any prior representations */
     SyBlobRelease(&pObj->sBlob);
+    
     MemObjSetType(pObj, MEMOBJ_INT);
   }
   return SXRET_OK;
@@ -407,14 +409,20 @@ PH7_PRIVATE sxi32 PH7_MemObjToInteger(ph7_value *pObj) {
  * Invalidate any prior representations
  */
 PH7_PRIVATE sxi32 PH7_MemObjToReal(ph7_value *pObj) {
+
   if ((pObj->iFlags & MEMOBJ_REAL) == 0) {
     /* Preform the conversion */
+
     pObj->rVal = MemObjRealValue(&(*pObj));
     /* Invalidate any prior representations */
+
     SyBlobRelease(&pObj->sBlob);
     MemObjSetType(pObj, MEMOBJ_REAL);
+
     /* Try to get an integer representation */
-    MemObjTryIntger(&(*pObj));
+    // TODO:
+    if ((pObj->iFlags & MEMOBJ_FIXEDTYPE) == 0)
+      MemObjTryIntger(&(*pObj)); 
   }
   return SXRET_OK;
 }
@@ -596,10 +604,10 @@ PH7_PRIVATE sxi32 PH7_MemObjToObject(ph7_value *pObj) {
 PH7_PRIVATE ProcMemObjCast PH7_MemObjCastMethod(sxi32 iFlags) {
   if (iFlags & MEMOBJ_STRING) {
     return PH7_MemObjToString;
-  } else if (iFlags & MEMOBJ_INT) {
-    return PH7_MemObjToInteger;
   } else if (iFlags & MEMOBJ_REAL) {
     return PH7_MemObjToReal;
+  } else if (iFlags & MEMOBJ_INT) {
+    return PH7_MemObjToInteger;
   } else if (iFlags & MEMOBJ_BOOL) {
     return PH7_MemObjToBool;
   } else if (iFlags & MEMOBJ_HASHMAP) {
@@ -628,12 +636,15 @@ PH7_PRIVATE ProcMemObjCast PH7_MemObjCastMethod(sxi32 iFlags) {
 PH7_PRIVATE sxi32 PH7_MemObjCastTo(ph7_value *pNos, sxi32 iFlags) {
 
   if ((iFlags & MEMOBJ_NULLABLE) && (pNos->iFlags & MEMOBJ_NULL)) {
-    /* null to nullable -- no conversion
-     * TODO: this not gonna work as wtoring NULL will change the object type
-     *       so subsequent stores will all be discarded */
+    /* null to nullable -- no conversion */
+#ifdef FIXEDTYPELOG
+    puts("Null to nullable, no conversion");
+#endif
   } else if ((iFlags & (MEMOBJ_ALL|MEMOBJ_CALLABLE)) == (pNos->iFlags & (MEMOBJ_ALL|MEMOBJ_CALLABLE))) {
     /* same types -- no conversion */
-    
+#ifdef FIXEDTYPELOG
+    puts("Same type, no conversion");
+#endif
   } else {
     /* Types are different: prefer the type of the class attribute 
     */
@@ -642,22 +653,26 @@ PH7_PRIVATE sxi32 PH7_MemObjCastTo(ph7_value *pNos, sxi32 iFlags) {
     /* Check compound types first */
     if (iFlags & MEMOBJ_CALLABLE) xCast = PH7_MemObjToCallable; else
     /* Then regular types*/
-    if (iFlags & MEMOBJ_INT)      xCast = PH7_MemObjToInteger; else
     if (iFlags & MEMOBJ_STRING)   xCast = PH7_MemObjToString; else
     if (iFlags & MEMOBJ_REAL)     xCast = PH7_MemObjToReal; else
     if (iFlags & MEMOBJ_BOOL)     xCast = PH7_MemObjToBool; else
+    if (iFlags & MEMOBJ_INT)      xCast = PH7_MemObjToInteger;  else
     if (iFlags & MEMOBJ_HASHMAP)  xCast = PH7_MemObjToHashmap; else
     if (iFlags & MEMOBJ_OBJ)      xCast = PH7_MemObjToObject; else return SXERR_INVALID;
 
 
     
 #if FIXEDTYPELOG
-    fprintf(stderr,"type converted\n");
+    fprintf(stderr,"Converting from type %08x to type %08x\n",pNos->iFlags,iFlags);
 #endif
     sxi32 rc = xCast(pNos);
+#if FIXEDTYPELOG
+    fprintf(stderr,"Type converted to=%08x\n",pNos->iFlags);
+#endif
+
     if (rc != SXRET_OK) {
 #if FIXEDTYPELOG
-      fprintf(stderr,"conversion is unreliable\n");
+      fprintf(stderr,"Conversion is unreliable\n");
 #endif
     }
     return rc;

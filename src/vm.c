@@ -3594,10 +3594,10 @@ static sxi32 VmByteCodeExec(
                  */
                 if (pObj->iFlags & MEMOBJ_FIXEDTYPE) {
 #if FIXEDTYPELOG
-                  fprintf(stderr, "= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pTos), PH7_MemObjTypeDump(pObj));
+                  fprintf(stderr, "= Typecasting for fixed type %08x->%08x\n",pTos->iFlags, pObj->iFlags);
 #endif
-                  //pObj->iFlags |= MEMOBJ_NULLABLE; TODO: propagate NULLABLE
-                  PH7_MemObjCastTo(pTos,pObj->iFlags);
+                  PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+                  // TODO: check return value (reliable conversion or not)
                 }
                 PH7_MemObjStore(pTos, pObj);
               }
@@ -3957,7 +3957,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
                 fprintf(stderr, "*= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-                PH7_MemObjCastTo(pNos,pObj->iFlags);
+                  PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+                  // TODO: check return value (reliable conversion or not)
               }
               PH7_MemObjStore(pNos, pObj);
             }
@@ -4009,7 +4010,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "+= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pTos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pTos,pObj->iFlags);
+              PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+             // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pTos, pObj);
           }
@@ -4109,7 +4111,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "-= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,pObj->iFlags);
+              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+             // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
           }
@@ -4201,7 +4204,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "%= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,pObj->iFlags);
+              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+             // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
           }
@@ -4300,7 +4304,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "/= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,pObj->iFlags);
+              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+             // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
           }
@@ -4417,7 +4422,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "|^&= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,pObj->iFlags);
+              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+             // TODO: check return value (reliable conversion or not)
             }
 
             PH7_MemObjStore(pNos, pObj);
@@ -4520,7 +4526,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "<<= >>= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,pObj->iFlags);
+              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+             // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
           }
@@ -4597,7 +4604,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, ".= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pTos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pTos,pObj->iFlags);
+              PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+             // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pTos, pObj);
           }
