@@ -142,6 +142,10 @@ static sxi32 TokenizePHP(SyStream *pStream, SyToken *pToken, void *pUserData, vo
       pToken->nType = PH7_TK_INTEGER;
       if (pStream->zText < pStream->zEnd) {
         c = pStream->zText[0];
+        // TODO: accept 'k' as x1000 , 'K' as x1024.
+        // TODO: accept (any case) 'kh' as x1000 , (anycase) 'ki' as x1024.
+        // TODO: if two first letter were [kKmMgG][hHiI], then skip till letters finish
+
         if (c == '.') {
           /* Real number */
           pStream->zText++;
@@ -192,6 +196,8 @@ static sxi32 TokenizePHP(SyStream *pStream, SyToken *pToken, void *pUserData, vo
           }
         }
       }
+
+
       /* Record token length */
       pStr->nByte = (sxu32)((const char *)pStream->zText - pStr->zString);
       return SXRET_OK;

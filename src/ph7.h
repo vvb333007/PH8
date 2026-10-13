@@ -328,6 +328,7 @@ extern "C" {
 #ifdef PH7_OMIT_FLOATING_POINT
   typedef sxi64 ph7_real;
 #else
+//typedef double ph7_real;
 typedef double ph7_real;
 #endif
   typedef sxi64 ph7_int64;

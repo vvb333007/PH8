@@ -134,17 +134,14 @@ sxi32 MemObjCallClassCastMethod(
  * If pObj represents a NULL value, return 0.
  */
 static sxi64 MemObjIntValue(ph7_value *pObj) {
-  sxi32 iFlags;
-  iFlags = pObj->iFlags;
-  if (iFlags & MEMOBJ_REAL) {
-    return MemObjRealToInt(&(*pObj));
-  } else if (iFlags & (MEMOBJ_INT | MEMOBJ_BOOL)) {
-    return pObj->x.iVal;
-  } else if (iFlags & MEMOBJ_STRING) {
-    return MemObjStringToInt(&(*pObj));
-  } else if (iFlags & MEMOBJ_NULL) {
-    return 0;
-  } else if (iFlags & MEMOBJ_HASHMAP) {
+
+  sxi32 iFlags = pObj->iFlags;
+
+  if (iFlags &  MEMOBJ_REAL)               return MemObjRealToInt(&(*pObj)); else
+  if (iFlags & (MEMOBJ_INT | MEMOBJ_BOOL)) return pObj->x.iVal; else
+  if (iFlags &  MEMOBJ_STRING)             return MemObjStringToInt(&(*pObj)); else
+  if (iFlags &  MEMOBJ_NULL)               return 0; else
+  if (iFlags &  MEMOBJ_HASHMAP) {
     ph7_hashmap *pMap = (ph7_hashmap *)pObj->x.pOther;
     sxu32 n = pMap->nEntry;
     PH7_HashmapUnref(pMap);
@@ -393,8 +390,11 @@ static sxi32 MemObjTryIntger(ph7_value *pObj) {
  * Convert a ph7_value to type integer.Invalidate any prior representations.
  */
 PH7_PRIVATE sxi32 PH7_MemObjToInteger(ph7_value *pObj) {
-    puts("memobj to integer");
+
+  sxi32 rc = SXRET_OK;
+
   if ((pObj->iFlags & MEMOBJ_INT) == 0) {
+
     /* Preform the conversion */
     pObj->x.iVal = MemObjIntValue(&(*pObj));
     /* Invalidate any prior representations */
@@ -402,7 +402,7 @@ PH7_PRIVATE sxi32 PH7_MemObjToInteger(ph7_value *pObj) {
     
     MemObjSetType(pObj, MEMOBJ_INT);
   }
-  return SXRET_OK;
+  return rc;
 }
 /*
  * Convert a ph7_value to type real (Try to get an integer representation also).
@@ -420,7 +420,6 @@ PH7_PRIVATE sxi32 PH7_MemObjToReal(ph7_value *pObj) {
     MemObjSetType(pObj, MEMOBJ_REAL);
 
     /* Try to get an integer representation */
-    // TODO:
     if ((pObj->iFlags & MEMOBJ_FIXEDTYPE) == 0)
       MemObjTryIntger(&(*pObj)); 
   }
@@ -620,28 +619,46 @@ PH7_PRIVATE ProcMemObjCast PH7_MemObjCastMethod(sxi32 iFlags) {
 }
 
 
-/* Cast ph7_value pNos to the type of iFlags
- * This function is used by the VmByteCodeExcec when dealing with a typed class attributes (e.g. public static string $attr;)
- * In PH8 this type is a compiler hint: when VM executes $class->$attr = 10, it will autoconvert 10 to '10' bofore storing to the 
- * class member;
+/*
+ * Cast a ph7_value to the type specified by iFlags.
  *
- * Returns SXERR_INVALID if pNos can not be cast to the type of pObj. This may happen
- * if pObj is of type 'resource'. Since 'resource' it is usually a raw C pointer, we can
- * not let type overwrite here (see how and where this function is used, to protect types
- * of typed object attributes); SXERR_INVALID means that it is impossible to assign pNos to pObj
- * and keep pObj type intact. This error code should be considered fatal by the VmByteCodeExec()
+ * This function is used by VmByteCodeExec() to enforce the declared types
+ * of class attributes (e.g. public static string $attr;).
  *
- * Returns SXRET_OK if subsequent
- */
-PH7_PRIVATE sxi32 PH7_MemObjCastTo(ph7_value *pNos, sxi32 iFlags) {
+ * In PH8, declared types act as conversion hints rather than strict type
+ * restrictions. When the VM executes an assignment such as
+ * $class->$attr = 10, the value is automatically converted to the
+ * declared attribute type before being stored.
+ *
+ * If MEMOBJ_NULLABLE is set and pNos is NULL, no conversion is performed.
+ *
+ * Returns SXRET_OK if the value already has the requested type or can be
+ * converted successfully.
+ *
+ * A non-SXRET_OK result indicates that the assignment cannot safely
+ * proceed and must be handled as an error by VmByteCodeExec(). (e.g. 5.5 to int is lossy, or array to int etc)
+ *
+ * Note: The requested type is encoded in the upper 16 bits of iFlags.
+ */PH7_PRIVATE sxi32 PH7_MemObjCast(ph7_value *pNos, sxi32 iFlags) {
 
   if ((iFlags & MEMOBJ_NULLABLE) && (pNos->iFlags & MEMOBJ_NULL)) {
     /* null to nullable -- no conversion */
 #ifdef FIXEDTYPELOG
     puts("Null to nullable, no conversion");
 #endif
-  } else if ((iFlags & (MEMOBJ_ALL|MEMOBJ_CALLABLE)) == (pNos->iFlags & (MEMOBJ_ALL|MEMOBJ_CALLABLE))) {
-    /* same types -- no conversion */
+    return SXRET_OK;
+  }
+
+
+  /* Shift iFlags 16 bits to the right, so typehints can be matched 
+  */
+  iFlags >>= 16;
+
+  /* Matching typehints
+  */
+  if ((iFlags & (MEMOBJ_ALL|MEMOBJ_CALLABLE)) == (pNos->iFlags & (MEMOBJ_ALL|MEMOBJ_CALLABLE))) {
+    /* same types -- no conversion
+    */
 #ifdef FIXEDTYPELOG
     puts("Same type, no conversion");
 #endif
@@ -649,10 +666,12 @@ PH7_PRIVATE sxi32 PH7_MemObjCastTo(ph7_value *pNos, sxi32 iFlags) {
     /* Types are different: prefer the type of the class attribute 
     */
     ProcMemObjCast xCast;
-    /* TODO: nullable */
-    /* Check compound types first */
+  
+    /* Check compound types first
+    */
     if (iFlags & MEMOBJ_CALLABLE) xCast = PH7_MemObjToCallable; else
-    /* Then regular types*/
+    /* Then regular types
+    */
     if (iFlags & MEMOBJ_STRING)   xCast = PH7_MemObjToString; else
     if (iFlags & MEMOBJ_REAL)     xCast = PH7_MemObjToReal; else
     if (iFlags & MEMOBJ_BOOL)     xCast = PH7_MemObjToBool; else
@@ -680,17 +699,38 @@ PH7_PRIVATE sxi32 PH7_MemObjCastTo(ph7_value *pNos, sxi32 iFlags) {
 
   return SXRET_OK;
 }
+/*
+ * Convert a parser type keyword into a VM type hint.
+ * Those are: object,int,float,string,bool,array,callable
+ *
+ * Maps a PH7_TKWRD_* type keyword to the corresponding MEMOBJ_* type
+ * flag, encoded in the upper 16 bits of the returned value, so it can be safely ORed with memobj iFlags
+ * (lower 16 bits are type flags, higher 16 bits are type hints i.e. "what it must be after conversion")
+ *
+ * Returns the encoded type hint for a recognized keyword, or 0 if the
+ * keyword does not map to a supported type.
+ *
+ * An unexpected keyword is logged when FIXEDTYPELOG is enabled.
+ */
+PH7_PRIVATE sxi32 PH7_TypeKeywordToHint(sxi32 nKwrd)  {
 
-PH7_PRIVATE sxi32 PH7_MemObjKeywordToType(sxi32 nKwrd)  {
+  switch ( nKwrd ) {
 
-  if (nKwrd == PH7_TKWRD_CALLABLE) return MEMOBJ_CALLABLE;
-  if (nKwrd == PH7_TKWRD_INT) return MEMOBJ_INT;
-  if (nKwrd == PH7_TKWRD_STRING) return MEMOBJ_STRING;
-  if (nKwrd == PH7_TKWRD_FLOAT) return MEMOBJ_REAL;
-  if (nKwrd == PH7_TKWRD_BOOL) return MEMOBJ_BOOL;
-  if (nKwrd == PH7_TKWRD_ARRAY) return MEMOBJ_HASHMAP;
-  if (nKwrd == PH7_TKWRD_OBJECT) return MEMOBJ_OBJ;
-  return MEMOBJ_NULL;
+    case PH7_TKWRD_CALLABLE:return MEMOBJ_CALLABLE << 16;
+    case PH7_TKWRD_INT:     return MEMOBJ_INT << 16;
+    case PH7_TKWRD_STRING:  return MEMOBJ_STRING << 16;
+    case PH7_TKWRD_FLOAT:   return MEMOBJ_REAL << 16;
+    case PH7_TKWRD_BOOL:    return MEMOBJ_BOOL << 16;
+    case PH7_TKWRD_ARRAY:   return MEMOBJ_HASHMAP << 16;
+    case PH7_TKWRD_OBJECT:  return MEMOBJ_OBJ << 16;
+    default:                
+#if FIXEDTYPELOG
+                            fprintf(stderr,"Unexpected fixed type %08x\n",nKwrd);
+#endif
+    case 0:                 break;
+  }
+
+  return 0;
 }
 
 /*
@@ -704,6 +744,7 @@ PH7_PRIVATE sxi32 PH7_MemObjIsNumeric(ph7_value *pObj) {
   } else if (pObj->iFlags & (MEMOBJ_NULL | MEMOBJ_HASHMAP | MEMOBJ_OBJ | MEMOBJ_RES)) {
     return FALSE;
   } else if (pObj->iFlags & MEMOBJ_STRING) {
+    // TODO: refactor. We do not need SyString here
     SyString sStr;
     sxi32 rc;
     SyStringInitFromBuf(&sStr, SyBlobData(&pObj->sBlob), SyBlobLength(&pObj->sBlob));
@@ -956,22 +997,28 @@ PH7_PRIVATE sxi32 PH7_MemObjStore(ph7_value *pSrc, ph7_value *pDest) {
   ph7_class_instance *pObj = 0;
   ph7_hashmap *pMap = 0;
   sxi32 rc;
-  if (pSrc->iFlags & MEMOBJ_HASHMAP) {
-    /* Increment reference count */
-    ((ph7_hashmap *)pSrc->x.pOther)->iRef++;
-  } else if (pSrc->iFlags & MEMOBJ_OBJ) {
-    /* Increment reference count */
+  if ((pSrc->iFlags & MEMOBJ_NULL) == 0) {
+    if (pSrc->iFlags & MEMOBJ_HASHMAP) {
+      /* Increment reference count */
+      ((ph7_hashmap *)pSrc->x.pOther)->iRef++;
+    } else if (pSrc->iFlags & MEMOBJ_OBJ) {
+      /* Increment reference count */
 
-    ((ph7_class_instance *)pSrc->x.pOther)->iRef++;
+      ((ph7_class_instance *)pSrc->x.pOther)->iRef++;
 #if ADDREFLOG
-    fprintf(stderr,"iRef++ (%u) after MemObjStore()\n", ((ph7_class_instance *)pSrc->x.pOther)->iRef);
+      fprintf(stderr,"iRef++ (%u) after MemObjStore()\n", ((ph7_class_instance *)pSrc->x.pOther)->iRef);
 #endif
+    }
   }
-  if (pDest->iFlags & MEMOBJ_HASHMAP) {
-    pMap = (ph7_hashmap *)pDest->x.pOther;
-  } else if (pDest->iFlags & MEMOBJ_OBJ) {
-    pObj = (ph7_class_instance *)pDest->x.pOther;
+
+  if ((pDest->iFlags & MEMOBJ_NULL) == 0) {
+    if (pDest->iFlags & MEMOBJ_HASHMAP) {
+      pMap = (ph7_hashmap *)pDest->x.pOther;
+    } else if (pDest->iFlags & MEMOBJ_OBJ) {
+      pObj = (ph7_class_instance *)pDest->x.pOther;
+    }
   }
+
   SyMemcpy((const void *)&(*pSrc), &(*pDest), sizeof(ph7_value) - (sizeof(ph7_vm *) + sizeof(SyBlob) + sizeof(sxu32)));
   pDest->iFlags &= ~MEMOBJ_AUX;
   rc = SXRET_OK;
@@ -997,11 +1044,11 @@ PH7_PRIVATE sxi32 PH7_MemObjStore(ph7_value *pSrc, ph7_value *pDest) {
 PH7_PRIVATE sxi32 PH7_MemObjLoad(ph7_value *pSrc, ph7_value *pDest) {
   SyMemcpy((const void *)&(*pSrc), &(*pDest),
            sizeof(ph7_value) - (sizeof(ph7_vm *) + sizeof(SyBlob) + sizeof(sxu32)));
-  if (pSrc->iFlags & MEMOBJ_HASHMAP) {
+  if (  (pSrc->iFlags & (MEMOBJ_HASHMAP | MEMOBJ_NULL)) == MEMOBJ_HASHMAP)  {
     /* Increment reference count */
     ((ph7_hashmap *)pSrc->x.pOther)->iRef++;
     
-  } else if (pSrc->iFlags & MEMOBJ_OBJ) {
+  } else if (  (pSrc->iFlags & (MEMOBJ_OBJ | MEMOBJ_NULL)) == MEMOBJ_OBJ)  {
     /* Increment reference count */
     ((ph7_class_instance *)pSrc->x.pOther)->iRef++;
 #if ADDREFLOG
@@ -1020,7 +1067,9 @@ PH7_PRIVATE sxi32 PH7_MemObjLoad(ph7_value *pSrc, ph7_value *pDest) {
  * Invalidate any prior representation of a given ph7_value.
  */
 PH7_PRIVATE sxi32 PH7_MemObjRelease(ph7_value *pObj) {
+
   if ((pObj->iFlags & MEMOBJ_NULL) == 0) {
+
     if (pObj->iFlags & MEMOBJ_HASHMAP) {
       PH7_HashmapUnref((ph7_hashmap *)pObj->x.pOther);
     } else if (pObj->iFlags & MEMOBJ_OBJ) {
@@ -1092,17 +1141,23 @@ PH7_PRIVATE sxi32 PH7_MemObjCmp(ph7_value *pObj1, ph7_value *pObj2, int bStrict,
   if (bStrict) {
     sxi32 iF1, iF2;
     /* Strict comparisons with === */
-    // NOTE: do not move these extra flags to MEMOBJ_AUX: it was not tested and may break 
-    //       typed property handling invariants. Or may be not - i didn't test it
-    //
-    if ((pObj1->iFlags & MEMOBJ_NULL) && (pObj1->iFlags & MEMOBJ_NULL))
+
+    // Both values are null (e.g. in 'if ($arr[ $idx ] === null))
+    if ((pObj1->iFlags & MEMOBJ_NULL) && (pObj2->iFlags & MEMOBJ_NULL)) {
       return 0;
-    
-    iF1 = pObj1->iFlags & ~(MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE);
-    iF2 = pObj2->iFlags & ~(MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE);
+    }
+
+    // One of values is NULL while other is not NULL
+    if ((pObj1->iFlags & MEMOBJ_NULL) != (pObj2->iFlags & MEMOBJ_NULL)) {
+      /* Not of the same type */
+      return 1;
+    }
+    // Remove typehints and attributes to compare pure types
+    //    
+    iF1 = pObj1->iFlags & ~(MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE|0xffff0000);
+    iF2 = pObj2->iFlags & ~(MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE|0xffff0000);
     if (iF1 != iF2) {
       /* Not of the same type */
-//      fprintf(stderr,"%08x %08x\n",iF1, iF2);
       return 1;
     }
   }

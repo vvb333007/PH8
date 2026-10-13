@@ -70,6 +70,7 @@ PH7_PRIVATE sxi32 PH7_VmThrow(ph7_vm *pVm, const char *zName, int nBytes, const 
             { \
               sxi32 ret_; \
               VmFrame *pFrame_ = pVm->pFrame; \
+              pVm->nExceptLine = aInstr[pc].nLine; \
               if (PH7_EXCEPTION == (ret_ = PH7_VmThrow(pVm, fname_, flen_,fmt_,__VA_ARGS__ ))) { \
                 /* Exception handled: a catch() block has executed.. */ \
                 if (aInstr != pFrame_->pExcByteCode || pFrame_->iExceptionJump < 1) \
@@ -537,7 +538,8 @@ PH7_PRIVATE sxi32 PH7_VmEmitInstr(
   sxi32 iP1,    /* First operand */
   sxu32 iP2,    /* Second operand */
   void *p3,     /* Third operand */
-  sxu32 *pIndex /* Instruction index. NULL otherwise */
+  sxu32 *pIndex, /* Instruction index. NULL otherwise */
+  ph7_gen_state *pGen
 ) {
   VmInstr sInstr;
   sxi32 rc;
@@ -546,18 +548,20 @@ PH7_PRIVATE sxi32 PH7_VmEmitInstr(
   sInstr.iP1 = iP1;
   sInstr.iP2 = iP2;
   sInstr.p3 = p3;
+  sInstr.nLine = pGen == NULL ? 0 : pGen->pIn->nLine;
   if (pIndex) {
     /* Instruction index in the bytecode array */
     *pIndex = SySetUsed(pVm->pByteContainer);
   }
 #if DISASM
-  fprintf(stderr, "  % 10s %d %u %p # PC=%u\n",
+  fprintf(stderr, "  % 10s %d %u %p # PC=%u, line: %d\n",
          VmInstrToString(sInstr.iOp),
 
           sInstr.iP1,
           sInstr.iP2,
           sInstr.p3,
-          SySetUsed(pVm->pByteContainer));
+          SySetUsed(pVm->pByteContainer),
+          sInstr.nLine);
 
 #endif 
   /* Finally,record the instruction */
@@ -970,14 +974,28 @@ static sxi32 VmMountUserClass(
         return SXERR_MEM;
       }
       if (SySetUsed(&pAttr->aByteCode) > 0) {
-        /* Initialize attribute default value (any complex expression) */
+        /* Initialize attribute default value or a constant (any complex expression) */
         VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
         // TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
         // TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
       } else {
-        /* Unitialized static attribute, add a hint type along with NULL */
-        if (pAttr->iFlags & PH7_CLASS_ATTR_FIXEDTYPE)
-          pMemObj->iFlags = (MEMOBJ_NULL | PH7_MemObjKeywordToType(pAttr->nType));
+        /* Unitialized static attribute
+         * 1. Add a type hint, based on `nType` (upper 16 bits of iFlags)
+         * 2. Propagate callable and nullable properties from pAttr->iFlags to memobj's iFlags.
+         * 3. Set memobj to MEMOBJ_NULL
+        */
+        if (pAttr->iFlags & PH7_CLASS_ATTR_FIXEDTYPE) {
+          //pMemObj->iFlags = (MEMOBJ_NULL | PH7_MemObjKeywordToType(pAttr->nType));
+          pMemObj->iFlags = (MEMOBJ_NULL | MEMOBJ_FIXEDTYPE | PH7_TypeKeywordToHint(pAttr->nType));
+        }
+
+        if (pAttr->iFlags & PH7_CLASS_ATTR_NULLABLE) {
+          pMemObj->iFlags |= MEMOBJ_NULLABLE;
+        }
+
+#if FIXEDTYPELOG
+        fprintf(stderr, "VmMountUserClass() : uninitialized static fixed-type variable, got type %08x\n",pMemObj->iFlags);
+#endif
       }
       /* Record attribute index */
       pAttr->nIdx = pMemObj->nIdx;
@@ -1053,12 +1071,25 @@ PH7_PRIVATE sxi32 PH7_VmCreateClassInstanceFrame(
         // TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
         // TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
       } else {
-        /* Unitialized attribute, record that*/
-        // TODO: This is a hack. MemObj is not designed to have NULL & string types at the same time
-        if (pAttr->iFlags & PH7_CLASS_ATTR_FIXEDTYPE)
-          pMemObj->iFlags = (MEMOBJ_NULL | PH7_MemObjKeywordToType(pAttr->nType));
+        /* 
+         * Unitialized attribute (MEMOBJ_NULL).
+           Propagate type hints (based on compiler-stored type code) to the memobj if it is of fixed type (int,float,bool,string,array,object,callable)
+           Propagate nullable property 
+         */
+        if (pAttr->iFlags & PH7_CLASS_ATTR_FIXEDTYPE) {
+          //pMemObj->iFlags = (MEMOBJ_NULL | PH7_MemObjKeywordToType(pAttr->nType));
+
+          pMemObj->iFlags = (MEMOBJ_NULL | MEMOBJ_FIXEDTYPE | PH7_TypeKeywordToHint(pAttr->nType));
+        }
+
+        if (pAttr->iFlags & PH7_CLASS_ATTR_NULLABLE) {
+          pMemObj->iFlags |= MEMOBJ_NULLABLE;
+        }
+#if FIXEDTYPELOG
+        fprintf(stderr, "CreateClassInstanceFrame() : uninitialized fixed-type variable, got type %08x\n",pMemObj->iFlags);
+#endif
       }
-      // TODO: SHould we set _FIXEDTYPE and friends just here? Not in OP_MEMBER/POP_MEMBER_NS?
+
       rc = SyHashInsert(&pObj->hAttr, SyStringData(&pAttr->sName), SyStringLength(&pAttr->sName), pVmAttr);
       if (rc != SXRET_OK) {
         VmSlot sSlot;
@@ -1791,7 +1822,7 @@ PH7_PRIVATE sxi32 PH7_VmMakeReady(
   PH7_ResetCodeGenerator(pVm, 0, 0);
 
   /* Emit the DONE instruction */
-  rc = PH7_VmEmitInstr(&(*pVm), PH7_OP_DONE, 0, 0, 0, 0);
+  rc = PH7_VmEmitInstr(&(*pVm), PH7_OP_DONE, 0, 0, 0, 0, NULL);
   if (rc != SXRET_OK) {
     return SXERR_MEM;
   }
@@ -2534,12 +2565,12 @@ static sxi32 VmByteCodeDump(
       break;
     }
     /* Format and call the consumer callback */
-    rc = SyProcFormat(xConsumer, pUserData, "  % 10s %d %u %qx # PC=%u\n",
+    rc = SyProcFormat(xConsumer, pUserData, "  % 10s %d %u %qx # PC=%u, line: %u\n",
                       VmInstrToString(pInstr->iOp), 
                       pInstr->iP1,
                       pInstr->iP2,
                       (uintptr_t)pInstr->p3,
-                      n);
+                      n, pInstr->nLine);
 
     if (rc != SXRET_OK) {
       /* Consumer routine request an operation abort */
@@ -2998,14 +3029,23 @@ static sxi32 VmByteCodeExec(
  * CVT_INT: * * *
  *
  * Force the top of the stack to be an integer.
+  bool      Y
+  int       Y
+  float     Y
+  string    Y
+  array     W
+  object    W/Y
+  resource
  */
       case PH7_OP_CVT_INT:
 
         STACK_UNDERFLOW_GOTO(pTos);
 
         if ((pTos->iFlags & MEMOBJ_INT) == 0) {
-          PH7_MemObjToInteger(pTos);
-          // TODO: if conversion was unsuccesfull: throw an exception
+          sxi32 rc = PH7_MemObjToInteger(pTos);
+          if (rc != SXRET_OK) {
+            VM_WARNING("int cast: a non-numeric value is cast to 'int'");
+          }
         }
         /* Invalidate any prior representation */
         MemObjSetType(pTos, MEMOBJ_INT);
@@ -3267,7 +3307,7 @@ static sxi32 VmByteCodeExec(
               if (!pInstr->p3) {
                 PH7_MemObjRelease(pTos);
               } else {
-                // TODO: ??? pTos is a string now. A memory leak?
+                // TODO: ??? 
                 MemObjSetType(pTos, MEMOBJ_NULL);
               }
               pTos->nIdx = SXU32_HIGH; /* Mark as constant */
@@ -3596,10 +3636,18 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
                   fprintf(stderr, "= Typecasting for fixed type %08x->%08x\n",pTos->iFlags, pObj->iFlags);
 #endif
-                  PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
-                  // TODO: check return value (reliable conversion or not)
+                  /* Check if conversion result is meaningful 
+                   * TODO: right now it is always SXRET_OK. we need set of rules: what can not be coverted
+                   * at all: resource <--> object
+                  */
+                PH7_MemObjCast(pTos,pObj->iFlags);
+//                  if ( SXRET_OK != PH7_MemObjCast(pTos,pObj->iFlags) ) {
+//                    fprintf(stderr, "object property was not updates (invalid argument type)\n");
+//                    goto skip_store_operation;
+//                  }
                 }
                 PH7_MemObjStore(pTos, pObj);
+//skip_store_operation:
               }
             }
             break;
@@ -3957,7 +4005,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
                 fprintf(stderr, "*= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-                  PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+                    PH7_MemObjCast(pNos,pObj->iFlags);
+                  //PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
                   // TODO: check return value (reliable conversion or not)
               }
               PH7_MemObjStore(pNos, pObj);
@@ -4010,7 +4059,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "+= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pTos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+              PH7_MemObjCast(pTos,pObj->iFlags);
+              //PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
              // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pTos, pObj);
@@ -4111,7 +4161,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "-= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+              PH7_MemObjCast(pNos,pObj->iFlags);
+              //PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
              // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
@@ -4204,7 +4255,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "%= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+              //PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+              PH7_MemObjCast(pNos,pObj->iFlags);
              // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
@@ -4304,7 +4356,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "/= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+              //PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+              PH7_MemObjCast(pNos,pObj->iFlags);
              // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
@@ -4422,7 +4475,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "|^&= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+//              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+                PH7_MemObjCast(pNos,pObj->iFlags);
              // TODO: check return value (reliable conversion or not)
             }
 
@@ -4526,7 +4580,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, "<<= >>= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pNos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+//              PH7_MemObjCastTo(pNos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+                PH7_MemObjCast(pNos,pObj->iFlags);
              // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pNos, pObj);
@@ -4604,7 +4659,8 @@ static sxi32 VmByteCodeExec(
 #if FIXEDTYPELOG
               fprintf(stderr, ".= Typecasting for fixed type %s->%s\n",PH7_MemObjTypeDump(pTos), PH7_MemObjTypeDump(pObj));
 #endif
-              PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+//              PH7_MemObjCastTo(pTos,(pObj->iFlags & ~(MEMOBJ_NULL|MEMOBJ_FIXEDTYPE)));
+                PH7_MemObjCast(pTos,pObj->iFlags);
              // TODO: check return value (reliable conversion or not)
             }
             PH7_MemObjStore(pTos, pObj);
@@ -5427,6 +5483,8 @@ static sxi32 VmByteCodeExec(
 
           /* P2 == 0 --> Attribute
            * P2 >0 --> Method
+           * P1 == 0, $class->method
+           * P1 > 0,  Class::Method()
            */
 
           if (!pInstr->iP1) {
@@ -5554,40 +5612,22 @@ static sxi32 VmByteCodeExec(
                     if (pValue) {
 
                       /* Perform a type cast? if class attribute was declared with a type hint
-                       * then we mark our MemObj as TYPE-LOCKED
+                       * then we mark our MemObj as TYPE-LOCKED. We do not rely on MEMOBJ_FIXEDTYPE which was set by VmMountUserClass or VmCreateClassInstance
+                       * Propagate nullable/callable properties again as well
                       */
                       if (pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_FIXEDTYPE) {
 #if FIXEDTYPELOG
                         fprintf(stderr,"Fixed type conversion %d on %s attr requested\n",pObjAttr->pAttr->iFlags, pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_STATIC ? "static" : "dynamic");
 #endif
                         pValue->iFlags |= MEMOBJ_FIXEDTYPE;
-                        if (pObjAttr->pAttr->nType == PH7_TKWRD_CALLABLE) {
-                          pValue->iFlags |= MEMOBJ_CALLABLE;
-#if FIXEDTYPELOG
-                          fprintf(stderr,"callable Fixed type propagated to the memobj\n");
-#endif
-                        }
-
+                        pValue->iFlags |= PH7_TypeKeywordToHint(pObjAttr->pAttr->nType);
                         if (pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_NULLABLE) {
-                          
-                          //Fixed type but NULL == nullable. Recover the type.
-                          if (pValue->iFlags & MEMOBJ_NULL) {
-                            //puts("Restoring nullable type");
-
-                            pValue->iFlags &= ~(MEMOBJ_ALL);
-                            pValue->iFlags |= PH7_MemObjKeywordToType(pObjAttr->pAttr->nType);
-                            // Restore 
-//                            if ((pValue->iFlags & (MEMOBJ_ALL)) == 0)
-                              pValue->iFlags |= MEMOBJ_NULL;
-                          }
                           pValue->iFlags |= MEMOBJ_NULLABLE;
-
-#if FIXEDTYPELOG
-                          fprintf(stderr,"nullable Fixed type propagated to the memobj\n");
-#endif
                         }
 
-
+#if FIXEDTYPELOG
+                        fprintf(stderr,"OP_MEMBER:  loaded member; type is %08x\n",pValue->iFlags);
+#endif
                       }
 
                       
@@ -5613,7 +5653,7 @@ static sxi32 VmByteCodeExec(
                 PH7_ClassInstanceUnref(pThis);
               }
             } else {
-/* Object is NULL.
+/* Object is NULL or is not an object .
  * Depending on operator used - either throw an exception or make a hard stop or just skip it
  * if it is nullsafe
  *
@@ -5627,10 +5667,15 @@ static sxi32 VmByteCodeExec(
                   SyStringInitFromBuf(&sName, "<unknown>", sizeof("<unknown>")-1);
                 }
 
-                /* Dereferencing a null pointer $class = null; $class->attribute or ->method() */
-                VM_EXCEPTION_GOTO("__nullderef",11,
-                                  pInstr->iP2 == 0 ? " '->%z' class attribute access"
-                                                   : " '->%z()' class method call",&sName)
+                if (pNos->iFlags & MEMOBJ_NULL) {
+                  /* Dereferencing a null pointer $class = null; $class->attribute or ->method() */
+                  VM_EXCEPTION_GOTO("__nullderef",11,
+                                    pInstr->iP2 == 0 ? " '->%z' class attribute access"
+                                                     : " '->%z()' class method call",&sName)
+                } else {
+                  /* Dereferencing something but not object */
+                  VM_EXCEPTION_GOTO("__unknownat",11, "left part of '->%z%s' must be an object, not '%s'!",&sName, pInstr->iP2 == 0 ? "" : "()", PH7_MemObjTypeDump(pNos))
+                }
 
               } else {
                /* ?->, a nullsafe opeartor: either replace method call with a builtin noop (__nullsafe())
@@ -6493,7 +6538,7 @@ static sxi32 VmByteCodeExec(
                     pObj = (ph7_value *)SySetAt(&pVm->aMemObj, n);
                     if (pObj && (pObj->iFlags & (MEMOBJ_NULL | MEMOBJ_OBJ | MEMOBJ_HASHMAP | MEMOBJ_RES)) == 0) {
                       // In ZendPHP8 it is just a fallback to pass by value, without any notice
-                      VM_FATAL_GOTO("in function '%z': returning a referene to a local variable is not permitted",&pVmFunc->sName);
+                      VM_WARNING_F("in function '%z': returning a reference to a local variable. switched to value.",&pVmFunc->sName);
                     }
                     n = SXU32_HIGH;
                     break;
@@ -8459,8 +8504,8 @@ PH7_PRIVATE sxi32 PH7_VmThrow(ph7_vm *pVm, const char *zName, int nByte, const c
   aInstr[1].iP2 = 0;
   aInstr[1].p3 = 0;
 
+  // Execute thrower.
   sxi32 ret = VmByteCodeExec(&(*pVm), aInstr, aStack, 1, &Result, NULL, TRUE);
-
 
   PH7_MemObjRelease(&aStack[0]);
   PH7_MemObjRelease(&aStack[1]);
@@ -10613,7 +10658,7 @@ static sxi32 VmUncaughtException(
         }
       }
     }
-    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"Uncaught exception '%z' in the '%z' frame context\nCall stack:\n%.*s\n", &sName, &sFuncName, SyBlobLength(&Blob), SyBlobData(&Blob));
+    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"Line %d: Uncaught exception '%z' in the '%z' frame context\nCall stack:\n%.*s\n",pVm->nExceptLine, &sName, &sFuncName, SyBlobLength(&Blob), SyBlobData(&Blob));
     SyBlobRelease(&Blob);
 
     /* Tell the upper layer to stop VM execution immediately  */
@@ -11553,7 +11598,7 @@ static sxi32 VmEvalChunk(
     }
   } else {
     ph7_value sResult; /* Return value */
-    if (SXRET_OK != PH7_VmEmitInstr(pVm, PH7_OP_DONE, 0, 0, 0, 0)) {
+    if (SXRET_OK != PH7_VmEmitInstr(pVm, PH7_OP_DONE, 0, 0, 0, 0, NULL)) {
       /* Out of memory */
       if (pCtx) {
         ph7_result_bool(pCtx, 0);

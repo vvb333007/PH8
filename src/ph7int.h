@@ -789,24 +789,29 @@ struct ph7_value {
 #define MEMOBJ_INT       0x002       /* Memory value is an integer */
 #define MEMOBJ_REAL      0x004      /* Memory value is a real number */
 #define MEMOBJ_BOOL      0x008      /* Memory value is a boolean */
+#define MEMOBJ_UNKNOWN   0x010      /* Unused flag */
 #define MEMOBJ_NULL      0x020      /* Memory value is NULL */
 #define MEMOBJ_HASHMAP   0x040   /* Memory value is a hashmap aka 'array' in the PHP jargon */
 #define MEMOBJ_OBJ       0x080       /* Memory value is an object [i.e: class instance] */
 #define MEMOBJ_RES       0x100       /* Memory value is a resource [User private data] */
 
+/* Hints. Can coexist with types above,  */
+#define MEMOBJ_UNKNOWN2  0x200      /* Unused flag */
 #define MEMOBJ_REFERENCE 0x400 /* Memory value hold a reference (64-bit index) of another ph7_value */
-
-/* Temporary runtime flags.
- * Used by typed object properties (e.g. `public int $a = 1;`)
-*/
 #define MEMOBJ_FIXEDTYPE 0x800 /* Type is locked and can not be changed. This flag is set by PH7_OP_MEMBER/PH7_OP_MEMBERNS opcodes to signal that attribute can not change its type
                                   This flag is examined by STORE opeartions which store to a typed class attribute */
 #define MEMOBJ_NULLABLE 0x1000 /* Locked type can be null */
-#define MEMOBJ_CALLABLE 0x2000 /* Locked type 'callable' */
-#define MEMOBJ_NEVERSET 0x4000 /* Typed class property was never initialized (e.g. `public int $a;`)*/
+#define MEMOBJ_CALLABLE 0x2000 /* Locked composite type 'callable' */
+#define MEMOBJ_UNKNOWN3 0x4000 /* Unused flag */
+#define MEMOBJ_UNKNOWN4 0x8000 /* Unused flag */
 
-
-
+// iFlags:
+// XXXX XXXX
+// ^    ^____ lower 16 bit: allowed value types
+// |
+// +-- higher 16 bit contain 'allowed value types' (shifted left by 16 bit) and used by fixed-type 
+//     promotion.
+//
 /* Mask of all known types */
 #define MEMOBJ_ALL (MEMOBJ_STRING | MEMOBJ_INT | MEMOBJ_REAL | MEMOBJ_BOOL | MEMOBJ_NULL | MEMOBJ_HASHMAP | MEMOBJ_OBJ | MEMOBJ_RES)
 /* Scalar variables
@@ -1317,7 +1322,9 @@ typedef struct VmInstr VmInstr;
 struct VmInstr {
   sxu8 iOp;  /* Operation to preform */
   sxi32 iP1; /* First operand */
-  sxu32 iP2; /* Second operand (Often the jump destination) */
+  //sxu32 iP2; /* Second operand (Often the jump destination) */
+  sxu16 iP2; /* Second operand (16 bit is pretty enough for a jump destination and object indices) */
+  sxu16 nLine; /* Corresponding source file line number. The file name must be extracted from pVm */
   void *p3;  /* Third operand (Often Upper layer private data) */
 };
 /* Each active class instance attribute is represented by an instance 
@@ -1398,8 +1405,8 @@ struct ph7_vm {
 #if defined(PH7_ENABLE_THREADS)
   SyMutex *pMutex; /* Recursive mutex associated with VM. */
 #endif
-  const char *pCwd;                /* ESP32: Current working directory; Set by chdir(), read by getcwd(), free()d by the VM destructor */
-  const char *pTmp;                /* ESP32: System writeable TMP directory (e.g. "/ffat/tmp") */
+  const char *pCwd;                /* Current working directory; Set by chdir(), read by getcwd(), free()d by the VM destructor */
+  const char *pTmp;                /* System writeable TMP directory (e.g. "/ffat/tmp") */
   ph7 *pEngine;                    /* Interpreter that own this VM */
   SySet aByteCode;                 /* Default bytecode container */
   SySet *pByteContainer;           /* Current bytecode container */
@@ -1441,7 +1448,9 @@ struct ph7_vm {
   int nMaxDepth;                   /* Maximum allowed recusion depth */
   int nObDepth;                    /* OB depth */
   int nExceptDepth;                /* Exception depth */
-  int nExceptMode ;                /* Exception mode (0-throw exceptions, 1- throe error messages, 2- quiet) */
+  int nExceptMode;                 
+  int nExceptLine;                 /* Exception source code line */
+  
   int closure_cnt;                 /* Loaded closures counter */
   int json_rc;                     /* JSON return status [refer to json_encode()/json_decode()]*/
   sxu32 unique_id;                 /* Random number used to generate unique ID [refer to uniqid() for more info]*/
@@ -1839,8 +1848,10 @@ PH7_PRIVATE sxi32 PH7_MemObjInitFromInt(ph7_vm *pVm, ph7_value *pObj, sxi64 iVal
 PH7_PRIVATE sxi32 PH7_MemObjInitFromBool(ph7_vm *pVm, ph7_value *pObj, sxi32 iVal);
 PH7_PRIVATE sxi32 PH7_MemObjInit(ph7_vm *pVm, ph7_value *pObj);
 PH7_PRIVATE sxi32 PH7_MemObjStringAppend(ph7_value *pObj, const char *zData, sxu32 nLen);
-PH7_PRIVATE int PH7_MemObjCastTo(ph7_value *pTos, sxi32 iFlags);
-PH7_PRIVATE sxi32 PH7_MemObjKeywordToType(sxi32 nKkwrd);
+
+// Cast pTos to a type defined in iFlags. 
+PH7_PRIVATE int PH7_MemObjCast(ph7_value *pTos, sxi32 iFlags);
+PH7_PRIVATE sxi32 PH7_TypeKeywordToHint(sxi32 nKkwrd);
 #if 0
 /* Not used in the current release of the PH7 engine */
 PH7_PRIVATE sxi32 PH7_MemObjStringFormat(ph7_value *pObj,const char *zFormat,va_list ap);
@@ -1913,7 +1924,9 @@ PH7_PRIVATE VmInstr *PH7_VmPeekNextInstr(ph7_vm *pVm);
 PH7_PRIVATE VmInstr *PH7_VmGetInstr(ph7_vm *pVm, sxu32 nIndex);
 PH7_PRIVATE SySet *PH7_VmGetByteCodeContainer(ph7_vm *pVm);
 PH7_PRIVATE sxi32 PH7_VmSetByteCodeContainer(ph7_vm *pVm, SySet *pContainer);
-PH7_PRIVATE sxi32 PH7_VmEmitInstr(ph7_vm *pVm, sxi32 iOp, sxi32 iP1, sxu32 iP2, void *p3, sxu32 *pIndex);
+
+PH7_PRIVATE sxi32 PH7_VmEmitInstr(ph7_vm *pVm, sxi32 iOp, sxi32 iP1, sxu32 iP2, void *p3, sxu32 *pIndex, ph7_gen_state *pGen);
+
 PH7_PRIVATE sxu32 PH7_VmRandomNum(ph7_vm *pVm);
 PH7_PRIVATE sxi32 PH7_VmCallClassMethod(ph7_vm *pVm, ph7_class_instance *pThis, ph7_class_method *pMethod,
                                         ph7_value *pResult, int nArg, ph7_value **apArg);
@@ -2153,6 +2166,7 @@ PH7_PRIVATE sxi32 SyMemBackendDisbaleMutexing(SyMemBackend *pBackend);
 PH7_PRIVATE sxu32 SyMemcpy(const void *pSrc, void *pDest, sxu32 nLen);
 PH7_PRIVATE sxi32 SyMemcmp(const void *pB1, const void *pB2, sxu32 nSize);
 PH7_PRIVATE void SyZero(void *pSrc, sxu32 nSize);
+
 PH7_PRIVATE sxi32 SyStrnicmp(const char *zLeft, const char *zRight, sxu32 SLen);
 PH7_PRIVATE sxi32 SyStrnmicmp(const void *pLeft, const void *pRight, sxu32 SLen);
 #ifndef PH7_DISABLE_BUILTIN_FUNC
