@@ -12,7 +12,7 @@
 
 #include "ph7int.h"
 
-
+static int ExprBracketIsArrayLiteral(const ph7_expr_node *pPrev);
 /*
  * WARNING:
  * iPrec values are used as internal parser/compiler 'category' IDs not just as precedence levels.
@@ -417,6 +417,9 @@ static sxi32 ExprVerifyNodes(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 
   }
   iParen = iSquare = iQuesty = iBraces = 0;
   for (i = 0; i < nNode; ++i) {
+    if (apNode[i]->xCode == PH7_CompileArray) {
+      continue;   /* Terminal node, brackets are balanced */
+    }
     if (apNode[i]->pStart->nType & PH7_TK_LPAREN /*'('*/) {
       if (i > 0 && (apNode[i - 1]->xCode == PH7_CompileVariable || apNode[i - 1]->xCode == PH7_CompileLiteral || (apNode[i - 1]->pStart->nType & (PH7_TK_ID | PH7_TK_KEYWORD | PH7_TK_SSTR | PH7_TK_DSTR | PH7_TK_RPAREN /*')'*/ | PH7_TK_CSB /*']'*/ | PH7_TK_CCB /*'}'*/)))) {
         /* Ticket 1433-033: Take care to ignore alpha-stream [i.e: or,xor] operators followed by an opening parenthesis */
@@ -722,7 +725,11 @@ Synchronize:
  * quoted string, a heredoc/nowdoc,a literal [i.e: PHP_EOL],a namespace path
  * [i.e: namespaces\path\to..],a array/list [i.e: array(4,5,6)] and so on.
  */
-static sxi32 ExprExtractNode(ph7_gen_state *pGen, ph7_expr_node **ppNode) {
+static sxi32 ExprExtractNode(ph7_gen_state *pGen, ph7_expr_node **ppNode
+#if 1
+, ph7_expr_node *pPrev
+#endif
+) {
   ph7_expr_node *pNode;
   SyToken *pCur;
   sxi32 rc;
@@ -740,6 +747,25 @@ static sxi32 ExprExtractNode(ph7_gen_state *pGen, ph7_expr_node **ppNode) {
   /* Point to the head of the token stream */
   pCur = pNode->pStart = pGen->pIn;
   /* Start collecting tokens */
+#if 1
+  if ((pCur->nType & PH7_TK_OSB) && ExprBracketIsArrayLiteral(pPrev)) {
+    /* Short array syntax attempt #3: [ ... ]  ==  array( ... ) */
+    pCur++;
+    PH7_DelimitNestedTokens(pCur, pGen->pEnd, PH7_TK_OSB, PH7_TK_CSB, &pCur);
+    if (pCur < pGen->pEnd) {
+      pCur++;                          /* jump ']' */
+    } else {
+      rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "Syntax error: Missing closing bracket ']'");
+      if (rc != SXERR_ABORT) {
+        rc = SXERR_SYNTAX;
+      }
+      SyMemBackendPoolFree(&pGen->pVm->sAllocator, pNode);
+      return rc;
+    }
+    pNode->pOp = 0;                    /* [ is not an op but a terminal node just as 'array' */
+    pNode->xCode = PH7_CompileArray;
+  } else 
+#endif
   if (pCur->nType & PH7_TK_OP) {
     /* Point to the instance that describe this operator */
     pNode->pOp = (const ph7_expr_op *)pCur->pUserData;
@@ -1191,7 +1217,13 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
         /* Subscripting */
         sxi32 iArrTok = iCur + 1;
         sxi32 iNest = 1;
-        if (iLeft < 0 || apNode[iLeft] == 0 || (apNode[iLeft]->pOp == 0 && (apNode[iLeft]->xCode != PH7_CompileVariable && apNode[iLeft]->xCode != PH7_CompileSimpleString && apNode[iLeft]->xCode != PH7_CompileString)) || (apNode[iLeft]->pOp && apNode[iLeft]->pOp->iPrec != 2 /* postfix */)) {
+        if (iLeft < 0 || apNode[iLeft] == 0 ||
+          (apNode[iLeft]->pOp == 0 && (
+                  apNode[iLeft]->xCode != PH7_CompileVariable &&
+                  apNode[iLeft]->xCode != PH7_CompileSimpleString &&
+                  apNode[iLeft]->xCode != PH7_CompileString &&
+                  apNode[iLeft]->xCode != PH7_CompileArray
+                )) || (apNode[iLeft]->pOp && apNode[iLeft]->pOp->iPrec != 2 /* postfix */)) {
           /* Syntax error */
           rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "Invalid array name");
 fprintf(stderr,"%d, %d, %d,%d, %d, %d,%d, %d\n",
@@ -1640,6 +1672,26 @@ fprintf(stderr,"%d, %d, %d,%d, %d, %d,%d, %d\n",
   }
   return SXRET_OK;
 }
+
+
+/* TRUE if '[' starts array literal, FALSE if it is an array index */
+static int ExprBracketIsArrayLiteral(const ph7_expr_node *pPrev) {
+  if (pPrev == 0) {
+    return TRUE;                       /* Start of an expression? Array literal */
+  }
+  if (pPrev->pOp) {
+    return TRUE;                       /* After any operator, including '[' and '='? Array literal */
+  }
+  if (pPrev->xCode == PH7_CompileVariable || pPrev->xCode == PH7_CompileLiteral
+      || pPrev->xCode == PH7_CompileArray) {
+    return FALSE;                      /* $a[ , CONST[ , [1,2][ */
+  }
+  if (pPrev->pStart->nType & (PH7_TK_ID | PH7_TK_KEYWORD | PH7_TK_SSTR | PH7_TK_DSTR
+                              | PH7_TK_RPAREN | PH7_TK_CSB | PH7_TK_CCB)) {
+    return FALSE;                      /* "str"[0], f()[0], $a[1][2], array(..)[0] */
+  }
+  return TRUE;                         /* '(' ',' ':' '=>' '{' */
+}
 /*
   * Build an expression tree from the freshly extracted raw tokens.
   * If successful, the root of the tree is stored in ppRoot.
@@ -1655,7 +1707,11 @@ PH7_PRIVATE sxi32 PH7_ExprMakeTree(ph7_gen_state *pGen, SySet *pExprNode, ph7_ex
   pNode = 0; /* Prevent compiler warning */
   /* Extract nodes one after one until we hit the end of the input */
   while (pGen->pIn < pGen->pEnd) {
-    rc = ExprExtractNode(&(*pGen), &pNode);
+    rc = ExprExtractNode(&(*pGen), &pNode
+#if 1
+, pNode
+#endif
+);
     if (rc != SXRET_OK) {
       return rc;
     }

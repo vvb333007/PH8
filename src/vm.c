@@ -3044,7 +3044,7 @@ static sxi32 VmByteCodeExec(
         if ((pTos->iFlags & MEMOBJ_INT) == 0) {
           sxi32 rc = PH7_MemObjToInteger(pTos);
           if (rc != SXRET_OK) {
-            VM_WARNING("int cast: a non-numeric value is cast to 'int'");
+            VM_WARNING_F("Line %u: a non-numeric value is cast to 'int'", aInstr[pc].nLine);
           }
         }
         /* Invalidate any prior representation */
@@ -3094,13 +3094,13 @@ static sxi32 VmByteCodeExec(
             (PH7_VmIsCallable(pVm, pTos, FALSE) == 0)) { 
 #if TYPEEXCEPTION
           /* callable is a sensitive type and we want diagnostics early */
-          VM_EXCEPTION_GOTO("__typeerror", 11, "Can not convert value to a callable. [PC: %08x]\n", pc)
+          VM_EXCEPTION_GOTO("__typeerror", 11, "can not convert value to a callable. [PC: %08x]\n", pc)
 #else
           /* Replace callable value with a string object referring a poisoned function :
              callable is a critical point so we can not it be in an inconsistent state.
           */
           VM_REPLACE_FUNC_NAME("__badcallable");
-          VM_WARNING_F("Can not convert value to a callable. [PC: %08x]\n", pc);
+          VM_WARNING_F("Line %u: value is not callable; converted to poisoned stub [PC: %08x]\n",aInstr[pc].nLine, pc);
 #endif
         }
         break;
@@ -3641,6 +3641,7 @@ static sxi32 VmByteCodeExec(
                    * at all: resource <--> object
                   */
                 PH7_MemObjCast(pTos,pObj->iFlags);
+// TODO: not yet
 //                  if ( SXRET_OK != PH7_MemObjCast(pTos,pObj->iFlags) ) {
 //                    fprintf(stderr, "object property was not updates (invalid argument type)\n");
 //                    goto skip_store_operation;
@@ -6390,7 +6391,7 @@ static sxi32 VmByteCodeExec(
                         VmLeaveFrame(pVm);
                         VM_EXCEPTION_GOTO("__typeerror", 11, "Can not convert value to a desired type. [PC: %08x]\n", pc)
 #else
-                        VM_WARNING_F("Conversion result is unreliable. [PC: %08x]\n", pc);
+                        VM_WARNING_F(" Line: %u, conversion result is unreliable. [PC: %08x]\n",aInstr[pc].nLine,pc);
 #endif
                       }
                     }

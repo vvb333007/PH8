@@ -1112,8 +1112,18 @@ PH7_PRIVATE sxi32 PH7_CompileArray(ph7_gen_state *pGen, sxi32 iCompileFlag) {
   sxi32 iNest;
   sxi32 rc;
   /* Jump the 'array' keyword,the leading left parenthesis and the trailing parenthesis.
+   * If the short array syntax was used - jump the '['
    */
+#if 1
+/* Skip 'array'+'(' or skip single '[' token */
+  if (pGen->pIn->nType & PH7_TK_OSB) {
+    pGen->pIn += 1;
+  } else {
+    pGen->pIn += 2;
+  }
+#else
   pGen->pIn += 2;
+#endif
   pGen->pEnd--;
   xValidator = 0;
   SXUNUSED(iCompileFlag); /* cc warning */
@@ -1137,9 +1147,18 @@ PH7_PRIVATE sxi32 PH7_CompileArray(ph7_gen_state *pGen, sxi32 iCompileFlag) {
       if ((pCur->nType & PH7_TK_ARRAY_OP) && iNest <= 0) {
         break;
       }
-      if (pCur->nType & PH7_TK_LPAREN /*'('*/) {
+#if 1
+        if (pCur->nType & (PH7_TK_LPAREN | PH7_TK_OSB | PH7_TK_OCB)) {
+#else
+        if (pCur->nType & PH7_TK_LPAREN /*'('*/) {
+#endif
         iNest++;
-      } else if (pCur->nType & PH7_TK_RPAREN /*')'*/) {
+      } else 
+#if 1
+      if (pCur->nType & (PH7_TK_RPAREN | PH7_TK_CSB | PH7_TK_CCB)) {
+#else
+      if (pCur->nType & PH7_TK_RPAREN /*')'*/) {
+#endif
         /* Don't worry about mismatched parenthesis here,the expression 
          * parser will shortly detect any syntax error.
          */
