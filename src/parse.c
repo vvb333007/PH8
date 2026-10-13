@@ -1222,19 +1222,13 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
                   apNode[iLeft]->xCode != PH7_CompileVariable &&
                   apNode[iLeft]->xCode != PH7_CompileSimpleString &&
                   apNode[iLeft]->xCode != PH7_CompileString &&
-                  apNode[iLeft]->xCode != PH7_CompileArray
+                  apNode[iLeft]->xCode != PH7_CompileArray &&
+                  apNode[iLeft]->xCode != PH7_CompileLiteral         /* const A = [1,2]; echo A[0]; case */
                 )) || (apNode[iLeft]->pOp && apNode[iLeft]->pOp->iPrec != 2 /* postfix */)) {
-          /* Syntax error */
-          rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "Invalid array name");
-fprintf(stderr,"%d, %d, %d,%d, %d, %d,%d, %d\n",
-                iLeft < 0,
-                apNode[iLeft] == 0,
-                apNode[iLeft]->pOp == 0,
-                apNode[iLeft]->xCode != PH7_CompileVariable,
-                apNode[iLeft]->xCode != PH7_CompileSimpleString,
-                apNode[iLeft]->xCode != PH7_CompileString,
-                apNode[iLeft]->pOp,
-                apNode[iLeft]->pOp->iPrec);
+          /* Syntax error
+           * TODO: PHP5xx allows constants as array literals
+          */
+          rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "operator '[': value on the left is not an array");
           if (rc != SXERR_ABORT) {
             rc = SXERR_SYNTAX;
           }
