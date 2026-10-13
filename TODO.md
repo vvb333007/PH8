@@ -59,14 +59,20 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 ~~Fix recursion depth limiter~~
 
 ### 6. Types and overloading
-  Nullable types in stdlib signatures (`?string`, `?Throwable`) or null will not pass strict checks
+
+  Nullable types in stdlib signatures (`?string`, `?Throwable`) or null will not pass strict checks: null will never match ?type signature when overloading
+
   "No matching function" message should print argument types, and the list of candidates
+
   Constructor by class name - find places where it is'nt handled (`new`, `parent::`, `method_exists`)
 
 ## 7. VM shutdown
-  Call `__destruct` for all live objects on VM exit (globals are not destructed right now on script DONE), before function and class tables are freed
-  Decide what `OP_HALT` does with destructors, and write it down
-  Objects with a cyclic references never reach zero refcount, need a list of all live objects
+
+  ~~Call `__destruct` for all live objects on VM exit (globals are not destructed right now on script DONE), before function and class tables are freed~~
+
+~~Decide what `OP_HALT` does with destructors, and write it down~~
+
+~~Objects with a cyclic references never reach zero refcount, need a list of all live objects~~
 
 ---
 
@@ -79,8 +85,7 @@ Implement `$a = $b ?: $c;`
 
 ### 3. __invoke(), __call(), __callStatic(), __get()
 
-Currently do not return any values. That must be fixed ASAP;
-use `__toString()` as a template
+~~Currently do not return any values. That must be fixed ASAP; use `__toString()` as a template~~
 
 
 ### 6. UNIX-like `fork()` to make a full clone of a VM
@@ -151,21 +156,24 @@ Not always checked for existence. Should we patch a constructor lookup code?
 
 ### 13. Short array syntax
 
-Support:
+~~Support:~~
 
 ```php
-$arr = [1,2,3];
+~~$arr = [1,2,3];~~
 ```
 
-`lex.c` and `compile.c` must be updated.
+~~`lex.c` and `compile.c` must be updated.~~
 
 ---
 
 ### 4. `function_exists()`
 
+
 ~~Implement `function_exists()`.~~
 
+
 ###5. '' === null
+
 
 ~~empty strings are === null which is wrong.~~
 
