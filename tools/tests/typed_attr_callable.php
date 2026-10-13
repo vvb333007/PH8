@@ -31,7 +31,8 @@ else
     die ('=== operator fails on a nullable');
 
 $cl->c = 11;
-if ($cl->c !== '__badcallable') {
+if ($cl->c !== '__badcallable') { 
+  var_dump($cl->c);
   die('A bad callable is expected but got ['.$cl->c.']');
 }
 

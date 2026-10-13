@@ -4,7 +4,7 @@ class Test {
   public ?string $c = '11';
   public ?string $d;
 
-  public string $e = '11';
+  public string $e;
 }
 //aaa:
 $cl = new Test();

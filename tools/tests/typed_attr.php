@@ -2,7 +2,7 @@
 
 class Test {
   public $x;
-  public bool $zz;
+  public float $zz = 1.1;
   public static bool $zzz;
   public ?string $a;
   public static int $b;
@@ -14,8 +14,11 @@ class Test {
 $cl = new Test;
 
 $cl->a = 1;
-if ($cl->a === 1)
-  die("Untyped property fails at int");
+if ($cl->a === 1) {
+  var_dump($cl->a);
+  die("Nullable string fails at int");
+}
+
 
 $cl->b = '88.7';
 if ($cl->b !== 88)
@@ -32,7 +35,7 @@ if ($cl->b === null)
   die("Typed non-nullable property fails at null");
 
 echo 'TEST PASSED';
-
+/*
 $cl->x = 1;
 var_dump($cl->x);
 
@@ -41,6 +44,6 @@ var_dump($cl->x);
 
 $cl->x = null;
 var_dump($cl->x);
-
+*/
 
 ?>
