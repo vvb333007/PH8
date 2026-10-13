@@ -2630,7 +2630,9 @@ PH7_PRIVATE sxi32 PH7_VmThrowError(
   if (pFile) {
     /* Append file name */
     SyBlobAppend(pWorker, pFile->zString, pFile->nByte);
-    SyBlobAppend(pWorker, (const void *)" ", sizeof(char));
+    SyBlobAppend(pWorker, (const void *)":", sizeof(char));
+  } else {
+    SyBlobAppend(pWorker, (const void *)"<stdlib>:", sizeof(char));
   }
   zErr = "[E]: ";
   switch (iErr) {
@@ -2673,13 +2675,6 @@ static sxi32 VmThrowErrorAp(
   }
   /* Reset the working buffer */
   SyBlobReset(pWorker);
-  /* Peek the processed file if available */
-  pFile = (SyString *)SySetPeek(&pVm->aFiles);
-  if (pFile) {
-    /* Append file name */
-    SyBlobAppend(pWorker, pFile->zString, pFile->nByte);
-    SyBlobAppend(pWorker, (const void *)" ", sizeof(char));
-  }
   zErr = "[E]: ";
   switch (iErr) {
     case PH7_CTX_WARNING: zErr = "[W]: "; break;
@@ -2693,6 +2688,13 @@ static sxi32 VmThrowErrorAp(
     /* Append function name first */
     SyBlobAppend(pWorker, pFuncName->zString, pFuncName->nByte);
     SyBlobAppend(pWorker, "(): ", sizeof("(): ") - 1);
+  }
+  /* Peek the processed file if available */
+  pFile = (SyString *)SySetPeek(&pVm->aFiles);
+  if (pFile) {
+    /* Append file name */
+    SyBlobAppend(pWorker, pFile->zString, pFile->nByte);
+    SyBlobAppend(pWorker, (const void *)":", sizeof(char));
   }
   SyBlobFormatAp(pWorker, zFormat, ap);
   /* Consume the error message */
@@ -3044,7 +3046,7 @@ static sxi32 VmByteCodeExec(
         if ((pTos->iFlags & MEMOBJ_INT) == 0) {
           sxi32 rc = PH7_MemObjToInteger(pTos);
           if (rc != SXRET_OK) {
-            VM_WARNING_F("Line %u: a non-numeric value is cast to 'int'", aInstr[pc].nLine);
+            VM_WARNING_F("%u: a non-numeric value is cast to 'int'", aInstr[pc].nLine);
           }
         }
         /* Invalidate any prior representation */
@@ -3089,19 +3091,20 @@ static sxi32 VmByteCodeExec(
       case PH7_OP_CVT_CALLABLE:
 
         STACK_UNDERFLOW_GOTO(pTos);
-
-        if ((pTos->iFlags & (MEMOBJ_STRING|MEMOBJ_HASHMAP)) == 0 ||
-            (PH7_VmIsCallable(pVm, pTos, FALSE) == 0)) { 
+        if ((pTos->iFlags & MEMOBJ_CALLABLE) == 0) {
+          if ((pTos->iFlags & (MEMOBJ_STRING|MEMOBJ_HASHMAP)) == 0 ||
+              (PH7_VmIsCallable(pVm, pTos, FALSE) == 0)) { 
 #if TYPEEXCEPTION
-          /* callable is a sensitive type and we want diagnostics early */
-          VM_EXCEPTION_GOTO("__typeerror", 11, "can not convert value to a callable. [PC: %08x]\n", pc)
+            /* callable is a sensitive type and we want diagnostics early */
+            VM_EXCEPTION_GOTO("__typeerror", 11, "can not convert value to a callable. [PC: %08x]\n", pc)
 #else
-          /* Replace callable value with a string object referring a poisoned function :
-             callable is a critical point so we can not it be in an inconsistent state.
-          */
-          VM_REPLACE_FUNC_NAME("__badcallable");
-          VM_WARNING_F("Line %u: value is not callable; converted to poisoned stub [PC: %08x]\n",aInstr[pc].nLine, pc);
+            /* Replace callable value with a string object referring a poisoned function :
+               callable is a critical point so we can not it be in an inconsistent state.
+            */
+            VM_REPLACE_FUNC_NAME("__badcallable");
+            VM_WARNING_F("%u: value is not callable; converted to poisoned stub [PC: %08x]\n",aInstr[pc].nLine, pc);
 #endif
+          }
         }
         break;
 
@@ -5209,6 +5212,13 @@ static sxi32 VmByteCodeExec(
           VmFrame *pFrame = pVm->pFrame;
           sxu32 nJump = pInstr->iP2;
 
+          /* Fetch source line number where exception happened:
+           * For internal exceptions thrown through VM_EXCEPTION_GOTO we use nExceptLine flag
+           * For user exceptions, the line number is set up by throw() itself
+           * Global VM exception line number is then reset
+           */
+          if (0 == pVm->nExceptLine)
+            pVm->nExceptLine = aInstr[pc].nLine;
 
           STACK_UNDERFLOW_GOTO(pTos);
 
@@ -5223,11 +5233,11 @@ static sxi32 VmByteCodeExec(
             ph7_class *pException;
             /* Make sure the loaded object is an instance of the 'Throwable' base class. */ 
             pException = PH7_VmExtractClass(&(*pVm), "Throwable", sizeof("Throwable") - 1, TRUE, 0);
-            if (pException == 0 || !VmInstanceOf(pThis->pClass, pException)) {
-              /* Exceptions must be valid objects derived from the Exception base class */
+            if (pException == 0 || !VmInstanceOf(pThis->pClass, pException)) { // TODO: this is a hot path, avoid VmInstanceOf call, use special class attribute to mark all Throwable classes
+              /* Exceptions must be valid objects derived from the Throwable base class */
               rc = VmUncaughtException(&(*pVm), pThis);
               if (rc == SXERR_ABORT) {
-                /* Abort processing immediately */
+                /* Abort processing immediately, keep exception line number */
           
                 goto Abort;
               }
@@ -5235,7 +5245,7 @@ static sxi32 VmByteCodeExec(
               /* Throw the exception. */
               rc = VmThrowException(&(*pVm), pThis);
               if (rc == SXERR_ABORT) {
-                /* Abort processing immediately */
+                /* Abort processing immediately , keep exception line number*/
                 
                 goto Abort;
               }
@@ -5244,12 +5254,13 @@ static sxi32 VmByteCodeExec(
             /* Expecting a class instance */
             rc = VmUncaughtException(&(*pVm), 0);
             if (rc == SXERR_ABORT) {
-              /* Abort processing immediately */
+              /* Abort processing immediately, keep exception line number */
               
               goto Abort;
             }
           }
-          /* Pop the top entry */
+          /* Pop the top entry, reset the exception line number */
+          pVm->nExceptLine = 0;
           VmPopOperand(&pTos, 1);
           /* Perform an unconditional jump */
           pc = nJump - 1;
@@ -5635,10 +5646,14 @@ static sxi32 VmByteCodeExec(
                       if (pThis->iRef < 2) {
                         /* Perform a store operation,rather than a load operation since
                          * the class instance '$this' will be deleted shortly.
+                         * this for stupid cases like (new Class)->member = 1; or (new Class)->member(2);
+                         * In this case we make a full copy of the ph7_value,
                          */
                         PH7_MemObjStore(pValue, pTos);
+                        puts("STore");
                       } else {
                         /* Simple load */
+                        puts("Load");
                         PH7_MemObjLoad(pValue, pTos);
                       }
                       if ((pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_CONSTANT) == 0) {
@@ -10637,7 +10652,7 @@ static sxi32 VmUncaughtException(
       if (pFrame->iFlags & VM_FRAME_EXCEPTION) SyBlobAppend(&Blob, "in a try() frame", sizeof("in a try() frame")-1);  else {
         ph7_vm_func *pFunc = (ph7_vm_func *)pFrame->pUserData;
         if (pFunc) {
-          SyBlobAppend(&Blob, "in function '", sizeof("in function '")-1); 
+          SyBlobAppend(&Blob, "in function \"", sizeof("in function '")-1); 
           SyBlobAppend(&Blob, pFunc->sName.zString, pFunc->sName.nByte); 
           SyBlobAppend(&Blob, "(", 1); 
           int nArg = SySetUsed(&pFrame->sArg);
@@ -10655,11 +10670,11 @@ static sxi32 VmUncaughtException(
               }
             }
           }
-          SyBlobAppend(&Blob, ")'\n", 3);
+          SyBlobAppend(&Blob, ")\"\n", 3);
         }
       }
     }
-    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"Line %d: Uncaught exception '%z' in the '%z' frame context\nCall stack:\n%.*s\n",pVm->nExceptLine, &sName, &sFuncName, SyBlobLength(&Blob), SyBlobData(&Blob));
+    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"%u: Uncaught exception '%z' in the '%z' frame context\nCall stack:\n%.*s\n",pVm->nExceptLine, &sName, &sFuncName, SyBlobLength(&Blob), SyBlobData(&Blob));
     SyBlobRelease(&Blob);
 
     /* Tell the upper layer to stop VM execution immediately  */

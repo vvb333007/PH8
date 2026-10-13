@@ -1056,7 +1056,7 @@ PH7_PRIVATE sxi32 PH7_MemObjLoad(ph7_value *pSrc, ph7_value *pDest) {
 #endif
   }
   if (SyBlobLength(&pDest->sBlob) > 0) {
-//    SyBlobRelease(&pDest->sBlob);
+    SyBlobRelease(&pDest->sBlob);
   }
   if (SyBlobLength(&pSrc->sBlob) > 0) {
     SyBlobReadOnly(&pDest->sBlob, SyBlobData(&pSrc->sBlob), SyBlobLength(&pSrc->sBlob));
