@@ -443,6 +443,7 @@ typedef double ph7_real;
                * Everything will pass through the PH7 compiler.
                */
 #define PH7_PHP_EXPR 0x02 /* This flag is reserved for future use. */
+#define PH7_PHP_DISASSEMBLE 0x04 /* Generate disassembly (debugging)*/
 /*
  * Call Context Error Message Serverity Level.
  *

@@ -405,7 +405,9 @@ static ph7_value *GenStateInstallNumLiteral(ph7_gen_state *pGen, sxu32 *pIdx) {
  */
 /* Forward declaration */
 static sxi32 GenStateCompileChunk(ph7_gen_state *pGen, sxi32 iFlags);
-/*
+/* TODO: when compiling string or integer or float literals we have to check if such literal
+ * is already in the literal table. Otherwise (1+1+1+1+1+1) will create 6 identical ph7_values
+ *
  * Compile a numeric [i.e: integer or real] literal.
  * Notes on the integer type.
  *  According to the PHP language reference manual
@@ -428,7 +430,14 @@ static sxi32 PH7_CompileNumLiteral(ph7_gen_state *pGen, sxi32 iCompileFlag) {
     ph7_value *pObj;
     sxi64 iValue;
     iValue = PH7_TokenValueToInt64(&pToken->sData);
-    pObj = GenStateInstallNumLiteral(&(*pGen), &nIdx);
+#if 1
+    if (iValue == 0) {
+      pObj = SySetAt(&pGen->pVm->aLitObj, nIdx = 3); // TODO: 3 - is the int(0) in literals pool
+    } else if (iValue == 1) {
+      pObj = SySetAt(&pGen->pVm->aLitObj, nIdx = 4); // TODO: 4 - is the int(1) in literals pool
+    } else
+#endif
+      pObj = GenStateInstallNumLiteral(&(*pGen), &nIdx);
     if (pObj == 0) {
       SXUNUSED(iCompileFlag); /* cc warning */
       return SXERR_ABORT;
@@ -683,7 +692,8 @@ static ph7_value *GenStateNewStrObj(ph7_gen_state *pGen, sxi32 *pCount) {
   PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, nIdx, 0, 0, pGen);
   return pConstObj;
 }
-/*
+/* TODO: Must check if such string is already in the literal pool
+ * TODO: Must check for substrings as well
  * Compile a double quoted/heredoc string.
  * According to the PHP language reference manual
  * Heredoc
@@ -1801,14 +1811,18 @@ static sxi32 PH7_CompileConstant(ph7_gen_state *pGen) {
   SySetInit(pConsCode, &pGen->pVm->sAllocator, sizeof(VmInstr));
   /* Swap bytecode container */
   pInstrContainer = PH7_VmGetByteCodeContainer(pGen->pVm);
-#if DISASM
-  printf(".section .const.%.*s\n",pName->nByte, pName->zString);
-#endif
   PH7_VmSetByteCodeContainer(pGen->pVm, pConsCode);
   /* Compile constant value */
   rc = PH7_CompileExpr(&(*pGen), 0, 0);
   /* Emit the done instruction */
   PH7_VmEmitInstr(pGen->pVm, PH7_OP_DONE, (rc != SXERR_EMPTY ? 1 : 0), 0, 0, 0, pGen);
+
+  if (pGen->pVm->bListing && pGen->xErr) {
+    SyProcFormat(pGen->xErr, pGen->pErrData, ".section const %.*s\n",pName->nByte, pName->zString);
+    VmByteCodeDump(pConsCode, pGen->xErr, pGen->pErrData);
+    SyProcFormat(pGen->xErr, pGen->pErrData, ".ends\n\n");
+  }
+
   PH7_VmSetByteCodeContainer(pGen->pVm, pInstrContainer);
   if (rc == SXERR_ABORT) {
     /* Don't worry about freeing memory, everything will be released shortly */
@@ -3400,6 +3414,13 @@ static sxi32 PH7_CompileStatic(ph7_gen_state *pGen) {
     rc = PH7_CompileExpr(&(*pGen), 0, 0);
     /* Emit the done instruction */
     PH7_VmEmitInstr(pGen->pVm, PH7_OP_DONE, (rc != SXERR_EMPTY ? 1 : 0), 0, 0, 0, pGen);
+
+    if (pGen->pVm->bListing && pGen->xErr) {
+      SyProcFormat(pGen->xErr, pGen->pErrData, ".section static %.*s\n",pName->nByte, pName->zString);
+      VmByteCodeDump(&sStatic.aByteCode, pGen->xErr, pGen->pErrData);
+      SyProcFormat(pGen->xErr, pGen->pErrData, ".ends\n\n");
+    }
+
     /* Restore default bytecode container */
     PH7_VmSetByteCodeContainer(pGen->pVm, pInstrContainer);
   }
@@ -3709,6 +3730,13 @@ static sxi32 GenStateProcessArgValue(ph7_gen_state *pGen, ph7_vm_func_arg *pArg,
   rc = PH7_CompileExpr(&(*pGen), 0, 0);
   /* Emit the done instruction */
   PH7_VmEmitInstr(pGen->pVm, PH7_OP_DONE, (rc != SXERR_EMPTY ? 1 : 0), 0, 0, 0, pGen);
+
+  if (pGen->pVm->bListing && pGen->xErr) {
+    SyProcFormat(pGen->xErr, pGen->pErrData, ".section @defarg %.*s\n", pArg->sName.nByte, pArg->sName.zString);
+    VmByteCodeDump(&pArg->aByteCode, pGen->xErr, pGen->pErrData);
+    SyProcFormat(pGen->xErr, pGen->pErrData, ".ends\n\n");
+  }
+
   PH7_VmSetByteCodeContainer(pGen->pVm, pInstrContainer);
   RE_SWAP_DELIMITER(pGen);
   if (rc == SXERR_ABORT) {
@@ -3897,6 +3925,10 @@ choose_memobj:
     }
     pIn++; /* Jump the dollar sign */
     /* Copy argument name */
+    if (pGen->pVm->bListing && pGen->xErr) {
+      SyProcFormat(pGen->xErr, pGen->pErrData, ".arg \"$%.*s\" ;  function argument\n", pIn->sData.nByte, pIn->sData.zString);
+    }
+
     zDup = SyMemBackendStrDup(&pGen->pVm->sAllocator, SyStringData(&pIn->sData), SyStringLength(&pIn->sData));
     if (zDup == 0) {
       //PH7_GenCompileError(&(*pGen), E_ERROR, pIn->nLine, "PH7 engine is running out of memory");
@@ -4059,6 +4091,14 @@ static sxi32 GenStateCompileFuncBody(
     rc = SXERR_ABORT;
   }
   SySetTruncate(&pGen->aGoto, nGotoOfft);
+
+  if (pGen->pVm->bListing && pGen->xErr) {
+    SyProcFormat(pGen->xErr, pGen->pErrData, ".section .text.%.*s\n", pFunc->sName.nByte, pFunc->sName.zString);
+    VmByteCodeDump(&pFunc->aByteCode, pGen->xErr, pGen->pErrData);
+    SyProcFormat(pGen->xErr, pGen->pErrData, ".ends\n\n");
+  }
+
+
   /* Restore the default container */
   PH7_VmSetByteCodeContainer(pGen->pVm, pInstrContainer);
   /* Leave function block */
@@ -4130,6 +4170,11 @@ static sxi32 GenStateCompileFunc(
   }
   /* Initialize the function state */
   PH7_VmInitFuncState(pGen->pVm, pFunc, zName, pName->nByte, iFlags, 0);
+
+  if (pGen->pVm->bListing && pGen->xErr) {
+    SyProcFormat(pGen->xErr, pGen->pErrData, "@function \"%.*s\"\n", pName->nByte, pName->zString);
+  }
+
   if (pGen->pIn < pEnd) {
     /* Collect function arguments */
     rc = GenStateCollectFuncArgs(pFunc, &(*pGen), pEnd);
@@ -4336,6 +4381,11 @@ err:
   if (rc == SXERR_ABORT) {
     return SXERR_ABORT;
   }
+
+  if (pGen->pVm->bListing && pGen->xErr) {
+    SyProcFormat(pGen->xErr, pGen->pErrData, "@end\n");
+  }
+
   if (ppFunc) {
     *ppFunc = pFunc;
   }
@@ -4347,6 +4397,7 @@ err:
   if (rc == SXRET_OK) {
     return SXRET_OK;
   }
+
   /* Fall through if something goes wrong */
 OutOfMem:
   /* If the supplied memory subsystem is so sick that we are unable to allocate
@@ -4408,6 +4459,8 @@ static sxi32 PH7_CompileFunction(ph7_gen_state *pGen) {
     return SXRET_OK;
   }
   /* Compile function body */
+
+
   rc = GenStateCompileFunc(&(*pGen), pName, iFlags, FALSE, 0);
   return rc;
 }
@@ -7174,6 +7227,10 @@ PH7_PRIVATE sxi32 PH7_CompileScript(
     /* Nothing to compile */
     return PH7_OK;
   }
+
+  pVm->bListing = (iFlags & PH7_PHP_DISASSEMBLE) ? 1 : 0;
+
+
   /* Initialize the tokens containers */
   SySetInit(&aRawToken, &pVm->sAllocator, sizeof(SyToken));
   SySetInit(&aPhpToken, &pVm->sAllocator, sizeof(SyToken));
@@ -7244,6 +7301,26 @@ PH7_PRIVATE sxi32 PH7_CompileScript(
       PH7_VmEmitInstr(&(*pVm), PH7_OP_CONSUME, nRawObj, 0, 0, 0, NULL);
     }
   }
+
+  if (pCodeGen->pVm->bListing && pCodeGen->xErr) {
+    SyBlob sDump; /* Generated dump is stored here */
+    sxi32 i = 0, nCount = SySetUsed(&pVm->aLitObj);
+    ph7_value *pObj = SySetBasePtr(&pVm->aLitObj);
+  
+    SyBlobInit(&sDump, &pVm->sAllocator);
+
+    while (i < nCount) {
+
+      SyBlobReset(&sDump);
+      PH7_MemObjDump(&sDump, &pObj[i], TRUE, 0, 0, 0);
+
+      SyProcFormat(pCodeGen->xErr, pCodeGen->pErrData, ".literal %u = %.*s\n",i, (int)SyBlobLength(&sDump), (const char *)SyBlobData(&sDump));
+      i++;
+    }
+  
+    SyBlobRelease(&sDump);
+  }
+
 cleanup:
   SySetRelease(&aRawToken);
   SySetRelease(&aPhpToken);

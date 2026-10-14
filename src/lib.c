@@ -4114,7 +4114,7 @@ static sxi32 ProcessXML(SyXMLParser *pParse, SySet *pTagStack, SySet *pWorker) {
     SyZero(&sNs, sizeof(SyXMLRawStr));
     SySetInit(&sEntry.sNSset, pParse->pAllocator, sizeof(SyHashEntry *));
     sEntry.nLine = sNs.nLine = pToken->nLine;
-    printf("Token type %08x\r\n",(unsigned int )pToken->nType);
+    //printf("Token type %08x\r\n",(unsigned int )pToken->nType);
     switch (pToken->nType) {
       case SXML_TOK_DOCTYPE:
         if (SySetUsed(pTagStack) > 1 || bGotTag) {

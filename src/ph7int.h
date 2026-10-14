@@ -1439,7 +1439,8 @@ struct ph7_vm {
   void *pStdin;                    /* STDIN IO stream */
   void *pStdout;                   /* STDOUT IO stream */
   void *pStderr;                   /* STDERR IO stream */
-  int bErrReport;                  /* TRUE to report all runtime Error/Warning/Notice */
+  int bErrReport:1;                /* TRUE to report all runtime Error/Warning/Notice */
+  int bListing:1;                  /* TRUE generate disasembly */
   int nRecursionDepth;             /* Current recursion depth */
 
 #define VM_THROW_RESERVE_NESTING 15 /* Required vod VM_EXCEPTION_GOTO to be able to throw()*/
@@ -1891,6 +1892,8 @@ PH7_PRIVATE sxi32 PH7_TokenizePHP(const char *zInput, sxu32 nLen, sxu32 nLineSta
 PH7_PRIVATE void PH7_VmReleaseContextValue(ph7_context *pCtx, ph7_value *pValue);
 PH7_PRIVATE sxi32 PH7_VmInitFuncState(ph7_vm *pVm, ph7_vm_func *pFunc, const char *zName, sxu32 nByte,
                                       sxi32 iFlags, void *pUserData);
+PH7_PRIVATE sxi32 VmByteCodeDump(SySet *pByteCode, ProcConsumer xConsumer, void *pUserData);
+
 PH7_PRIVATE sxi32 PH7_VmInstallUserFunction(ph7_vm *pVm, ph7_vm_func *pFunc, SyString *pName);
 PH7_PRIVATE sxi32 PH7_VmCreateClassInstanceFrame(ph7_vm *pVm, ph7_class_instance *pObj);
 PH7_PRIVATE sxi32 PH7_VmRefObjRemove(ph7_vm *pVm, sxu32 nIdx, SyHashEntry *pEntry, ph7_hashmap_node *pMapEntry);

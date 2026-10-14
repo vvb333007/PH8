@@ -1,4 +1,5 @@
-/*                 
+/*                         aLitObj
+
  * PH7-ESP32 — embeddable PHP bytecode compiler & virtual machine,
  * ported and maintained for ESP32/FreeRTOS, Linux and Windows(Cygwin).
  *
@@ -1668,27 +1669,31 @@ PH7_PRIVATE sxi32 PH7_VmInit(
   pVm->json_rc = JSON_ERROR_NONE;
   /* PRNG context */
   SyRandomnessInit(&pVm->sPrng, 0, 0);
-  /* Install the null constant */
+
+
+  /*#0: Install the null constant */
   pObj = PH7_ReserveConstObj(&(*pVm), 0);
-  if (pObj == 0) {
-    rc = SXERR_MEM;
-    goto Err;
-  }
+  if (pObj == 0) { rc = SXERR_MEM; goto Err; }
   PH7_MemObjInit(pVm, pObj);
 
-  /* Install the boolean TRUE constant */
+  /*#1: Install the boolean TRUE constant */
   pObj = PH7_ReserveConstObj(&(*pVm), 0);
-  if (pObj == 0) {
-    rc = SXERR_MEM;
-    goto Err;
-  }
+  if (pObj == 0) {rc = SXERR_MEM; goto Err; }
   PH7_MemObjInitFromBool(pVm, pObj, 1);
-  /* Install the boolean FALSE constant */
+
+  /*#2: Install the boolean FALSE constant */
   pObj = PH7_ReserveConstObj(&(*pVm), 0);
-  if (pObj == 0) {
-    rc = SXERR_MEM;
-    goto Err;
-  }
+  if (pObj == 0) { rc = SXERR_MEM; goto Err; }
+  PH7_MemObjInitFromBool(pVm, pObj, 0);
+
+  /*#3: Install the integer 0 constant */
+  pObj = PH7_ReserveConstObj(&(*pVm), 0);
+  if (pObj == 0) {rc = SXERR_MEM; goto Err; }
+  PH7_MemObjInitFromBool(pVm, pObj, 1);
+
+  /*#4: Install the integer 1 constant */
+  pObj = PH7_ReserveConstObj(&(*pVm), 0);
+  if (pObj == 0) { rc = SXERR_MEM; goto Err; }
   PH7_MemObjInitFromBool(pVm, pObj, 0);
 
 
@@ -2539,7 +2544,7 @@ PH7_PRIVATE sxi32 PH7_VmConfigure(
  * of consuming the generated dump perhaps redirecting it to its standard output
  * (STDOUT).
  */
-static sxi32 VmByteCodeDump(
+PH7_PRIVATE sxi32 VmByteCodeDump(
   SySet *pByteCode,       /* Bytecode container */
   ProcConsumer xConsumer, /* Dump consumer callback */
   void *pUserData         /* Last argument to xConsumer() */
@@ -2557,20 +2562,31 @@ static sxi32 VmByteCodeDump(
   pInstr = (VmInstr *)SySetBasePtr(pByteCode);
   pEnd = &pInstr[SySetUsed(pByteCode)];
   n = 0;
-  xConsumer((const void *)zDump, sizeof(zDump) - 1, pUserData);
+//  xConsumer((const void *)zDump, sizeof(zDump) - 1, pUserData);
   /* Dump instructions */
+  sxi32 nLine = 0;
   for (;;) {
     if (pInstr >= pEnd) {
       /* No more instructions */
       break;
     }
-    /* Format and call the consumer callback */
-    rc = SyProcFormat(xConsumer, pUserData, "  % 10s %d %u %qx # PC=%u, line: %u\n",
-                      VmInstrToString(pInstr->iOp), 
-                      pInstr->iP1,
-                      pInstr->iP2,
-                      (uintptr_t)pInstr->p3,
-                      n, pInstr->nLine);
+    if (pInstr->nLine != nLine) {
+      nLine = pInstr->nLine;
+
+      /* Format and call the consumer callback */
+      rc = SyProcFormat(xConsumer, pUserData, "#%08x:  % 10s %d %u %qx; line %u\n",n,
+                        VmInstrToString(pInstr->iOp), 
+                        pInstr->iP1,
+                        pInstr->iP2,
+                        (uintptr_t)pInstr->p3,
+                        pInstr->nLine);
+    } else {
+      rc = SyProcFormat(xConsumer, pUserData, "#%08x:  % 10s %d %u %qx\n",n,
+                        VmInstrToString(pInstr->iOp), 
+                        pInstr->iP1,
+                        pInstr->iP2,
+                        (uintptr_t)pInstr->p3);
+    }
 
     if (rc != SXRET_OK) {
       /* Consumer routine request an operation abort */
@@ -5650,10 +5666,10 @@ static sxi32 VmByteCodeExec(
                          * In this case we make a full copy of the ph7_value,
                          */
                         PH7_MemObjStore(pValue, pTos);
-                        puts("STore");
+                        //puts("STore");
                       } else {
                         /* Simple load */
-                        puts("Load");
+                        //puts("Load");
                         PH7_MemObjLoad(pValue, pTos);
                       }
                       if ((pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_CONSTANT) == 0) {
@@ -6922,108 +6938,102 @@ PH7_PRIVATE sxi32 PH7_VmOutputConsumeAp(
  * This function never fail and always return a pointer
  * to a null terminated string.
  */
+static char const * aOpNames[] = {
+
+    [PH7_OP_DONE] = "DONE",
+    [PH7_OP_HALT] = "HALT",
+    [PH7_OP_LOAD] = "LOAD",
+    [PH7_OP_LOADC] = "LOAD.C",
+    [PH7_OP_LOAD_MAP] = "LOAD.MAP",
+    [PH7_OP_LOAD_LIST] = "LOAD.LIST",
+    [PH7_OP_LOAD_IDX] = "LOAD.IDX",
+    [PH7_OP_LOAD_CLOSURE] = "LOAD.CL",
+    [PH7_OP_NULLC] = "NULC",
+    [PH7_OP_NOOP] = "NOOP",
+    [PH7_OP_JMP] = "JMP",
+    [PH7_OP_JZ] = "JZ",
+    [PH7_OP_JNZ] = "JNZ",
+    [PH7_OP_JNN] = "JNN",
+    [PH7_OP_POP] = "POP",
+    [PH7_OP_CAT] = "CAT",
+    [PH7_OP_CVT_INT] = "CVT.INT",
+    [PH7_OP_CVT_STR] = "CVT.STR",
+    [PH7_OP_CVT_REAL] = "CVT.REAL",
+    [PH7_OP_CVT_CALLABLE] = "CVT.CALL",
+    [PH7_OP_CALL] = "CALL",
+    [PH7_OP_UMINUS] = "NEG",
+    [PH7_OP_UPLUS] = "UPLUS",
+    [PH7_OP_BITNOT] = "NOT.B",
+    [PH7_OP_LNOT] = "NOT.L",
+    [PH7_OP_MUL] = "MUL",
+    [PH7_OP_DIV] = "DIV",
+    [PH7_OP_MOD] = "MOD",
+    [PH7_OP_ADD] = "ADD",
+    [PH7_OP_SUB] = "SUB",
+    [PH7_OP_SHL] = "SHL",
+    [PH7_OP_SHR] = "SHR",
+    [PH7_OP_LT] = "LT",
+    [PH7_OP_LE] = "LE",
+    [PH7_OP_GT] = "GT",
+    [PH7_OP_GE] = "GE",
+    [PH7_OP_EQ] = "EQ",
+    [PH7_OP_NEQ] = "NEQ",
+    [PH7_OP_TEQ] = "EQ.T",
+    [PH7_OP_TNE] = "NEQ.T",
+    [PH7_OP_BAND] = "AND.B",
+    [PH7_OP_BXOR] = "XOR.B",
+    [PH7_OP_BOR] = "OR.B",
+    [PH7_OP_LAND] = "AND.L",
+    [PH7_OP_LOR] = "OR.L",
+    [PH7_OP_LXOR] = "XOR.L",
+    [PH7_OP_STORE] = "STORE",
+    [PH7_OP_STORE_IDX] = "STORE.IDX",
+    [PH7_OP_STORE_IDX_REF] = "STORE.IDX.R",
+    [PH7_OP_PULL] = "STACK.PULL",
+    [PH7_OP_SWAP] = "STACK.SWAP",
+    [PH7_OP_YIELD] = "STACK.YIELD",
+    [PH7_OP_CVT_BOOL] = "CVT.BOOL",
+    [PH7_OP_CVT_NULL] = "CVT.NULL",
+    [PH7_OP_CVT_ARRAY] = "CVT.ARRAY",
+    [PH7_OP_CVT_OBJ] = "CVT.OBJ",
+    [PH7_OP_CVT_NUMC] = "CVT.NUMC",
+    [PH7_OP_INCR] = "INC",
+    [PH7_OP_DECR] = "DEC",
+    [PH7_OP_SEQ] = "EQ.S",
+    [PH7_OP_SNE] = "NEQ.S",
+    [PH7_OP_NEW] = "NEW",
+    [PH7_OP_CLONE] = "CLONE",
+    [PH7_OP_ADD_STORE] = "ADD.STORE",
+    [PH7_OP_SUB_STORE] = "SUB.STORE",
+    [PH7_OP_MUL_STORE] = "MUL.STORE",
+    [PH7_OP_DIV_STORE] = "DIV.STORE",
+    [PH7_OP_MOD_STORE] = "MOD.STORE",
+    [PH7_OP_CAT_STORE] = "CAT.STORE",
+    [PH7_OP_SHL_STORE] = "SHL.STORE",
+    [PH7_OP_SHR_STORE] = "SHR.STORE",
+    [PH7_OP_BAND_STORE] = "AND.B.STORE",
+    [PH7_OP_BOR_STORE] = "OR.B.STORE",
+    [PH7_OP_BXOR_STORE] = "XOR.B.STORE",
+    [PH7_OP_CONSUME] = "ECHO",
+    [PH7_OP_LOAD_REF] = "LOAD.&",
+    [PH7_OP_STORE_REF] = "STORE.&",
+    [PH7_OP_MEMBER] = "MEMBER",
+    [PH7_OP_UPLINK] = "UPLINK",
+    [PH7_OP_ERR_CTRL] = "ERR.CTRL",
+    [PH7_OP_IS_A] = "IS.A",
+    [PH7_OP_SWITCH] = "SWITCH",
+    [PH7_OP_LOAD_EXCEPTION] = "LOAD_EXCEP",
+    [PH7_OP_POP_EXCEPTION]= "POP_EXCEP",
+    [PH7_OP_THROW] = "THROW",
+    [PH7_OP_FOREACH_INIT] = "4EACH_INIT",
+    [PH7_OP_FOREACH_STEP] = "4EACH_STEP",
+};
+
 static const char *VmInstrToString(sxi32 nOp) {
-  const char *zOp = "ILL";
-  switch (nOp) {
-    case PH7_OP_DONE: zOp = "DONE"; break;
-    case PH7_OP_HALT: zOp = "HALT"; break;
-    case PH7_OP_LOAD: zOp = "LOAD"; break;
-    case PH7_OP_LOADC: zOp = "LOAD.C"; break;
-    case PH7_OP_LOAD_MAP: zOp = "LOAD.MAP"; break;
-    case PH7_OP_LOAD_LIST: zOp = "LOAD.LIST"; break;
-    case PH7_OP_LOAD_IDX: zOp = "LOAD.IDX"; break;
-    case PH7_OP_LOAD_CLOSURE: zOp = "LOAD.CL"; break;
-    case PH7_OP_NOOP: zOp = "NOOP"; break;
-    case PH7_OP_JMP: zOp = "JMP"; break;
-    case PH7_OP_JZ: zOp = "JZ"; break;
-    case PH7_OP_JNZ: zOp = "JNZ"; break;
-    case PH7_OP_JNN: zOp = "JNN"; break;
-    case PH7_OP_POP: zOp = "POP"; break;
-    case PH7_OP_CAT: zOp = "CAT"; break;
-    case PH7_OP_CVT_INT: zOp = "CVT.INT"; break;
-    case PH7_OP_CVT_STR: zOp = "CVT.STR"; break;
-    case PH7_OP_CVT_REAL: zOp = "CVT.REAL"; break;
-    case PH7_OP_CVT_CALLABLE: zOp = "CVT.CALL"; break;
-    case PH7_OP_CALL: zOp = "CALL"; break;
-    case PH7_OP_UMINUS: zOp = "NEG"; break;
-    case PH7_OP_UPLUS: zOp = "UPLUS"; break;
-    case PH7_OP_BITNOT: zOp = "NOT.B"; break;
-    case PH7_OP_LNOT: zOp = "NOT.L"; break;
-    case PH7_OP_MUL: zOp = "MUL"; break;
-    case PH7_OP_DIV: zOp = "DIV"; break;
-    case PH7_OP_MOD: zOp = "MOD"; break;
-    case PH7_OP_ADD: zOp = "ADD"; break;
-    case PH7_OP_SUB: zOp = "SUB"; break;
-    case PH7_OP_SHL: zOp = "SHL"; break;
-    case PH7_OP_SHR: zOp = "SHR"; break;
-    case PH7_OP_LT: zOp = "LT"; break;
-    case PH7_OP_LE: zOp = "LE"; break;
-    case PH7_OP_GT: zOp = "GT"; break;
-    case PH7_OP_GE: zOp = "GE"; break;
-    case PH7_OP_EQ: zOp = "EQ"; break;
-    case PH7_OP_NEQ: zOp = "NEQ"; break;
-    case PH7_OP_TEQ: zOp = "EQ.T"; break;
-    case PH7_OP_TNE: zOp = "NEQ.T"; break;
-    case PH7_OP_BAND: zOp = "AND.B"; break;
-    case PH7_OP_BXOR: zOp = "XOR.B"; break;
-    case PH7_OP_BOR: zOp = "OR.B"; break;
-    case PH7_OP_LAND: zOp = "AND.L"; break;
-    case PH7_OP_LOR: zOp = "OR.L"; break;
-    case PH7_OP_LXOR: zOp = "XOR.L"; break;
-    case PH7_OP_STORE: zOp = "STORE"; break;
-    case PH7_OP_STORE_IDX: zOp = "STORE.IDX"; break;
-    case PH7_OP_STORE_IDX_REF: zOp = "STORE.IDX.R"; break;
-    case PH7_OP_PULL: zOp = "STACK.PULL"; break;
-    case PH7_OP_SWAP: zOp = "STACK.SWAP"; break;
-    case PH7_OP_YIELD: zOp = "STACK.YIELD"; break;
-    case PH7_OP_CVT_BOOL: zOp = "CVT.BOOL"; break;
-    case PH7_OP_CVT_NULL: zOp = "CVT.NULL"; break;
-    case PH7_OP_CVT_ARRAY: zOp = "CVT.ARRAY"; break;
-    case PH7_OP_CVT_OBJ: zOp = "CVT.OBJ"; break;
-    case PH7_OP_CVT_NUMC: zOp = "CVT.NUMC"; break;
-    case PH7_OP_INCR: zOp = "INC"; break;
-    case PH7_OP_DECR: zOp = "DEC"; break;
-    case PH7_OP_SEQ: zOp = "EQ.S"; break;
-    case PH7_OP_SNE: zOp = "NEQ.S"; break;
-    case PH7_OP_NEW: zOp = "NEW"; break;
-    case PH7_OP_CLONE: zOp = "CLONE"; break;
-    case PH7_OP_ADD_STORE: zOp = "ADD.STORE"; break;
-    case PH7_OP_SUB_STORE: zOp = "SUB.STORE"; break;
-    case PH7_OP_MUL_STORE: zOp = "MUL.STORE"; break;
-    case PH7_OP_DIV_STORE: zOp = "DIV.STORE"; break;
-    case PH7_OP_MOD_STORE: zOp = "MOD.STORE"; break;
-    case PH7_OP_CAT_STORE: zOp = "CAT.STORE"; break;
-    case PH7_OP_SHL_STORE: zOp = "SHL.STORE"; break;
-    case PH7_OP_SHR_STORE: zOp = "SHR.STORE"; break;
-    case PH7_OP_BAND_STORE: zOp = "AND.B.STORE"; break;
-    case PH7_OP_BOR_STORE: zOp = "OR.B.STORE"; break;
-    case PH7_OP_BXOR_STORE: zOp = "XOR.B.STORE"; break;
-    case PH7_OP_CONSUME: zOp = "ECHO"; break;
-    case PH7_OP_LOAD_REF: zOp = "LOAD.&"; break;
-    case PH7_OP_STORE_REF: zOp = "STORE.&"; break;
-    case PH7_OP_MEMBER: zOp = "MEMBER"; break;
-    case PH7_OP_UPLINK: zOp = "UPLINK"; break;
-    case PH7_OP_ERR_CTRL: zOp = "ERR.CTRL"; break;
-    case PH7_OP_IS_A: zOp = "IS.A"; break;
-    case PH7_OP_SWITCH: zOp = "SWITCH"; break;
-    case PH7_OP_LOAD_EXCEPTION:
-      zOp = "LOAD_EXCEP";
-      break;
-    case PH7_OP_POP_EXCEPTION:
-      zOp = "POP_EXCEP";
-      break;
-    case PH7_OP_THROW: zOp = "THROW"; break;
-    case PH7_OP_FOREACH_INIT:
-      zOp = "4EACH_INIT";
-      break;
-    case PH7_OP_FOREACH_STEP:
-      zOp = "4EACH_STEP";
-      break;
-    case PH7_OP_NULLC: zOp = "NOOP"; break;
-    default:
-      break;
-  }
-  return zOp;
+  
+  return (nOp < 0 ||
+          nOp >= sizeof(aOpNames)/sizeof(aOpNames[0])) ? "ILL"
+                                                   : aOpNames[nOp];
 }
 /*
  * Dump PH7 bytecodes instructions to a human readable format.
