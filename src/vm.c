@@ -976,6 +976,7 @@ static sxi32 VmMountUserClass(
         return SXERR_MEM;
       }
       if (SySetUsed(&pAttr->aByteCode) > 0) {
+#if 0
         /* Initialize attribute default value or a constant (any complex expression) */
         
         sxi32 rc = VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
@@ -983,6 +984,19 @@ static sxi32 VmMountUserClass(
           VmErrorFormat(&(*pVm), PH7_CTX_ERR, "Exception in initialization value of %z::%z", &pClass->sName, &pAttr->sName);
           return SXRET_OK;
         }
+#else
+        /* Initialize static attribute default value or a constant (any complex expression)
+        */
+        sxi32 rc = VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
+
+        /* Failed to eval() the initialization value, record that
+         * Later, Class::member access will throw an exception; attempt to new Class will return 'null'
+         * and a warning message as well
+        */
+        if (rc == PH7_ABORT || rc == PH7_EXCEPTION)
+          pClass->iFlags |= PH7_CLASS_BAD;
+
+#endif
 
         // TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
         // TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
@@ -1074,8 +1088,19 @@ PH7_PRIVATE sxi32 PH7_VmCreateClassInstanceFrame(
       }
       pVmAttr->nIdx = pMemObj->nIdx;
       if (SySetUsed(&pAttr->aByteCode) > 0) {
+#if 0
         /* Initialize attribute default value (any complex expression, exceptions are ignored) */
         VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
+#else
+        sxi32 rc = VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
+
+        /* Failed to eval() the initialization value. This is bad;
+         * 
+        */
+        if (rc == PH7_ABORT || rc == PH7_EXCEPTION) {
+          pClass->iFlags |= PH7_CLASS_BAD;
+        }
+#endif
         // TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
         // TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
       } else {
@@ -1240,7 +1265,7 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "" \
   "    $this->code = $code;" \
   "    $this->file = $file;" \
-  "    $this->line = $line > 0 ? $line : __ELINE__;" \
+  "    $this->line = $line;" \
   "    $this->trace = debug_backtrace();" \
   "  }" \
   "" \
@@ -1259,8 +1284,8 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "class Exception extends Throwable {" \
   "  public function __construct(?string $message = null," \
   "                              int $code = 0," \
-  "                              ?string $filename = __FILE__ ," \
-  "                              int $lineno = __LINE__) {" \
+  "                              ?string $filename = null ," \
+  "                              int $lineno = 0) {" \
   "" \
   "    parent::__construct($message,$code,$filename,$lineno);" \
   "  }" \
@@ -1272,8 +1297,8 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "class Error extends Throwable {" \
   "  public function __construct(?string $message = null," \
   "                              int $code = 0," \
-  "                              ?string $filename = __FILE__ ," \
-  "                              int $lineno = __LINE__) {" \
+  "                              ?string $filename = null ," \
+  "                              int $lineno = 0) {" \
   "" \
   "    parent::__construct($message,$code,$filename,$lineno);" \
   "  }" \
@@ -1282,8 +1307,8 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "class DivisionByZeroError extends Error {" \
   "  public function __construct(?string $message = null," \
   "                              int $code = 0," \
-  "                              ?string $filename = __FILE__ ," \
-  "                              int $lineno = __LINE__) {" \
+  "                              ?string $filename = null ," \
+  "                              int $lineno = 0) {" \
   "" \
   "    parent::__construct($message,$code,$filename,$lineno);" \
   "  }" \
@@ -1292,8 +1317,8 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "class TypeError extends Error {" \
   "  public function __construct(?string $message = null," \
   "                              int $code = 0," \
-  "                              ?string $filename = __FILE__ ," \
-  "                              int $lineno = __LINE__) {" \
+  "                              ?string $filename = null ," \
+  "                              int $lineno = 0) {" \
   "" \
   "    parent::__construct($message,$code,$filename,$lineno);" \
   "  }" \
@@ -1302,8 +1327,8 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "class ArgumentCountError extends Error {" \
   "  public function __construct(?string $message = null," \
   "                              int $code = 0," \
-  "                              ?string $filename = __FILE__ ," \
-  "                              int $lineno = __LINE__) {" \
+  "                              ?string $filename = null ," \
+  "                              int $lineno = 0) {" \
   "" \
   "    parent::__construct($message,$code,$filename,$lineno);" \
   "  }" \
@@ -3259,9 +3284,47 @@ static sxi32 VmByteCodeExec(
                 /* Set a NULL default value */
                 MemObjSetType(pTos, MEMOBJ_NULL);
                 SyBlobReset(&pTos->sBlob);
+
                 /* Invoke the callback and deal with the expanded value */
+#if 1
+                /* User-defined constants:
+                 * Expand the constant and precache its value in pCons. Disable expansion on this constant
+                 * and return previously calculated value
+                 *
+                 * This is required to optimize code like
+                 * const A = 1+1+1+1+1;
+                 * const B = A+A+A+A+A;
+                 * echo B;
+                 *
+                 * Classic PH7 calls expand on A once to calculate A, then expands A 5 times to calculate B
+                 * Then when echo B is called process repeats again resulting in a snowball of VmLocalExec
+                 * which are costly
+                 */
+                if (pCons->xExpand == PH7_VmExpandConstantValue) {
+
+                  PH7_MemObjInit(pVm, &pCons->aValue);
+                  //puts("Caching user-defined constant...");
+                  pCons->xExpand(&pCons->aValue, pCons->pUserData);
+                  pCons->xExpand = NULL;
+
+                } else if (pCons->xExpand != NULL) {
+                  //puts("Expanding built-in constant...");
+                  pCons->xExpand(pTos, pCons->pUserData);
+                }
+
+                if (pCons->xExpand == NULL) {
+                  //puts("Loading cached value...");
+                /*
+                 * Load calculated value
+                 *  TODO: CITO: should it be MemObjStore() instead? 
+                 */
+                  PH7_MemObjLoad(&pCons->aValue, pTos);
+                } 
+
+#else
 
                 pCons->xExpand(pTos, pCons->pUserData);
+#endif
                 /* Mark as constant */
                 pTos->nIdx = SXU32_HIGH;
                 break;
@@ -5763,6 +5826,11 @@ static sxi32 VmByteCodeExec(
                 PH7_MemObjRelease(pTos);
                 pTos->nIdx = SXU32_HIGH;
               } else {
+#if 1
+                if (pClass->iFlags & PH7_CLASS_BAD) {
+                  VM_EXCEPTION_GOTO("__unknownat",11,"class '%.*s' is not initialized properly (initialization values threw an exception)", SyBlobLength(&pNos->sBlob), (const char *)SyBlobData(&pNos->sBlob))
+                }
+#endif
                 if (pInstr->iP2) {
                   /* Method call */
                   ph7_class_method *pMeth = 0;
@@ -5921,6 +5989,18 @@ static sxi32 VmByteCodeExec(
           } else {
             ph7_class_method *pCons;
             /* Create a new class instance */
+#if 1
+            if (pClass->iFlags & PH7_CLASS_BAD) {
+              VM_WARNING("Class can not be created, marked as 'bad' by the compiler\n");
+              PH7_MemObjRelease(pTos);
+              if (pInstr->iP1 > 0) {
+                /* Pop given arguments */
+                VmPopOperand(&pTos, pInstr->iP1);
+              }
+              break;
+            }
+#endif
+
             pNew = PH7_NewClassInstance(&(*pVm), pClass);
             if (pNew == 0) {
 
@@ -8792,6 +8872,7 @@ static int vm_builtin_define(ph7_context *pCtx, int nArg, ph7_value **apArg) {
  *  Constant value or NULL if not defined.
  */
 static int vm_builtin_constant(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+return SXRET_OK;
   SyHashEntry *pEntry;
   ph7_constant *pCons;
   const char *zName; /* Constant name */

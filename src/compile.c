@@ -432,9 +432,9 @@ static sxi32 PH7_CompileNumLiteral(ph7_gen_state *pGen, sxi32 iCompileFlag) {
     iValue = PH7_TokenValueToInt64(&pToken->sData);
 #if 1
     if (iValue == 0) {
-      pObj = SySetAt(&pGen->pVm->aLitObj, nIdx = 3); // TODO: 3 - is the int(0) in literals pool
+      pObj = SySetAt(&pGen->pVm->aLitObj, nIdx = PH7_LITPOOL_ZERO); // 3 - is the int(0) in literals pool
     } else if (iValue == 1) {
-      pObj = SySetAt(&pGen->pVm->aLitObj, nIdx = 4); // TODO: 4 - is the int(1) in literals pool
+      pObj = SySetAt(&pGen->pVm->aLitObj, nIdx = PH7_LITPOOL_ONE); // 4 - is the int(1) in literals pool
     } else
 #endif
       pObj = GenStateInstallNumLiteral(&(*pGen), &nIdx);
@@ -1590,16 +1590,16 @@ static sxi32 GenStateLoadLiteral(ph7_gen_state *pGen) {
   if (pStr->nByte == sizeof("NULL") - 1) {
     if (SyStrnicmp(pStr->zString, "null", sizeof("NULL") - 1) == 0) {
       /* NULL constant are always indexed at 0 */
-      PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, 0, 0, 0, pGen);
+      PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, PH7_LITPOOL_NULL, 0, 0, pGen);
       return SXRET_OK;
     } else if (SyStrnicmp(pStr->zString, "true", sizeof("TRUE") - 1) == 0) {
       /* TRUE constant are always indexed at 1 */
-      PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, 1, 0, 0, pGen);
+      PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, PH7_LITPOOL_TRUE, 0, 0, pGen);
       return SXRET_OK;
     }
   } else if (pStr->nByte == sizeof("FALSE") - 1 && SyStrnicmp(pStr->zString, "false", sizeof("FALSE") - 1) == 0) {
     /* FALSE constant are always indexed at 2 */
-    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, 2, 0, 0, pGen);
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, PH7_LITPOOL_FALSE, 0, 0, pGen);
     return SXRET_OK;
   } else if (pStr->nByte == sizeof("__LINE__") - 1 && SyMemcmp(pStr->zString, "__LINE__", sizeof("__LINE__") - 1) == 0) {
     /* TICKET 1433-004: __LINE__ constant must be resolved at compile time,not run time */

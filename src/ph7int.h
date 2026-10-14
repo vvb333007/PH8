@@ -857,6 +857,14 @@ struct ph7_conf {
   void *pErrData;      /* Third argument to xErr() */
   SyBlob sErrConsumer; /* Default error consumer */
 };
+
+/* Predefined literal objects which are used often:
+*/
+#define PH7_LITPOOL_ONE   4
+#define PH7_LITPOOL_ZERO  3
+#define PH7_LITPOOL_FALSE 2
+#define PH7_LITPOOL_TRUE  1
+#define PH7_LITPOOL_NULL  0
 /*
  * Signature of the C function responsible of expanding constant values.
  */
@@ -872,7 +880,10 @@ typedef struct ph7_constant ph7_constant;
 struct ph7_constant {
   SyString sName;       /* Constant name */
   ProcConstant xExpand; /* Function responsible of expanding constant value */
+  ph7_value aValue;  
   void *pUserData;      /* Last argument to xExpand() */
+  // TODO: cached result after first execution of xExpand
+  
 };
 typedef struct ph7_aux_data ph7_aux_data;
 /*
@@ -1255,6 +1266,9 @@ struct ph7_class {
 #define PH7_CLASS_INTERFACE 0x002  /* Class is interface */
 #define PH7_CLASS_ABSTRACT  0x004  /* Class is abstract */
 #define PH7_CLASS_ENUM      0x008  /* Class is enum, only having static const attributes */
+#define PH7_CLASS_BAD       0x010  /* Class is bad: one of its attribute has thrown an exception in its initializer (e.g const A = 1/0;)
+                                    * `new` will fail on a bad class;
+                                   */
 
 /* Class attribute/methods/constants protection levels */
 #define PH7_CLASS_PROT_PUBLIC 1    /* public */
@@ -1283,6 +1297,7 @@ struct ph7_class_attr {
 #define PH7_CLASS_ATTR_ENUM      0x010 /* Used by GenStateCompileEnum() to hint the compiler (..CompileConst) to not require = RVALUE */
 #define PH7_CLASS_ATTR_FIXEDTYPE 0x020 /* Fixed type attribute (assignment will do typecast) */
 #define PH7_CLASS_ATTR_NULLABLE  0x040 /* Fixed type nullable attribute (assignment will do typecast) */
+#define PH7_CLASS_ATTR_BAD       0x080 /* Initialization value code execution has generated an exception */
 
 #define PH7_CLASS_ATTR_TYPEMASK  0xffffff00 /* Fixed type attribute: declared type: PH7_TKWRD_INT etc */
 
