@@ -72,6 +72,7 @@ PH7_PRIVATE sxi32 PH7_VmThrow(ph7_vm *pVm, const char *zName, int nBytes, const 
               sxi32 ret_; \
               VmFrame *pFrame_ = pVm->pFrame; \
               pVm->nExceptLine = aInstr[pc].nLine; \
+              if (is_callback) goto Abort; \
               if (PH7_EXCEPTION == (ret_ = PH7_VmThrow(pVm, fname_, flen_,fmt_,__VA_ARGS__ ))) { \
                 /* Exception handled: a catch() block has executed.. */ \
                 if (aInstr != pFrame_->pExcByteCode || pFrame_->iExceptionJump < 1) \
@@ -976,7 +977,13 @@ static sxi32 VmMountUserClass(
       }
       if (SySetUsed(&pAttr->aByteCode) > 0) {
         /* Initialize attribute default value or a constant (any complex expression) */
-        VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
+        
+        sxi32 rc = VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
+        if (rc == PH7_ABORT || rc == PH7_EXCEPTION) {
+          VmErrorFormat(&(*pVm), PH7_CTX_ERR, "Exception in initialization value of %z::%z", &pClass->sName, &pAttr->sName);
+          return SXRET_OK;
+        }
+
         // TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
         // TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
       } else {
@@ -1224,8 +1231,8 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "" \
   "  public function __construct(?string $message = null," \
   "                                  int $code = 0," \
-  "                              ?string $file = __FILE__," \
-  "                                  int $line = __LINE__ ) {" \
+  "                              ?string $file = null," \
+  "                                  int $line = 0 ) {" \
   "" \
   "    if( isset($message) ) {" \
   "      $this->message = $message;" \
@@ -1233,7 +1240,7 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "" \
   "    $this->code = $code;" \
   "    $this->file = $file;" \
-  "    $this->line = $line;" \
+  "    $this->line = $line > 0 ? $line : __ELINE__;" \
   "    $this->trace = debug_backtrace();" \
   "  }" \
   "" \
@@ -1246,38 +1253,17 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "  public function getPrevious() { return null; }" \
   "  public function __toString() { return $this->file.' '.$this->line.' '.$this->code.' '.$this->message; }" \
   "}" \
-  "class Exception {" \
-  "" \
-  "  protected $message = 'Unknown';" \
-  "  protected $code = 0;" \
-  "  protected $file;" \
-  "  protected $line;" \
-  "  protected $trace;" \
-  "  protected $previous;" \
-  "" \
+  "/* Exception. These exceptions are user thrown" \
+  " *" \
+  " */" \
+  "class Exception extends Throwable {" \
   "  public function __construct(?string $message = null," \
-  "                                  int $code = 0," \
-  "                              ?string $file = __FILE__," \
-  "                                  int $line = __LINE__ ) {" \
+  "                              int $code = 0," \
+  "                              ?string $filename = __FILE__ ," \
+  "                              int $lineno = __LINE__) {" \
   "" \
-  "    if( isset($message) ) {" \
-  "      $this->message = $message;" \
-  "    }" \
-  "" \
-  "    $this->code = $code;" \
-  "    $this->file = $file;" \
-  "    $this->line = $line;" \
-  "    $this->trace = debug_backtrace();" \
+  "    parent::__construct($message,$code,$filename,$lineno);" \
   "  }" \
-  "" \
-  "  public function getMessage() { return $this->message; }" \
-  "  public function getCode() { return $this->code; }" \
-  "  public function getFile() { return $this->file; }" \
-  "  public function getLine() { return $this->line; }" \
-  "  public function getTrace(){ return $this->trace; }" \
-  "  public function getTraceAsString() { return debug_string_backtrace(); }" \
-  "  public function getPrevious() { return null; }" \
-  "  public function __toString() { return $this->file.' '.$this->line.' '.$this->code.' '.$this->message; }" \
   "}" \
   "" \
   "/* Error. These exceptions are thrown by VM" \
@@ -2772,6 +2758,8 @@ static sxi32 VmByteCodeExec(
   ph7_value *pTos;
   SySet aArg;
 
+  //puts("Enter");
+
   sxi32 pc;
   sxi32 rc;
   /* Argument container */
@@ -2795,7 +2783,7 @@ static sxi32 VmByteCodeExec(
 
   /* Soft limit guarantees at least VM_THROW_RESERVE_NESTING frames to perform PH7_VmThrow */
   if (pVm->nRecursionDepth == (pVm->nMaxDepth - VM_THROW_RESERVE_NESTING)) {
-
+    
     VM_EXCEPTION_GOTO("__genericfn", 11, "Call nesting soft limit reached. [PC: %08x]", pc);
 
   } else if (pVm->nRecursionDepth > (pVm->nMaxDepth)) {
@@ -5233,8 +5221,10 @@ static sxi32 VmByteCodeExec(
            * For user exceptions, the line number is set up by throw() itself
            * Global VM exception line number is then reset
            */
-          if (0 == pVm->nExceptLine)
+          if (0 == pVm->nExceptLine) {
             pVm->nExceptLine = aInstr[pc].nLine;
+          }
+//          fprintf(stderr,"pVm->nExceptLine == %d\n", pVm->nExceptLine);
 
           STACK_UNDERFLOW_GOTO(pTos);
 
@@ -6777,7 +6767,9 @@ Abort:
     PH7_MemObjRelease(pTos);
     pTos--;
   }
+  //fprintf(stderr,"Recursion depth is %d\n",pVm->nRecursionDepth);
   pVm->nRecursionDepth--;
+  
   return PH7_ABORT;
 Exception:
 #if DEVEL
@@ -7291,16 +7283,19 @@ PH7_PRIVATE int PH7_VmIsCallable(ph7_vm *pVm, ph7_value *pValue, int CallInvoke)
     ph7_class_instance *pThis = (ph7_class_instance *)pValue->x.pOther;
     ph7_class_method *pMethod;
     pMethod = PH7_ClassExtractMethod(pThis->pClass, "__invoke", sizeof("__invoke") - 1);
-    if (pMethod && CallInvoke) {
-      ph7_value sResult;
-      sxi32 rc;
-      /* Invoke the magic method and extract the result */
-      PH7_MemObjInit(pVm, &sResult);
-      rc = PH7_VmCallClassMethod(pVm, pThis, pMethod, &sResult, 0, 0);
-      if (rc == SXRET_OK && (sResult.iFlags & (MEMOBJ_BOOL | MEMOBJ_INT))) {
-        res = sResult.x.iVal != 0;
+    if (pMethod) {
+      res = 1;
+      if (CallInvoke) {
+        ph7_value sResult;
+        sxi32 rc;
+        /* Invoke the magic method and extract the result */
+        PH7_MemObjInit(pVm, &sResult);
+        rc = PH7_VmCallClassMethod(pVm, pThis, pMethod, &sResult, 0, 0);
+        if (rc == SXRET_OK && (sResult.iFlags & (MEMOBJ_BOOL | MEMOBJ_INT))) {
+          res = sResult.x.iVal != 0;
+        }
+        PH7_MemObjRelease(&sResult);
       }
-      PH7_MemObjRelease(&sResult);
     }
   } else if (pValue->iFlags & MEMOBJ_HASHMAP) {
     ph7_hashmap *pMap = (ph7_hashmap *)pValue->x.pOther;

@@ -118,6 +118,18 @@ static void PH7_DATE_Const(ph7_value *pVal, void *pUnused) {
   ph7_value_string_format(pVal, "%04d-%02d-%02d", sTm.tm_year, sTm.tm_mon + 1, sTm.tm_mday);
 }
 /*
+ *TODO: this is wrong  __ELINE__
+ *  A source file line number, where exception was thrown
+ */
+
+static void PH7_ELINE_Const(ph7_value *pVal, void *pUserData) {
+
+  ph7_vm *pVm = (ph7_vm *)pUserData;
+  ph7_value_int64(pVal, pVm->nExceptLine);
+//  fprintf(stderr,"nExceptLine == %d\n", pVm->nExceptLine);
+}
+
+/*
  * __FILE__
  *  Path of the processed script.
  */
@@ -1646,6 +1658,7 @@ static const ph7_builtin_constant aBuiltIn[] = {
   { "__TIME__", PH7_TIME_Const },
   { "__DATE__", PH7_DATE_Const },
   { "__FILE__", PH7_FILE_Const },
+  { "__ELINE__", PH7_ELINE_Const },
   { "__DIR__", PH7_DIR_Const },
   { "PHP_SHLIB_SUFFIX", PH7_PHP_SHLIB_SUFFIX_Const },
   { "E_ERROR", PH7_E_ERROR_Const },
