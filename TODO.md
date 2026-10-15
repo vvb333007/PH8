@@ -236,41 +236,46 @@ Not always checked for existence. Should we patch a constructor lookup code?
 ~~Add the `enum` keyword.~~
 
 
----
-
-
 ###14.  Function return arguments
+
 
 ~~Support for function return types syntax (PHP7.x)~~
 
 
 ###15.  Overloading:
 
+
 ~~do not let user to register a function with exactly same signature twice. Right now function is overwritten silently.~~
 
 
 ###16.  Overloading:
+
 
 ~~do not fallback to the last function in the list if there are no good candidates for overloading.
 Do fallback only if there is only 1 candidate~~
 
 ###17.  Nullable types:
 
+
 ~~inject code into return statement which LOADC 0,0,0; TEQ ; JNZ over CVT instruction to skip conversion of null to the function type~~
 
 ###18.   `callable` type
+
 
 ~~Implement callable type~~
 
 ###19.  ?? operator 
 
+
 ( ~~?? as a null coalesce OP~~, and ??= null coalesce assignment)
 
 ###20.  ?-> nullsafe operator  
 
+
 ~~Implement a nullsafe arrow operator, which loads NULL. Change the behaviour of -> to generate a VM error if operating on null~~
 
 ### 21. Compiler intrinsics: add math functions as opcode
+
 
 This is required in order to minimize expensive OP_CALL operations on FFI math functions:
 abs()       -> OP_ABS
