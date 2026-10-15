@@ -78,14 +78,50 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 
 ## Smaller tasks
 
+
 ### 1. '?:' Elvis operator support
 
 Implement `$a = $b ?: $c;`
 
+### 2. User constants caching:
 
-### 3. __invoke(), __call(), __callStatic(), __get()
+
+~~PH7 executes bytecode each time const value is referenced:~~
+```
+const A = 1+1+1+1+1; // <--- bytecode
+const B = A+A+A+A+A; // <-- bytecode; every 'A' is also a bytecode
+```
+
+~~results in 25 calls to VmLocalExec()! Plus to that, constants like~~
+
+```
+const A = rand_str(5);
+```
+
+~~change their values each time they are referenced.~~
+
+~~TODO: Execute bytecode once and cache result.~~
+
+
+### 3. Constants as arrays:
+
+
+~~PH7 does not support referencing constants as array elements:~~
+
+```
+const A = [1,2,3];
+echo A[1]; // PH7 throws an error here
+```
+~~TODO: add support~~
+
+
+### 4. __invoke(), __call(), __callStatic(), __get()
 
 ~~Currently do not return any values. That must be fixed ASAP; use `__toString()` as a template~~
+
+### 5.  __call() and  __callStatic()
+
+Currently do not receive called method name.
 
 
 ### 6. UNIX-like `fork()` to make a full clone of a VM
@@ -102,6 +138,7 @@ if ($pid == 0) {
 }
 ```
 ### 7. Background PHP services via FreeRTOS tasks
+
 Start a service from P2HP:
 
 ```php
