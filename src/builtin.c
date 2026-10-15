@@ -15,11 +15,31 @@
 #  include "esp32/builtins.h"
 #endif
 
+#ifndef PH7_DISABLE_BUILTIN_FUNC
+#ifdef PH7_ENABLE_MATH_FUNC
+#include <math.h>
+#endif
+#endif
+
+/*
+ * Section:
+ *    Math Functions.
+ * Authors:
+ *    Symisc Systems,devel@symisc.net.
+ *    Copyright (C) Symisc Systems,http://ph7.symisc.net
+ * Status:
+ *    Stable.
+ */
+#include <stdlib.h> /* abs */
+#include <math.h>
+
+
 
 /* Common string literals */
 #ifndef AMALGAM
 static char s_Space[] = { ' ', 0 };
 static char s_NaN[] = { 'N','a','N', 0 };
+static char s_INF[] = { 'I','N','F', 0 };
 #endif
 
 /* This file implement built-in 'foreign' functions for the PH7 engine */
@@ -53,6 +73,7 @@ static int PH7_builtin_is_bool(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   return PH7_OK;
   //return PH7_EXCEPTION;
 }
+
 /*
  * bool is_float($var)
  * bool is_real($var)
@@ -72,6 +93,65 @@ static int PH7_builtin_is_float(ph7_context *pCtx, int nArg, ph7_value **apArg) 
   ph7_result_bool(pCtx, res);
   return PH7_OK;
 }
+
+/*
+ * bool is_nan($var)
+ *  Finds out whether a variable is a NaN (not a number).
+ * Parameters
+ *   $var: The variable being evaluated.
+ * Return
+ *  TRUE if var is a NaN. FALSE otherwise.
+ */
+static int PH7_builtin_is_nan(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  int res = 0;
+  if (nArg > 0) {
+    double dval = ph7_value_to_double(apArg[0]);
+    res = isnan(dval);
+  }
+  ph7_result_bool(pCtx, res);
+  return PH7_OK;
+}
+
+/*
+ * bool is_finite($var)
+ *  Finds out whether a variable is a finite number.
+ * Parameters
+ *   $var: The variable being evaluated.
+ * Return
+ *  TRUE if var is a finite number. FALSE otherwise.
+ */
+static int PH7_builtin_is_finite(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  int res = 0;
+  if (nArg > 0) {
+    double dval = ph7_value_to_double(apArg[0]);
+    if (!isnan(dval)) /* To match ZendPHP */
+      res = !isinf(dval);
+  }
+  ph7_result_bool(pCtx, res);
+  return PH7_OK;
+}
+
+/*
+ * bool is_infinite($var)
+ *  Finds out whether a variable is a finite number.
+ * Parameters
+ *   $var: The variable being evaluated.
+ * Return
+ *  TRUE if var is a infinite number. FALSE otherwise.
+ */
+static int PH7_builtin_is_infinite(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  int res = 0;
+  if (nArg > 0) {
+    double dval = ph7_value_to_double(apArg[0]);
+    if (!isnan(dval)) /* To match ZendPHP */
+      res = isinf(dval);
+  }
+  ph7_result_bool(pCtx, res);
+  return PH7_OK;
+}
+
+
+
 /*
  * bool is_int($var)
  * bool is_integer($var)
@@ -288,6 +368,7 @@ static int PH7_builtin_empty(ph7_context *pCtx, int nArg, ph7_value **apArg) {
 }
 #ifndef PH7_DISABLE_BUILTIN_FUNC
 #ifdef PH7_ENABLE_MATH_FUNC
+
 /*
  * Section:
  *    Math Functions.
@@ -298,7 +379,7 @@ static int PH7_builtin_empty(ph7_context *pCtx, int nArg, ph7_value **apArg) {
  *    Stable.
  */
 #include <stdlib.h> /* abs */
-#include <math.h>
+
 /*
  * float sqrt(float $arg )
  *  Square root of the given number.
@@ -4138,6 +4219,10 @@ PH7_PRIVATE sxi32 PH7_InputFormat(
           } else {
             realvalue = ph7_value_to_double(pArg);
           }
+
+          if (isnan(realvalue)) { zBuf = s_NaN; length = 3; break; }
+          if (isinf(realvalue)) { zBuf = s_INF; length = 3; break; }
+
           if (precision < 0) precision = 6; /* Set default precision */
           if (precision > PH7_FMT_BUFSIZ - 40) precision = PH7_FMT_BUFSIZ - 40;
           if (realvalue < 0.0) {
@@ -8503,6 +8588,9 @@ static const ph7_builtin_func aBuiltInFunc[] = {
 #ifndef PH7_DISABLE_BUILTIN_FUNC
 #ifdef PH7_ENABLE_MATH_FUNC
   /* Math functions */
+  { "is_finite", PH7_builtin_is_finite },
+  { "is_infinite", PH7_builtin_is_infinite },
+  { "is_nan", PH7_builtin_is_nan },
   { "abs", PH7_builtin_abs },
   { "sqrt", PH7_builtin_sqrt },
   { "exp", PH7_builtin_exp },
