@@ -453,7 +453,29 @@ static void PH7_DBIA_Const(ph7_value *pVal, void *pUserData) {
   ph7_value_int(pVal, 0x02); /* MUST BE A POWER OF TWO */
   SXUNUSED(pUserData);
 }
+
+
 #ifdef PH7_ENABLE_MATH_FUNC
+#include <math.h>
+/*
+ * NAN
+ *  Expand the value of Not-A-Number.
+ */
+static void PH7_NAN_Const(ph7_value *pVal, void *pUserData) {
+  SXUNUSED(pUserData); /* cc warning */
+  ph7_value_double(pVal, NAN);
+}
+
+/*
+ * INF
+ *  Expand the value of infinite number
+ */
+static void PH7_INF_Const(ph7_value *pVal, void *pUserData) {
+  SXUNUSED(pUserData); /* cc warning */
+  ph7_value_double(pVal, INFINITY);
+}
+
+
 /*
  * M_PI
  *  Expand the value of pi.
@@ -592,6 +614,8 @@ static void PH7_M_EULER_Const(ph7_value *pVal, void *pUserData) {
   ph7_value_double(pVal, 0.57721566490153286061);
 }
 #endif /* PH7_DISABLE_BUILTIN_MATH */
+
+
 /*
  * DATE_ATOM
  *  Expand Atom (example: 2005-08-15T15:52:01+00:00) 
@@ -1696,6 +1720,8 @@ static const ph7_builtin_constant aBuiltIn[] = {
   { "DEBUG_BACKTRACE_IGNORE_ARGS", PH7_DBIA_Const },
   { "DEBUG_BACKTRACE_PROVIDE_OBJECT", PH7_DBPO_Const },
 #ifdef PH7_ENABLE_MATH_FUNC
+  { "NAN", PH7_NAN_Const },
+  { "INF", PH7_INF_Const },
   { "M_PI", PH7_M_PI_Const },
   { "M_E", PH7_M_E_Const },
   { "M_LOG2E", PH7_M_LOG2E_Const },
