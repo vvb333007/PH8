@@ -20,12 +20,29 @@
  */
 
 #include "ph7int.h"
+#ifndef PH7_DISABLE_BUILTIN_FUNC
+#ifdef PH7_ENABLE_MATH_FUNC
+#include <math.h>
+#endif
+#endif
+/*
+ * Section:
+ *    Math Functions.
+ * Authors:
+ *    Symisc Systems,devel@symisc.net.
+ *    Copyright (C) Symisc Systems,http://ph7.symisc.net
+ * Status:
+ *    Stable.
+ */
+#include <stdlib.h> /* abs */
+#include <math.h>
 
 
 /* Common string literals */
 
 static char s_Space[] = { ' ', 0 };
 static char s_NaN[] = { 'N','a','N', 0 };
+static char s_INF[] = { 'I','N','F', 0 };
 
 
 #include <stdlib.h>
@@ -2989,6 +3006,11 @@ static sxi32 InternFormat(ProcConsumer xConsumer, void *pUserData, const char *z
       case SXFMT_GENERIC:
 #ifndef SX_OMIT_FLOATINGPOINT
         realvalue = va_arg(ap, double);
+
+        if (isnan(realvalue)) { bufpt = s_NaN; length = 3; break; }
+        if (isinf(realvalue)) { bufpt = s_INF; length = 3; break; }
+
+        
         if (precision < 0) precision = 6; /* Set default precision */
         if (precision > SXFMT_BUFSIZ - 40) precision = SXFMT_BUFSIZ - 40;
         if (realvalue < 0.0) {
