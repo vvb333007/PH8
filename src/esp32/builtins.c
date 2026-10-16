@@ -19,7 +19,6 @@
 #include "builtins.h"
 
 
-
 /* Templates and boilerplates.
  * IMPLEMENT() macros are function templates: 0, 1 or two args.
  *
@@ -176,15 +175,21 @@ IMPLEMENT_N(digitalPinCanOutput, int,
 #endif
 )
 
+
 // $rtc_pin = digitalPinToRtcPin($pin)
 //
 IMPLEMENT_N(digitalPinToRtcPin, int,
 #ifdef __CYGWIN__
   puts("pinMode()");
 #else
+#ifdef RTC_GPIO_IS_VALID_GPIO
   ph7_result_int(pCtx, digitalPinToRtcPin(a0));
 #endif
+#endif
 )
+
+
+
 
 // $chan = digitalPinToDacChannel($pin)
 //
@@ -192,9 +197,12 @@ IMPLEMENT_N(digitalPinToDacChannel, int,
 #ifdef __CYGWIN__
   puts("pinMode()");
 #else
+#ifdef DAC_CHANNEL_1_GPIO_NUM
   ph7_result_int(pCtx, digitalPinToDacChannel(a0));
 #endif
+#endif
 )
+
 
 // $chan = digitalPinToTouchChannel($pin)
 //
