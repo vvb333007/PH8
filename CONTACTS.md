@@ -6,7 +6,7 @@
  * licensing@symisc.net
  * contact@symisc.net
 
-###PH7-ESP32 fork/maintenance (2026-present):
+###PH8 fork/maintenance (2026-present):
 
 ####  Viacheslav Logunov
 

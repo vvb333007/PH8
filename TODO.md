@@ -79,6 +79,15 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 ## Smaller tasks
 
 
+### Magic methods
+
+__invoke() does not receive any arguements right now. __call and __callStatic do not receive method name
+
+implement __terminate() magic method
+implement __oom() magic method
+implement __toArray() magic method
+
+
 ### 1. '?:' Elvis operator support
 
 Implement `$a = $b ?: $c;`
