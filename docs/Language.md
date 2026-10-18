@@ -156,6 +156,11 @@ enum Hello: int {
 
 PH8 implements a simplified and more direct semantics for the `__call()` and `__callStatic()` magic methods compared to Zend PHP 8. Instead of receiving the name of the missing method as the first parameter and all original arguments packed into a single array as the second, the magic method receives the original arguments directly, preserving their number, order, and normal parameter-passing semantics. The name of the intercepted method is available through the special __CALL__ constant. This eliminates the need to unpack an argument array and makes magic methods behave more like transparent handlers for otherwise undefined method calls, while allowing their parameters to be declared according to the actual intercepted call.
 
+Вот полный текст на английском, с новым абзацем про `??`.
+
+---
+
+
 ## 3. Type System and Automatic Conversion
 
 Unlike Zend PHP, PH8 treats a declared type as a guarantee, not a restriction. The virtual machine automatically converts a value when necessary to maintain that guarantee.
@@ -360,6 +365,57 @@ In PH8, the nullsafe operator applies only to the method call or property access
 In Zend PHP 8, `$a?->method()->method()` only needs one nullsafe operator. If the first nullsafe operator encounters `null`, the whole expression evaluates to `null`.
 
 The equivalent PH8 expression is `$a?->method()?->method()`: each `->` in the chain must have its own nullsafe operator.
+
+## 7.3. Operator Precedence
+
+The PH8 precedence table follows the C language rather than the current PHP table. This is a deliberate choice: many PH8 extensions, such as function overloading, are also borrowed from C, and a single consistent model makes the language predictable for anyone familiar with C. The order of the core levels (postfix operators, unary operators, `* / %`, `+ -`, shifts, relational, equality, `&`, `^`, `|`, `&&`, `||`, `?:`, assignment, comma) matches C. PHP-specific operators are layered on top: `instanceof`, `.`, `??`, `->`, `::`, and the word operators `and`, `xor` and `or`.
+
+As a result, PH8 parses a few expressions differently from PHP 8. All of these cases come down to one rule: when an expression mixes the operators listed below, use explicit parentheses. Parenthesized code behaves identically in PH8 and in PHP, and it is easier to read as well.
+
+## 7.4. Differences from PHP 8 and How to Write Portable Code
+
+**`!` and `instanceof`.** In PHP, `instanceof` binds tighter than `!`, so `!$a instanceof B` means `!($a instanceof B)`. In PH8, `!` is an ordinary unary operator, as in C, and binds tighter than `instanceof`, so the same expression is parsed as `(!$a) instanceof B`. This is the most common difference, because the check is very frequent in PHP code. The correct form is:
+
+```php
+if (!($a instanceof B)) { ... }
+```
+
+**Concatenation `.` and arithmetic.** In PHP 8, the `.` operator has lower precedence than `+`, `-`, `<<` and `>>`. In PH8, `.` has the same precedence as `+` and `-` (as in PHP 7), and the shift operators bind more loosely. For example, `"a" . 1 + 2` evaluates to `"a3"` in PHP 8, but PH8 parses it as `("a" . 1) + 2`. Do not mix `.` with arithmetic or shift operators without parentheses:
+
+```php
+echo "Total: " . ($a + $b);
+echo "Mask: " . ($x << 2);
+```
+
+**`??` and `||`.** In PHP, `??` has lower precedence than `||` and is right-associative. In PH8, `??` and `||` share the same precedence level and are both left-associative. In practice:
+
+- Chains of `??` alone give the same result in PH8 and PHP: `$a ?? $b ?? $c` returns the first operand that is not `null`.
+- An expression with `||` on the left of `??` is parsed identically: `$a || $b ?? $c` means `($a || $b) ?? $c` in both engines. The left side is always a boolean, never `null`, so `$c` is never used.
+- The difference appears when `??` is on the left of `||`. The expression `$a ?? $b || $c` means `$a ?? ($b || $c)` in PHP, but `($a ?? $b) || $c` in PH8. The results can differ: for example, `5 ?? 0 || 0` yields `int(5)` in PHP and `bool(true)` in PH8.
+- With `&&`, the ternary operator and assignments, `??` behaves the same in PH8 and PHP.
+
+Whenever `??` and `||` appear in the same expression, always specify the order with parentheses:
+
+```php
+$x = $a ?? ($b || $c);
+$y = ($a ?? $b) || $c;
+```
+
+**`<>`.** In PHP, `<>` is a synonym for `!=` and sits at the equality level. In PH8, it sits at the level of `<`, `>`, `<=` and `>=`. In an unparenthesized expression that mixes it with `==` or `!=`, the result may differ. Prefer `!=`.
+
+**Reference assignment `=&`.** In PH8, this operator has the precedence of `&` and is left-associative, whereas in PHP it is an ordinary assignment. Use it only in its simple form, `$a =& $b;`, and do not combine it with other operators in the same expression.
+
+**Assignment inside a condition.** In PHP, an expression such as `!$x = f()` means `!($x = f())`. To avoid depending on parser details, write:
+
+```php
+if (!($x = f())) { ... }
+```
+
+## 7.5. What Is Safe Without Parentheses
+
+You can safely write anything that is the same in C and PHP: arithmetic with `* / %` and `+ -`, comparisons, `==`, `!=`, `===`, `!==`, the bitwise operators `&`, `^`, `|`, the logical operators `&&` and `||`, assignments, and expressions such as `!$a->b` and `!$a[0]`. These are parsed identically in PH8 and PHP.
+
+
 
 ## 8. Language Constructs
 
