@@ -639,7 +639,8 @@ PH7_PRIVATE ProcMemObjCast PH7_MemObjCastMethod(sxi32 iFlags) {
  * proceed and must be handled as an error by VmByteCodeExec(). (e.g. 5.5 to int is lossy, or array to int etc)
  *
  * Note: The requested type is encoded in the upper 16 bits of iFlags.
- */PH7_PRIVATE sxi32 PH7_MemObjCast(ph7_value *pNos, sxi32 iFlags) {
+ */
+PH7_PRIVATE sxi32 PH7_MemObjCast(ph7_value *pNos, sxi32 iFlags) {
 
   if ((iFlags & MEMOBJ_NULLABLE) && (pNos->iFlags & MEMOBJ_NULL)) {
     /* null to nullable -- no conversion */

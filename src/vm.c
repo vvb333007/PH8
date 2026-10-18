@@ -1,6 +1,6 @@
 /*                         aLitObj
 
- * PH7-ESP32 � embeddable PHP bytecode compiler & virtual machine,
+ * PH7-ESP32 — embeddable PHP bytecode compiler & virtual machine,
  * ported and maintained for ESP32/FreeRTOS, Linux and Windows(Cygwin).
  *
  * Copyright (C) 2011-2018 Symisc Systems <http://ph7.symisc.net/>
@@ -192,7 +192,8 @@ struct VmFrame {
   SyHash hVar;               /* Variable hashtable for fast lookup */
   SySet sArg;                /* Function arguments container */
   SySet sRef;                /* Local reference table (VmSlot instance) */
-  sxi32 iFlags;              /* Frame configuration flags (See below)*/
+  sxi16 iFlags;              /* Frame configuration flags (See below)*/
+  sxu16 nLine;               /* Call from the source line nLine has created this frame */
   sxu32 iExceptionJump;      /* Exception jump destination */
   VmInstr *pExcByteCode;     /* Code segment for iExceptionJump */
 };
@@ -355,10 +356,20 @@ PH7_PRIVATE sxi32 PH7_VmRegisterConstant(
     SyMemBackendPoolFree(&pVm->sAllocator, pCons);
     return 0;
   }
-  /* Install the constant */
+  /* Set constant name and its expansion function
+  */
   SyStringInitFromBuf(&pCons->sName, zDupName, pName->nByte);
   pCons->xExpand = xExpand;
   pCons->pUserData = pUserData;
+
+  /* Initialize cached constant value (for user constants only. FFI constants, like
+  * M_PI are resolved through FFI call and are never cached)
+  *
+  * Values are released as a part of a massive VM purge at the script end
+  */
+  PH7_MemObjInit(pVm, &pCons->aValue);
+
+  /* Install the constant */
   rc = SyHashInsert(&pVm->hConstant, (const void *)zDupName, SyStringLength(&pCons->sName), pCons);
   if (rc != SXRET_OK) {
     SyMemBackendFree(&pVm->sAllocator, zDupName);
@@ -670,6 +681,7 @@ static sxi32 VmEnterFrame(
   ph7_vm *pVm,               /* Target VM */
   void *pUserData,           /* Upper-layer private data */
   ph7_class_instance *pThis, /* Top most class instance [i.e: Object in the PHP jargon]. NULL otherwise */
+  sxi32 nLine,               /* Source file line number which caused frame creation or 0 */
   VmFrame **ppFrame          /* OUT: Top most active frame */
 ) {
   VmFrame *pFrame;
@@ -680,6 +692,7 @@ static sxi32 VmEnterFrame(
   }
   /* Link to the list of active VM frame */
   pFrame->pParent = pVm->pFrame;
+  pFrame->nLine = nLine;
   pVm->pFrame = pFrame;
   if (ppFrame) {
     /* Write a pointer to the new VM frame */
@@ -1302,6 +1315,7 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "" \
   "    parent::__construct($message,$code,$filename,$lineno);" \
   "  }" \
+  "  public function __toString() { return 'Error: '.$this->message.' in '.$this->file.':'.$this->line; }" \
   "}" \
   "" \
   "class DivisionByZeroError extends Error {" \
@@ -1709,7 +1723,7 @@ PH7_PRIVATE sxi32 PH7_VmInit(
 
 
   /* Create the global frame */
-  rc = VmEnterFrame(&(*pVm), 0, 0, 0);
+  rc = VmEnterFrame(&(*pVm), 0, 0,0,0);
   if (rc != SXRET_OK) {
     goto Err;
   }
@@ -2782,6 +2796,7 @@ static sxi32 VmByteCodeExec(
   VmInstr *pInstr;
   ph7_value *pTos;
   SySet aArg;
+  sxu16 nLine;
 
   //puts("Enter");
 
@@ -2819,8 +2834,10 @@ static sxi32 VmByteCodeExec(
 
   /* Execute as much as we can */
   for (;;) {
+
     /* Fetch the instruction to execute */
     pInstr = &aInstr[pc];
+    nLine = pInstr->nLine;
     rc = SXRET_OK;
 
 
@@ -3075,7 +3092,7 @@ static sxi32 VmByteCodeExec(
         if ((pTos->iFlags & MEMOBJ_INT) == 0) {
           sxi32 rc = PH7_MemObjToInteger(pTos);
           if (rc != SXRET_OK) {
-            VM_WARNING_F("%u: a non-numeric value is cast to 'int'", aInstr[pc].nLine);
+            VM_WARNING_F("%u: a non-numeric value is cast to 'int'", nLine);
           }
         }
         /* Invalidate any prior representation */
@@ -3131,7 +3148,7 @@ static sxi32 VmByteCodeExec(
                callable is a critical point so we can not it be in an inconsistent state.
             */
             VM_REPLACE_FUNC_NAME("__badcallable");
-            VM_WARNING_F("%u: value is not callable; converted to poisoned stub [PC: %08x]\n",aInstr[pc].nLine, pc);
+            VM_WARNING_F("%u: value is not callable; converted to poisoned stub [PC: %08x]\n",nLine, pc);
 #endif
           }
         }
@@ -3287,23 +3304,25 @@ static sxi32 VmByteCodeExec(
 
                 /* Invoke the callback and deal with the expanded value */
 #if 1
-                /* User-defined constants:
-                 * Expand the constant and precache its value in pCons. Disable expansion on this constant
-                 * and return previously calculated value
+                /* PH7: minimise calls to xExpand for user-defined constants:
+                 * Expand the constant and precache its value in pCons->aValue. 
+                 * Disable expansion on this constant and return previously calculated value
                  *
                  * This is required to optimize code like
                  * const A = 1+1+1+1+1;
                  * const B = A+A+A+A+A;
                  * echo B;
                  *
-                 * Classic PH7 calls expand on A once to calculate A, then expands A 5 times to calculate B
+                 * Classic PH7 calls xExpand on A once to calculate A, then expands A 5 times to calculate B
                  * Then when echo B is called process repeats again resulting in a snowball of VmLocalExec
                  * which are costly
+                 *
+                 * We do not precache built-in constants as it gives no speed gain plus it breaks
+                 * __LINE__ and some other built-in constants
                  */
                 if (pCons->xExpand == PH7_VmExpandConstantValue) {
 
-                  PH7_MemObjInit(pVm, &pCons->aValue);
-                  //puts("Caching user-defined constant...");
+                  //puts("cache miss: expanding and caching user-defined constant...");
                   pCons->xExpand(&pCons->aValue, pCons->pUserData);
                   pCons->xExpand = NULL;
 
@@ -3313,19 +3332,20 @@ static sxi32 VmByteCodeExec(
                 }
 
                 if (pCons->xExpand == NULL) {
-                  //puts("Loading cached value...");
+                  //puts("cache hit: loading cached value...");
                 /*
                  * Load calculated value
                  *  TODO: CITO: should it be MemObjStore() instead? 
+                 * No, it should not as it creates unnecessary copies
                  */
                   PH7_MemObjLoad(&pCons->aValue, pTos);
                 } 
 
 #else
-
+                /* PH7: always expand */
                 pCons->xExpand(pTos, pCons->pUserData);
 #endif
-                /* Mark as constant */
+                /* Mark as constant so when used as a lvalue it will generate errors */
                 pTos->nIdx = SXU32_HIGH;
                 break;
               }
@@ -3808,7 +3828,7 @@ static sxi32 VmByteCodeExec(
                 sxu32 nOfft;
 
    
-                if ((pKey->iFlags & MEMOBJ_INT) == 0) { // BUG:
+                if ((pKey->iFlags & MEMOBJ_INT) == 0) { // BUG: In PH7 here is no check for == 0
                   /* Force an int cast */
                   PH7_MemObjToInteger(pKey);
                 }
@@ -5058,7 +5078,7 @@ static sxi32 VmByteCodeExec(
           SyStringInitFromBuf(&s1, SyBlobData(&pNos->sBlob), SyBlobLength(&pNos->sBlob));
           SyStringInitFromBuf(&s2, SyBlobData(&pTos->sBlob), SyBlobLength(&pTos->sBlob));
           rc = SyStringCmp(&s1, &s2, SyMemcmp);
-          if (pInstr->iOp == PH7_OP_SNE) { //BUG:
+          if (pInstr->iOp == PH7_OP_SNE) { //BUG: "ne" logic was broken. Did they even test it?
             rc = rc != 0;
           } else {
             rc = rc == 0;
@@ -5222,7 +5242,7 @@ static sxi32 VmByteCodeExec(
           VmFrame *pFrame;
           SySetPut(&pVm->aException, (const void *)&pException);
           /* Create the exception frame */
-          rc = VmEnterFrame(&(*pVm), 0, 0, &pFrame);
+          rc = VmEnterFrame(&(*pVm), 0, 0, nLine, &pFrame);
           if (rc != SXRET_OK) {
             //VmErrorFormat(&(*pVm), PH7_CTX_ERR, "Fatal PH7 engine is runnig out of memory");
 
@@ -5579,7 +5599,7 @@ static sxi32 VmByteCodeExec(
               pThis = (ph7_class_instance *)pNos->x.pOther;
               /* Point to the instantiated class */
               pClass = pThis->pClass;
-              /* Extract attribute name first */
+              /* Extract attribute/method name first */
               SyStringInitFromBuf(&sName, (const char *)SyBlobData(&pTos->sBlob), SyBlobLength(&pTos->sBlob));
 
               if (pInstr->iP2) {
@@ -5603,7 +5623,14 @@ static sxi32 VmByteCodeExec(
                 */
                 if (pMeth == 0) {
                   pMeth = PH7_ClassExtractMethod(pClass, "__call", sizeof("__call") - 1 );
-                  // TODO: pVm->iFailedName = Name of the failed method
+                  if (pMeth != NULL) {
+                    /* Set up an VM internal pointer, pointing to the failed function name. Yes, it is a memcpy, but it is not a hotpath
+                     */
+                    sxi32 nLen = sName.nByte > (sizeof(pVm->aFailedMethod) - 1) ? sizeof(pVm->aFailedMethod) - 1 : sName.nByte;
+                    memcpy(pVm->aFailedMethod, sName.zString, nLen);
+                    pVm->aFailedMethod[nLen] = '\0';
+                    // TODO: warning if string was truncated
+                  }
                   
                 }
 
@@ -5634,8 +5661,6 @@ static sxi32 VmByteCodeExec(
                   }
                 }
 #if 1
-                // TODO: commented out because it is not done yet.
-                // compiler needs an update to emit public $__get; everytime it compiles __get() magic method for a class
 
                 if (pObjAttr == NULL) {
                   // find a reference to an existing 'magic' property (special property named 'public __get;')
@@ -5832,7 +5857,8 @@ static sxi32 VmByteCodeExec(
                 }
 #endif
                 if (pInstr->iP2) {
-                  /* Method call */
+                  /* A method call. Try to extract requested method or, if it is not available - fallback to __callStatic
+                  */
                   ph7_class_method *pMeth = 0;
                   if (sName.nByte > 0 && (pClass->iFlags & PH7_CLASS_INTERFACE) == 0) {
                     /* Extract the target method */
@@ -5841,7 +5867,14 @@ static sxi32 VmByteCodeExec(
                   
                   if (pMeth == NULL) {
                     pMeth = PH7_ClassExtractMethod(pClass, "__callStatic", sizeof("__callStatic") - 1 );
-                    // TODO: install called method name into PHP_CALLED constant
+                    if (pMeth != NULL) {
+                      /* Set up an VM internal pointer, pointing to the failed function name. Yes, it is a memcpy, but it is not a hotpath
+                       */
+                      sxi32 nLen = sName.nByte > (sizeof(pVm->aFailedMethod) - 1) ? sizeof(pVm->aFailedMethod) - 1 : sName.nByte;
+                      memcpy(pVm->aFailedMethod, sName.zString, nLen);
+                      pVm->aFailedMethod[nLen] = '\0';
+                      // TODO: warning if string was truncated
+                    }
                   }
 
                   if (pMeth == 0 || (pMeth->iFlags & PH7_CLASS_ATTR_ABSTRACT)) {
@@ -6176,6 +6209,7 @@ static sxi32 VmByteCodeExec(
               PH7_MemObjInit(pVm, &sResult);
               /* May be a class instance and it's static method */
               /* TODO: check return code propagation path  */
+
               PH7_VmCallUserFunction(pVm, pTos, (int)SySetUsed(&aArg), (ph7_value **)SySetBasePtr(&aArg), &sResult);
               /* TODO: propagate exception, if any */
               SySetReset(&aArg);
@@ -6191,17 +6225,39 @@ static sxi32 VmByteCodeExec(
               ph7_value pValue;
               PH7_MemObjInit(pVm, &pValue);
   
-              /* class name as function: invoke magic __invoke() call
-               */
               if (pTos->iFlags & MEMOBJ_OBJ) {
                 ph7_class_instance *pThis = (ph7_class_instance *)pTos->x.pOther;
-                /* Call the magic method '__invoke' if available 
-                   Raise an exception if __invoke() is not available
-                   TODO: propagate return value and copy it to the stack
-                */
+
+              /* class name as function: invoke magic __invoke() call */
+#if 0
+                // THIS IS WRONG, DO NOT UNCOMMENT
+                //
+                // No we can not sumply replace the object on Tos: if we release it and place there a function name
+                // then we simply loose 1 ref, and this will be deadly in cases like (new Object)->mathod(), as GC
+                // will destroy object completely. Calling then __invoke() on dead object is a game: if __invoke()
+                // uses `this` then ...
+                // If we don't release it, then we can get a leak. Do we?
+                //
+                // This needs to be brainstormed
+                //
+                ph7_class_method *pMeth;
+                pMeth = PH7_ClassExtractMethod(pThis->pClass, "__invoke", sizeof("__invoke") - 1 );
+
+                if (pMeth == 0) {
+                  VM_EXCEPTION_GOTO("__unknownfn", 11, "Calling object as function requires __invoke to be implemented by class '%z'\n", &pClass->sName)
+                } else {
+                  /* Replace object on the stack with a method name */
+                  PH7_MemObjRelease(pTos);  // (new Class)() ?
+                  SyBlobAppend(&pTos->sBlob, SyStringData(&pMeth->sVmName), SyStringLength(&pMeth->sVmName));
+                  MemObjSetType(pTos, MEMOBJ_STRING);
+                }
+                pTos->nIdx = SXU32_HIGH;
+                goto NameIsString;
+#else
                 if (SXRET_OK != PH7_CallMagicMethod(&(*pVm), pThis->pClass, pThis, "__invoke", sizeof("__invoke") - 1, NULL, &pValue)) {
                   VM_EXCEPTION_GOTO("__unknownat", 11, "'__invoke()' magic method is not implemented by class '%z'. at [PC: %08x]\n", &pThis->pClass->sName, pc)
                 }
+#endif
 
               } else {
                 /* Raise exception: Invalid function name, most likely NULL */
@@ -6219,6 +6275,7 @@ static sxi32 VmByteCodeExec(
             }
             break;
           }
+//NameIsString:
           SyStringInitFromBuf(&sName, SyBlobData(&pTos->sBlob), SyBlobLength(&pTos->sBlob));
 
           /* Check for a compiled function first */
@@ -6328,8 +6385,8 @@ static sxi32 VmByteCodeExec(
            
 
              /* Create a new VM frame  */
-            // TODO: pFrame leaks on exception
-            rc = VmEnterFrame(&(*pVm), pVmFunc, pThis, &pFrame);
+            // TODO: check if this frame leaks after exception
+            rc = VmEnterFrame(&(*pVm), pVmFunc, pThis, nLine, &pFrame);
             if (rc != SXRET_OK) {
               /* Pop given arguments */
               if (pInstr->iP1 > 0) {
@@ -8389,6 +8446,7 @@ PH7_PRIVATE sxi32 PH7_VmCallClassMethod(
   }
   /* Fill the operand stack with the given arguments */
   for (i = 0; i < nArg; i++) {
+//    fprintf(stderr,"memload %p\n", apArg[i]);
     PH7_MemObjLoad(apArg[i], &aStack[i]);
     /*
      * Symisc eXtension:
@@ -9889,7 +9947,7 @@ static int vm_builtin_get_resource_type(ph7_context *pCtx, int nArg, ph7_value *
 }
 /*
  * void var_dump(expression,....)
- *   var_dump � Dumps information about a variable
+ *   var_dump пїЅ Dumps information about a variable
  * Parameters
  *   One or more expression to dump.
  * Returns
@@ -10733,9 +10791,19 @@ static sxi32 VmUncaughtException(
     SyBlobInit(&Blob, &pVm->sAllocator);
 
     for (i = 1, pFrame = pVm->pFrame; pFrame->pParent != NULL; pFrame = pFrame->pParent, i++) {
+
+      if (pFrame->nLine > 0)
+        SyBlobFormat(&Blob, "Line %u, ", pFrame->nLine );
+
       
-      if (pFrame->iFlags & VM_FRAME_CATCH) SyBlobAppend(&Blob, "in a catch() frame", sizeof("in a catch() frame")-1);  else
-      if (pFrame->iFlags & VM_FRAME_EXCEPTION) SyBlobAppend(&Blob, "in a try() frame", sizeof("in a try() frame")-1);  else {
+      if (pFrame->iFlags & VM_FRAME_CATCH) {
+        SyBlobAppend(&Blob, "in a catch() frame", sizeof("in a catch() frame")-1);
+        SyBlobAppend(&Blob, "\n           ↑\n", sizeof("\n           ↑\n")-1);
+      } else if (pFrame->iFlags & VM_FRAME_EXCEPTION) {
+        SyBlobAppend(&Blob, "in a try() frame", sizeof("in a try() frame")-1);
+        SyBlobAppend(&Blob, "\n           ↑\n", sizeof("\n           ↑\n")-1);
+      }
+      else {
         ph7_vm_func *pFunc = (ph7_vm_func *)pFrame->pUserData;
         if (pFunc) {
           SyBlobAppend(&Blob, "in function \"", sizeof("in function '")-1); 
@@ -10756,11 +10824,14 @@ static sxi32 VmUncaughtException(
               }
             }
           }
-          SyBlobAppend(&Blob, ")\"\n", 3);
+          SyBlobAppend(&Blob, ")\"\n           ↑\n", sizeof(")\"\n           ↑\n")-1);
         }
       }
     }
-    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"%u: Uncaught exception '%z' in the '%z' frame context\nCall stack:\n%.*s\n",pVm->nExceptLine, &sName, &sFuncName, SyBlobLength(&Blob), SyBlobData(&Blob));
+
+    SyBlobAppend(&Blob, " GLOBAL FRAME CONTEXT\n", sizeof(" GLOBAL FRAME CONTEXT\n")-1);
+    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"%u: Uncaught exception '%z' in the '%z' frame context\n"
+                                       " ---- Call stack (GDB order): ---- \n%.*s\n",pVm->nExceptLine, &sName, &sFuncName, SyBlobLength(&Blob), SyBlobData(&Blob));
     SyBlobRelease(&Blob);
 
     /* Tell the upper layer to stop VM execution immediately  */
@@ -10859,7 +10930,7 @@ static sxi32 VmThrowException(
     }
 
     /* Create a private frame first */
-    rc = VmEnterFrame(&(*pVm), 0, 0, &pFrame);
+    rc = VmEnterFrame(&(*pVm), 0, 0,0, &pFrame); /* TODO: must be a valid line number here */
     if (rc == SXRET_OK) {
       /* Mark as catch frame */
       ph7_value *pObj = VmExtractMemObj(&(*pVm), &pCatch->sThis, FALSE, TRUE);
@@ -10873,7 +10944,7 @@ static sxi32 VmThrowException(
         pObj->x.pOther = pThis;
         MemObjSetType(pObj, MEMOBJ_OBJ);
       }
-      /* Exe�ute the block */
+      /* Exeсute the block */
 
       rc = VmLocalExec(&(*pVm), &pCatch->sByteCode, 0);
       /* Leave the frame */
@@ -11973,9 +12044,9 @@ static int vm_builtin_get_included_files(ph7_context *pCtx, int nArg, ph7_value 
  *  and the current working directory before failing. The include()
  *  construct will emit a warning if it cannot find a file; this is different
  *  behavior from require(), which will emit a fatal error.
- *  If a path is defined � whether absolute (starting with a drive letter
+ *  If a path is defined пїЅ whether absolute (starting with a drive letter
  *  or \ on Windows, or / on Unix/Linux systems) or relative to the current
- *  directory (starting with . or ..) � the include_path will be ignored altogether.
+ *  directory (starting with . or ..) пїЅ the include_path will be ignored altogether.
  *  For example, if a filename begins with ../, the parser will look in the parent
  *  directory to find the requested file.
  *  When a file is included, the code it contains inherits the variable scope

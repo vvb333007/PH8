@@ -957,54 +957,11 @@ PH7_PRIVATE sxi32 PH7_ClassInstanceDump(SyBlob *pOut, ph7_class_instance *pThis,
  * Note that PH7 does not support all the magical method and introudces __toFloat(),__toInt()
  * which have the same behaviour as __toString() but for float and integer types
  * respectively.
- * Refer to the official documentation for more information.
- * TODO: This must be refactored: we need proper return result propagation. we need arguments as well.
- * TODO: __set() must be able to receive 2 arguments (name and value), not just 1 like it is now.
- */
-PH7_PRIVATE sxi32 PH7_ClassInstanceCallMagicMethod(
-  ph7_vm *pVm,               /* VM that own all this stuff */
-  ph7_class *pClass,         /* Target class */
-  ph7_class_instance *pThis, /* Target object */
-  const char *zMethod,       /* Magic method name [i.e: __toString()]*/
-  sxu32 nByte,               /* zMethod length*/
-  const SyString *pAttrName  /* Attribute name, i.e. argument to the magic method */
-) {
-  ph7_value *apArg[2] = { 0, 0 };
-  ph7_class_method *pMeth;
-  ph7_value sAttr; /* cc warning */
-  sxi32 rc;
-  int nArg;
-  /* Make sure the magic method is available */
-  /* TODO: precache all magic methods*/
-  pMeth = PH7_ClassExtractMethod(&(*pClass), zMethod, nByte);
-  if (pMeth == 0) {
-    /* No such method,return immediately */
-    return SXERR_NOTFOUND;
-  }
-  nArg = 0;
-
-  /* Copy arguments */
-  if (pAttrName) {
-    PH7_MemObjInitFromString(pVm, &sAttr, pAttrName);
-    sAttr.nIdx = SXU32_HIGH; /* Mark as constant */
-    apArg[0] = &sAttr;
-    nArg = 1;
-  }
-  /* Call the magic method now */
-  /* TODO: use non-null ph7_result to save magic method return value 
-   *       and put it on the stack (PH7_MemObjStore(pValue, pTos);)
-   */
-  rc = PH7_VmCallClassMethod(pVm, &(*pThis), pMeth, 0, nArg, apArg);
-  /* Clean up */
-  if (pAttrName) {
-    PH7_MemObjRelease(&sAttr);
-  }
-  return rc;
-}
-
-
-
-
+ *
+ * TODO: refactor. this function must be able to take an arbitrary number of argumens, insted of one pAttrName
+ * (which is a string).
+ * TODO: add ph7_value 
+*/
 PH7_PRIVATE sxi32 PH7_CallMagicMethod(
   ph7_vm *pVm,               /* VM that own all this stuff */
   ph7_class *pClass,         /* Target class */

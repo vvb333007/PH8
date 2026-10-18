@@ -175,7 +175,7 @@ PH7_PRIVATE sxu32 SyStrlen(const char *zSrc) {
     return 0;
   }
 #endif
-  for (;;) {
+  for (;;) { // TODO: should we unroll it more? Add __unlikely
     if (!zIn[0]) { break; }
     zIn++;
     if (!zIn[0]) { break; }
@@ -5320,7 +5320,7 @@ PH7_PRIVATE void MD5Final(unsigned char digest[16], MD5Context *ctx) {
   MD5Transform(ctx->buf, (sxu32 *)ctx->in);
   byteReverse((unsigned char *)ctx->buf, 4);
   SyMemcpy(ctx->buf, digest, 0x10);
-  SyZero(ctx, sizeof(*ctx)); /* In case it's sensitive */ // BUG:2
+  SyZero(ctx, sizeof(*ctx)); /* In case it's sensitive */ // BUG:2 wrong use of size of fixed
 }
 #undef F1
 #undef F2

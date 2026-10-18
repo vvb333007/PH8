@@ -1664,6 +1664,23 @@ static void PH7_parent_Const(ph7_value *pVal, void *pUserData) {
     ph7_value_null(pVal);
   }
 }
+
+/*
+ * __CALL__
+ *  Expand the name of failed method name which resulted in a __call() or __callStatic()
+ * The semantic of __call/__callStatic differs from Zends one: the failed method name is not passed as a first arg
+ * and other arguments are not packed into array. Instead, __call/__callStatic receive arguments as if they were called directly
+ * Thus, typical __call/__callStatic should use __CALL__ to make appropriate choices
+ */
+static void PH7_CALL_Const(ph7_value *pVal, void *pUserData) {
+  ph7_vm *pVm = (ph7_vm *)pUserData;
+  if (pVm) {
+    ph7_value_string(pVal, pVm->aFailedMethod, (int)SyStrlen(pVm->aFailedMethod)); // TODO: get rid of strlen
+  } else {
+    ph7_value_string(pVal, "<null>", sizeof("<null>") - 1);
+  }
+}
+
 /*
  * Table of built-in constants.
  */
@@ -1875,6 +1892,7 @@ static const ph7_builtin_constant aBuiltIn[] = {
   { "self", PH7_self_Const },
   { "__CLASS__", PH7_self_Const },
   { "parent", PH7_parent_Const },
+  { "__CALL__", PH7_CALL_Const },
 #if defined(ESP32) || defined(__CYGWIN__)
 #  include "esp32/constants.inc"
 #endif

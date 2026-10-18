@@ -1420,8 +1420,8 @@ struct ph7_vm {
 #if defined(PH7_ENABLE_THREADS)
   SyMutex *pMutex; /* Recursive mutex associated with VM. */
 #endif
-  const char *pCwd;                /* Current working directory; Set by chdir(), read by getcwd(), free()d by the VM destructor */
-  const char *pTmp;                /* System writeable TMP directory (e.g. "/ffat/tmp") */
+  const char *pCwd;                /* TODO: use SyString. Current working directory; Set by chdir(), read by getcwd(), free()d by the VM destructor */
+  const char *pTmp;                /* TODO: use SyString. System writeable TMP directory (e.g. "/ffat/tmp") */
   ph7 *pEngine;                    /* Interpreter that own this VM */
   SySet aByteCode;                 /* Default bytecode container */
   SySet *pByteContainer;           /* Current bytecode container */
@@ -1457,8 +1457,9 @@ struct ph7_vm {
   int bErrReport:1;                /* TRUE to report all runtime Error/Warning/Notice */
   int bListing:1;                  /* TRUE generate disasembly */
   int nRecursionDepth;             /* Current recursion depth */
+  char aFailedMethod[64];          /* Used by __call() and __callStatic() magic methods to obtain the name of the failed method (no, first arg to _call() is not method name in PH8) */
 
-#define VM_THROW_RESERVE_NESTING 15 /* Required vod VM_EXCEPTION_GOTO to be able to throw()*/
+#define VM_THROW_RESERVE_NESTING 15 /* Required for VM_EXCEPTION_GOTO to be able to throw()*/ 
 #define VM_MAX_NESTING_DEPTH     (32 + VM_THROW_RESERVE_NESTING) /* Max nesting depth of VmByteCodeExec() */
 
   int nMaxDepth;                   /* Maximum allowed recusion depth */

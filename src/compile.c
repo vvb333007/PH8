@@ -1021,7 +1021,7 @@ PH7_PRIVATE sxi32 PH7_CompileString(ph7_gen_state *pGen, sxi32 iCompileFlag) {
 /*
  * Compile a Heredoc string.
  *  See the block-comment above for more information.
- * BUG: CITO: an empty heredoc statements screws the compiler up: it reaches the end of the script in attempt to find an end statement
+ * BUG: an empty heredoc statements screws the compiler up: it reaches the end of the script in attempt to find an end statement
 
 Dome:
 
@@ -1817,6 +1817,7 @@ static sxi32 PH7_CompileConstant(ph7_gen_state *pGen) {
   /* Emit the done instruction */
   PH7_VmEmitInstr(pGen->pVm, PH7_OP_DONE, (rc != SXERR_EMPTY ? 1 : 0), 0, 0, 0, pGen);
 
+  /* Dump disassembly if required */
   if (pGen->pVm->bListing && pGen->xErr) {
     SyProcFormat(pGen->xErr, pGen->pErrData, ".section const %.*s\n",pName->nByte, pName->zString);
     VmByteCodeDump(pConsCode, pGen->xErr, pGen->pErrData);
@@ -3415,6 +3416,7 @@ static sxi32 PH7_CompileStatic(ph7_gen_state *pGen) {
     /* Emit the done instruction */
     PH7_VmEmitInstr(pGen->pVm, PH7_OP_DONE, (rc != SXERR_EMPTY ? 1 : 0), 0, 0, 0, pGen);
 
+    /* Disassemble if required */
     if (pGen->pVm->bListing && pGen->xErr) {
       SyProcFormat(pGen->xErr, pGen->pErrData, ".section static %.*s\n",pName->nByte, pName->zString);
       VmByteCodeDump(&sStatic.aByteCode, pGen->xErr, pGen->pErrData);
@@ -3731,6 +3733,7 @@ static sxi32 GenStateProcessArgValue(ph7_gen_state *pGen, ph7_vm_func_arg *pArg,
   /* Emit the done instruction */
   PH7_VmEmitInstr(pGen->pVm, PH7_OP_DONE, (rc != SXERR_EMPTY ? 1 : 0), 0, 0, 0, pGen);
 
+  /* Dump microcode for a default function argument */
   if (pGen->pVm->bListing && pGen->xErr) {
     SyProcFormat(pGen->xErr, pGen->pErrData, ".section @defarg %.*s\n", pArg->sName.nByte, pArg->sName.zString);
     VmByteCodeDump(&pArg->aByteCode, pGen->xErr, pGen->pErrData);
@@ -4092,6 +4095,7 @@ static sxi32 GenStateCompileFuncBody(
   }
   SySetTruncate(&pGen->aGoto, nGotoOfft);
 
+  /* Dump function body */
   if (pGen->pVm->bListing && pGen->xErr) {
     SyProcFormat(pGen->xErr, pGen->pErrData, ".section .text.%.*s\n", pFunc->sName.nByte, pFunc->sName.zString);
     VmByteCodeDump(&pFunc->aByteCode, pGen->xErr, pGen->pErrData);
@@ -4350,8 +4354,8 @@ err:
         //puts(":never is replaced with :void");
       }
 
-      /* Check if nKey is one of a valid types: object, string, array, int, bool, callable
-       * handle special types: 'static'
+      /* Check if nKey is refers to an object and replace it with type object
+       * i.e. :static , :self and :parent all are synonyms of  :object
        * TODO: only do this if we are in the class scope!
       */
       if (nKey == PH7_TKWRD_STATIC || nKey == PH7_TKWRD_PARENT || nKey == PH7_TKWRD_SELF) {

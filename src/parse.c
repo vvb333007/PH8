@@ -468,7 +468,7 @@ static sxi32 ExprVerifyNodes(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 
         apNode[i]->pStart->nType |= PH7_TK_OSB /*'['*/;
 
         pOp = aOpTable;
-//        pEnd = &pOp[sizeof(aOpTable)];  // BUG:1
+//        pEnd = &pOp[sizeof(aOpTable)];  // BUG: out of memory bounds access
         pEnd = &pOp[sizeof(aOpTable) / sizeof(aOpTable[0])];
 
         while (pOp < pEnd) {
