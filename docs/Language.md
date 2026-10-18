@@ -152,6 +152,10 @@ enum Hello: int {
 }
 ```
 
+### 2.8. Simplified `__call()` and `__callStatic()` semantics
+
+PH8 implements a simplified and more direct semantics for the `__call()` and `__callStatic()` magic methods compared to Zend PHP 8. Instead of receiving the name of the missing method as the first parameter and all original arguments packed into a single array as the second, the magic method receives the original arguments directly, preserving their number, order, and normal parameter-passing semantics. The name of the intercepted method is available through the special __CALL__ constant. This eliminates the need to unpack an argument array and makes magic methods behave more like transparent handlers for otherwise undefined method calls, while allowing their parameters to be declared according to the actual intercepted call.
+
 ## 3. Type System and Automatic Conversion
 
 Unlike Zend PHP, PH8 treats a declared type as a guarantee, not a restriction. The virtual machine automatically converts a value when necessary to maintain that guarantee.
