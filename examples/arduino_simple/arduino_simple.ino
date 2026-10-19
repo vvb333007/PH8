@@ -19,7 +19,8 @@ char * const zSource = "\r\n"
  * Все, что делает эта функция - перенаправляет весь вход на экран (на stdout)
  */
 static int output_callback(const void *pOutput,unsigned int nOutputLen,void *pUserData /* Unused */) {
-  return write(1,pOutput,nOutputLen) < 0 ? PH7_ABORT : PH7_OK;
+  Serial.printf("%.*s",nOutputLen, pOutput );
+  return PH7_OK;
 }
 
 
