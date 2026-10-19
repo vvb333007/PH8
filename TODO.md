@@ -78,6 +78,27 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 
 ## Smaller tasks
 
+### 0. Arrays
+
+Implement: 
+
+`array_column()`  PHP5.5
+
+`array_key_first()` PHP7.3
+
+`array_key_last()`  PHP7.3
+
+`array_replace_recursive()`
+
+`array_merge_recursive()`
+
+`array_count_values()`
+
+`array_change_key_case()`
+
+Refactor `(object)` cast of arrays: instead of wrapping up arrays to stdClass we have to create a new class with given properties in runtime
+
+
 
 ### Magic methods
 
