@@ -35,8 +35,10 @@ static void PH7_VER_Const(ph7_value *pVal, void *pUnused) {
  */
 static void PH7_OS_Const(ph7_value *pVal, void *pUnused) {
 
+
   ph7_value_string(pVal, "WINNT", (int)sizeof("WINNT") - 1);
 
+#if !defined(__MINGW32__) && !defined(__MINGW64__)
   struct utsname sInfo;
   if (uname(&sInfo) != 0) {
     ph7_value_string(pVal, "Unix", (int)sizeof("Unix") - 1);
@@ -44,6 +46,7 @@ static void PH7_OS_Const(ph7_value *pVal, void *pUnused) {
     ph7_value_string(pVal, sInfo.sysname, -1);
   }
   SXUNUSED(pUnused);
+#endif
 }
 /*
  * PHP_EOL
@@ -51,7 +54,7 @@ static void PH7_OS_Const(ph7_value *pVal, void *pUnused) {
  */
 static void PH7_EOL_Const(ph7_value *pVal, void *pUnused) {
   SXUNUSED(pUnused);
-  ph7_value_string(pVal, "\n", (int)sizeof(char));
+  ph7_value_string(pVal, "\r\n", (int)sizeof(char)*2);
 }
 /*
  * PHP_INT_MAX

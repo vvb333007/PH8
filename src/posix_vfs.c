@@ -27,7 +27,10 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#if defined(__MINGW32__) || defined(__MINGW64__)
+#else
 #include <sys/uio.h>
+#endif
 #include <sys/stat.h>
 #ifdef ESP32
 /* TARFS is the only FS on ESP32 which supports mmap(), so TARFS is used for scripts.
@@ -35,7 +38,10 @@
  */
 # include "tarfs.h"
 #else
+#if defined(__MINGW32__) || defined(__MINGW64__)
+#else
 # include <sys/mman.h>
+#endif
 #endif
 
 #include <sys/file.h>
@@ -453,6 +459,7 @@ static int UnixVfs_Mmap(const char *zPath, void **ppMap, ph7_int64 *pSize) {
   rc = PH7_OK;
   if (pMap == MAP_FAILED) {
     rc = -1;
+    
   } else {
     /* Point to the memory view */
     *ppMap = pMap;

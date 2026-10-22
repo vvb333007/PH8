@@ -33,6 +33,7 @@
 #define PL_MAX_REPEAT 1000
 #define PL_MAX_PATTERN (64 * 1024)
 
+/* Compiled REGEX, PCRE-style API */
 struct pl_regex {
   char *pat;    /* translated pattern, wrapped in one extra group: "(" ... ")" */
   int flags;    /* SLRE flags */
@@ -41,6 +42,22 @@ struct pl_regex {
   int nuser;    /* user-visible groups */
   unsigned char map[PL_MAX_GROUPS + 1]; /* user group i -> index in SLRE caps[] */
 };
+
+/* Compiled REGEX, PREG-stype API */
+struct preg_re {
+  pl_regex *re;  /* NULL for the empty pattern "//" */
+  int anchored;  /* modifier A */
+  int ngroups;
+};
+
+
+/* Rubbery array of spans */
+typedef struct {
+  pl_span *p;
+  int n;
+  int cap;
+  int oom;
+} spans_t;
 
 
 /* Rubbery string buffer (can grow)
@@ -52,10 +69,41 @@ typedef struct {
   int    oom;
 } sbuf;
 
+/* Pattern translator: PCRE -> SLRE
+*/
+typedef struct {
+
+  sbuf out;
+  const char *p;
+
+  struct {
+    int pos;
+    int caps;
+    int user;
+  } stk[PL_MAX_DEPTH]; /* open groups: where '(' is in out, counters before it */
+
+  int depth;
+  int atom_pos;
+  int atom_caps;
+  int atom_user; /* last complete atom, needed for {n,m} */
+  int ncaps, nuser;
+  int top_alt;   /* saw a '|' outside any group */
+  int class_neg; /* currently inside a negated [^...] */
+
+  unsigned char map[PL_MAX_GROUPS + 1];
+
+} tr_t;
+
+
+/* utility function as pl_regex is opaque struct 
+*/
+int pl_ngroups(const pl_regex *re) {
+  return re->nuser;
+}
+
 /* Put data into sbuf, reallocing for bigger size if needed.
- *
  */
-static void sb_put(sbuf *b, const char *s, size_t n) {
+void sb_put(sbuf *b, const char *s, size_t n) {
 
   if (!b->oom) {
 
@@ -86,29 +134,14 @@ static void sb_put(sbuf *b, const char *s, size_t n) {
   }
 }
 
-static inline void sb_putc(sbuf *b, char c) {
+static inline void sb_putc(sbuf *b, char c) { 
   sb_put(b, &c, 1);
 }
+
 static inline void sb_puts(sbuf *b, const char *s) {
   sb_put(b, s, strlen(s));
 }
 
-
-/* Pattern translator: PCRE -> SLRE
-*/
-typedef struct {
-  sbuf out;
-  const char *p;
-  struct {
-    int pos, caps, user;
-  } stk[PL_MAX_DEPTH]; /* open groups: where '(' is in out, counters before it */
-  int depth;
-  int atom_pos, atom_caps, atom_user; /* last complete atom, needed for {n,m} */
-  int ncaps, nuser;
-  int top_alt;   /* saw a '|' outside any group */
-  int class_neg; /* currently inside a negated [^...] */
-  unsigned char map[PL_MAX_GROUPS + 1];
-} tr_t;
 
 static void begin_atom(tr_t *t) {
   t->atom_pos = (int) t->out.len;
@@ -1546,4 +1579,706 @@ int slre_match( const char * regexp,
     s_len,
     s ) );
   return foo( regexp, (int)strlen( regexp ), s, s_len, &info );
+}
+
+
+/* PREG-style API, for PHP (PH8 engine)
+ *
+ */
+static void sp_push(spans_t *a, int start, int end) {
+
+  if (!a->oom) {
+
+    if (a->n == a->cap) {
+
+      int nc = a->cap ? a->cap * 2 : 8;
+      pl_span *np = (pl_span *) realloc(a->p, (size_t) nc * sizeof *np);
+
+      if (np == NULL) {
+        a->oom = 1;
+        return;
+      }
+
+      a->p = np;
+      a->cap = nc;
+    }
+
+    a->p[a->n].start = start;
+    a->p[a->n].end = end;
+    a->n++;
+  }
+}
+
+
+/* "/pattern/flags" -> malloc()ed body + flags
+*/
+static int parse_pattern(const char *pat, char **body_out, int *flags, int *anchored) {
+
+  const char *p = pat, *b, *e;
+  char open, close;
+  int depth = 1;
+  size_t n;
+  char *body;
+
+  while (isspace((unsigned char) *p))
+    p++;
+
+  open = *p;
+
+  if (open == '\0' || isalnum((unsigned char) open) || open == '\\')
+    return PREG_E_DELIMITER;
+
+  switch (open) {
+    case '(': close = ')'; break;
+    case '[': close = ']'; break;
+    case '{': close = '}'; break;
+    case '<': close = '>'; break;
+    default:  close = open; break;
+  }
+
+  b = ++p;
+
+  while (*p != '\0') {
+
+    if (*p == '\\' && p[1] != '\0') { /* escaped char (incl. escaped delimiter) */
+      p += 2;
+      continue;
+    }
+
+    if (close != open && *p == open)
+      depth++;
+    else if (*p == close && --depth == 0)
+      break;
+
+    p++;
+  }
+
+  if (*p == '\0')
+    return PREG_E_DELIMITER;
+
+  e = p++;
+
+  for (; *p != '\0'; p++) {
+    switch (*p) {
+      case 'i': *flags |= PL_ICASE; break;
+      case 'A': *anchored = 1; break;
+      case 'D':
+      case 'S':
+      case ' ':
+      case '\n':
+      case '\r': break;
+      default: return PREG_E_MODIFIER;
+    }
+  }
+
+  n = (size_t) (e - b);
+  body = (char *) malloc(n + 1);
+
+  if (body == NULL)
+    return PL_E_NOMEM;
+
+  memcpy(body, b, n);
+  body[n] = '\0';
+  *body_out = body;
+
+  return PL_OK;
+}
+
+preg_re *preg_compile(const char *pattern, int *err) {
+
+  preg_re *r;
+  char *body = NULL;
+  int flags = 0, anchored = 0, rc, e = PL_OK;
+
+  if (pattern == NULL) {
+    if (err != NULL) *err = PREG_E_ARGS;
+    return NULL;
+  }
+
+  rc = parse_pattern(pattern, &body, &flags, &anchored);
+
+  if (rc != PL_OK) {
+    if (err != NULL) *err = rc;
+    return NULL;
+  }
+
+  r = (preg_re *) calloc(1, sizeof *r);
+
+  if (r == NULL) {
+    free(body);
+    if (err != NULL) *err = PL_E_NOMEM;
+    return NULL;
+  }
+
+  r->anchored = anchored;
+
+  if (*body != '\0') { /* empty pattern is fine in PHP, pl_compile() would refuse it */
+    r->re = pl_compile(body, flags, &e);
+    if (r->re == NULL) {
+      free(body);
+      free(r);
+      if (err != NULL) *err = e;
+      return NULL;
+    }
+    r->ngroups = pl_ngroups(r->re);
+  }
+
+  free(body);
+
+  if (err != NULL) *err = PL_OK;
+
+  return r;
+}
+
+void preg_re_free(preg_re *re) {
+  if (re != NULL) {
+    pl_free(re->re);
+    free(re);
+  }
+}
+
+void preg_all_free(preg_all_t *all) {
+  if (all != NULL) {
+    free(all->spans);
+    free(all->counts);
+    memset(all, 0, sizeof *all);
+  }
+}
+
+const char *preg_strerror(int code) {
+  switch (code) {
+    case PL_OK:             return "no error";
+    case PL_NO_MATCH:       return "no match";
+    case PL_E_UNSUPPORTED:  return "unsupported regex construct";
+    case PL_E_SYNTAX:       return "regex syntax error";
+    case PL_E_NOMEM:        return "out of memory";
+    case PL_E_LIMITS:       return "regex limits exceeded";
+    case PL_E_ENGINE:       return "regex engine error";
+    case PL_E_GROUPS:       return "unsupported group layout";
+    case PREG_E_DELIMITER:  return "missing or invalid delimiter";
+    case PREG_E_MODIFIER:   return "unsupported modifier";
+    case PREG_E_OFFSET:     return "offset is out of range";
+    case PREG_E_ARGS:       return "invalid argument";
+    default:                return "unknown error";
+  }
+}
+
+
+/* Common helpers
+*/
+
+/* One search from `start`; handles the empty pattern and modifier A. */
+static int re_exec(const preg_re *r, const char *s, int len, int start, pl_match *m) {
+
+  int rc;
+
+  if (r->re == NULL) {
+    if (start < 0 || start > len)
+      return PL_NO_MATCH;
+    m->ngroups = 0;
+    m->g[0].start = m->g[0].end = start;
+    return PL_OK;
+  }
+
+  rc = pl_exec(r->re, s, len, start, m);
+
+  /* leftmost match: if there is one exactly at `start`, it is the one we got */
+  if (rc == PL_OK && r->anchored && m->g[0].start != start)
+    return PL_NO_MATCH;
+
+  return rc;
+}
+
+/* PHP drops trailing groups that did not participate */
+static int visible_count(const pl_match *m, int flags) {
+
+  int n = m->ngroups;
+
+  if (!(flags & PREG_UNMATCHED_AS_NULL)) {
+    while (n > 0 && m->g[n].start < 0)
+      n--;
+  }
+
+  return n + 1;
+}
+
+static int next_pos(const pl_match *m) {
+  /* after an empty match step one byte forward, otherwise we would loop forever */
+  return (m->g[0].end == m->g[0].start) ? m->g[0].end + 1 : m->g[0].end;
+}
+
+static int norm_offset(int *off, int len) {
+
+  if (*off < 0) {
+    *off += len;
+    if (*off < 0)
+      *off = 0;
+  } else if (*off > len) {
+    return PREG_E_OFFSET;
+  }
+
+  return PL_OK;
+}
+
+
+/* preg_match()
+*/
+int preg_match_re(const preg_re *re, const char *s, int len,
+                  preg_match_t *out, int flags, int offset) {
+
+  pl_match m;
+  int rc, i, n;
+
+  if (re == NULL || s == NULL)
+    return PREG_E_ARGS;
+
+  if (len < 0)
+    len = (int) strlen(s);
+
+  rc = norm_offset(&offset, len);
+
+  if (rc != PL_OK)
+    return rc;
+
+  rc = re_exec(re, s, len, offset, &m);
+
+  if (rc == PL_NO_MATCH) {
+    if (out != NULL)
+      out->count = 0;
+    return 0;
+  }
+
+  if (rc < 0)
+    return rc;
+
+  if (out != NULL) {
+    n = visible_count(&m, flags);
+    out->count = n;
+    for (i = 0; i < n; i++)
+      out->g[i] = m.g[i];
+  }
+
+  return 1;
+}
+
+
+/* preg_match_all()
+*/
+int preg_match_all_re(const preg_re *re, const char *s, int len,
+                      preg_all_t *all, int flags, int offset) {
+
+  pl_match m;
+  pl_span *sp = NULL;
+  int *cnt = NULL;
+  int cap = 0, n = 0, pos, rc, i;
+  int ng, w;
+
+  if (re == NULL || s == NULL)
+    return PREG_E_ARGS;
+
+  if (len < 0)
+    len = (int) strlen(s);
+
+  rc = norm_offset(&offset, len);
+
+  if (rc != PL_OK)
+    return rc;
+
+  ng = re->ngroups;
+  w = ng + 1;
+  pos = offset;
+
+  while (pos <= len) {
+
+    rc = re_exec(re, s, len, pos, &m);
+
+    if (rc == PL_NO_MATCH)
+      break;
+
+    if (rc < 0)
+      goto fail;
+
+    if (all != NULL) {
+
+      if (n == cap) {
+
+        int nc = cap ? cap * 2 : 8;
+        pl_span *a = (pl_span *) realloc(sp, (size_t) nc * (size_t) w * sizeof *sp);
+        int *b;
+
+        if (a != NULL)
+          sp = a;
+
+        b = (int *) realloc(cnt, (size_t) nc * sizeof *cnt);
+
+        if (b != NULL)
+          cnt = b;
+
+        if (a == NULL || b == NULL) {
+          rc = PL_E_NOMEM;
+          goto fail;
+        }
+
+        cap = nc;
+      }
+
+      for (i = 0; i < w; i++)
+        sp[(size_t) n * (size_t) w + (size_t) i] = m.g[i];
+
+      cnt[n] = visible_count(&m, flags);
+    }
+
+    n++;
+    pos = next_pos(&m);
+  }
+
+  if (all != NULL) {
+    all->nmatches = n;
+    all->ngroups = ng;
+    all->spans = sp;
+    all->counts = cnt;
+  }
+
+  return n;
+
+fail:
+  free(sp);
+  free(cnt);
+
+  if (all != NULL)
+    memset(all, 0, sizeof *all);
+
+  return rc;
+}
+
+
+/* preg_replace(): PHP replacement syntax.
+ * Mirrors php_pcre_replace_impl()/preg_get_backref(): $n ${n} \n, n = 0..99.
+ */
+static int get_backref(const char **pp, int *ref) {
+
+  const char *w = *pp;
+  int brace = 0, n;
+
+  if (w[1] == '\0')
+    return 0;
+
+  if (*w == '$' && w[1] == '{') {
+    brace = 1;
+    w++;
+  }
+
+  w++;
+
+  if (*w >= '0' && *w <= '9')
+    n = *w++ - '0';
+  else
+    return 0;
+
+  if (*w >= '0' && *w <= '9')
+    n = n * 10 + (*w++ - '0');
+
+  if (brace) {
+    if (*w != '}')
+      return 0;
+    w++;
+  }
+
+  *ref = n;
+  *pp = w;
+
+  return 1;
+}
+
+static void expand2(sbuf *o, const char *s, const pl_match *m, const char *t) {
+
+  char last = 0;
+  int ref;
+
+  while (*t != '\0') {
+
+    if (*t == '\\' || *t == '$') {
+
+      if (last == '\\') { /* "\\" -> "\"   "\$" -> "$": overwrite the backslash just emitted */
+        if (!o->oom)
+          o->p[o->len - 1] = *t;
+        t++;
+        last = 0;
+        continue;
+      }
+
+      if (get_backref(&t, &ref)) {
+        if (ref <= m->ngroups && m->g[ref].start >= 0)
+          sb_put(o, s + m->g[ref].start, (size_t) (m->g[ref].end - m->g[ref].start));
+        last = 0;
+        continue;
+      }
+    }
+
+    sb_putc(o, *t);
+    last = *t;
+    t++;
+  }
+}
+
+char *preg_replace_re(const preg_re *re, const char *s, int len, const char *repl,
+                      int limit, int *out_len, int *count) {
+
+  sbuf o;
+  pl_match m;
+  int pos = 0, last = 0, n = 0, rc;
+
+  if (out_len != NULL) *out_len = 0;
+  if (count != NULL) *count = 0;
+
+  if (re == NULL || s == NULL || repl == NULL) {
+    if (out_len != NULL) *out_len = PREG_E_ARGS;
+    return NULL;
+  }
+
+  if (len < 0)
+    len = (int) strlen(s);
+
+  memset(&o, 0, sizeof o);
+  sb_put(&o, "", 0); /* make sure o.p is allocated and NUL-terminated */
+
+  while (pos <= len && (limit < 0 || n < limit)) {
+
+    rc = re_exec(re, s, len, pos, &m);
+
+    if (rc == PL_NO_MATCH)
+      break;
+
+    if (rc < 0) {
+      free(o.p);
+      if (out_len != NULL) *out_len = rc;
+      return NULL;
+    }
+
+    sb_put(&o, s + last, (size_t) (m.g[0].start - last));
+    expand2(&o, s, &m, repl);
+    last = m.g[0].end;
+    n++;
+    pos = next_pos(&m);
+  }
+
+  sb_put(&o, s + last, (size_t) (len - last));
+
+  if (o.oom) {
+    free(o.p);
+    if (out_len != NULL) *out_len = PL_E_NOMEM;
+    return NULL;
+  }
+
+  if (out_len != NULL) *out_len = (int) o.len;
+  if (count != NULL) *count = n;
+
+  return o.p;
+}
+
+
+/* preg_split(): unlike pl_split(), empty matches DO split (preg_split('//', 'abc')
+ * gives "", "a", "b", "c", "").
+ */
+int preg_split_re(const preg_re *re, const char *s, int len, int limit, int flags,
+                  pl_span **out, int *nout) {
+
+  spans_t a;
+  pl_match m;
+  int pos = 0, last = 0, rc, i, gc;
+  int no_empty = (flags & PREG_SPLIT_NO_EMPTY) != 0;
+
+  if (re == NULL || s == NULL || out == NULL || nout == NULL)
+    return PREG_E_ARGS;
+
+  if (len < 0)
+    len = (int) strlen(s);
+
+  if (limit == 0)
+    limit = -1;
+
+  memset(&a, 0, sizeof a);
+
+  while ((limit == -1 || limit > 1) && pos <= len) {
+
+    rc = re_exec(re, s, len, pos, &m);
+
+    if (rc == PL_NO_MATCH)
+      break;
+
+    if (rc < 0) {
+      free(a.p);
+      return rc;
+    }
+
+    if (!no_empty || m.g[0].start != last) {
+      sp_push(&a, last, m.g[0].start);
+      if (limit != -1)
+        limit--;
+    }
+
+    if (flags & PREG_SPLIT_DELIM_CAPTURE) {
+
+      gc = visible_count(&m, 0) - 1;
+
+      for (i = 1; i <= gc; i++) {
+        if (!no_empty || PREG_SPAN_LEN(m.g[i]) > 0)
+          sp_push(&a, m.g[i].start, m.g[i].end);
+      }
+    }
+
+    last = m.g[0].end;
+    pos = next_pos(&m);
+  }
+
+  if (!no_empty || last < len)
+    sp_push(&a, last, len);
+
+  if (a.oom) {
+    free(a.p);
+    return PL_E_NOMEM;
+  }
+
+  *out = a.p;
+  *nout = a.n;
+
+  return PL_OK;
+}
+
+
+/* preg_grep()
+*/
+int preg_grep_re(const preg_re *re, const char *const *subjects, const int *lens, int n,
+                 int flags, int **out_idx) {
+
+  pl_match m;
+  int *idx = NULL;
+  int i, cnt = 0, rc, l, matched, invert = (flags & PREG_GREP_INVERT) != 0;
+
+  if (out_idx != NULL)
+    *out_idx = NULL;
+
+  if (re == NULL || (n > 0 && subjects == NULL) || n < 0)
+    return PREG_E_ARGS;
+
+  if (out_idx != NULL && n > 0) {
+    idx = (int *) malloc((size_t) n * sizeof *idx);
+    if (idx == NULL)
+      return PL_E_NOMEM;
+  }
+
+  for (i = 0; i < n; i++) {
+
+    if (subjects[i] == NULL) {
+      free(idx);
+      return PREG_E_ARGS;
+    }
+
+    l = lens != NULL ? lens[i] : (int) strlen(subjects[i]);
+    rc = re_exec(re, subjects[i], l, 0, &m);
+
+    if (rc < 0 && rc != PL_NO_MATCH) {
+      free(idx);
+      return rc;
+    }
+
+    matched = (rc == PL_OK);
+
+    if (matched != invert) {
+      if (idx != NULL)
+        idx[cnt] = i;
+      cnt++;
+    }
+  }
+
+  if (out_idx != NULL)
+    *out_idx = idx;
+  else
+    free(idx);
+
+  return cnt;
+}
+
+
+/* Pattern-string variants
+*/
+int preg_match(const char *pattern, const char *s, int len,
+               preg_match_t *m, int flags, int offset) {
+
+  int err = PL_OK, rc;
+  preg_re *re = preg_compile(pattern, &err);
+
+  if (re == NULL)
+    return err;
+
+  rc = preg_match_re(re, s, len, m, flags, offset);
+  preg_re_free(re);
+
+  return rc;
+}
+
+int preg_match_all(const char *pattern, const char *s, int len,
+                   preg_all_t *all, int flags, int offset) {
+
+  int err = PL_OK, rc;
+  preg_re *re = preg_compile(pattern, &err);
+
+  if (re == NULL)
+    return err;
+
+  rc = preg_match_all_re(re, s, len, all, flags, offset);
+  preg_re_free(re);
+
+  return rc;
+}
+
+char *preg_replace(const char *pattern, const char *repl, const char *s, int len,
+                   int limit, int *out_len, int *count) {
+
+  int err = PL_OK;
+  char *r;
+  preg_re *re = preg_compile(pattern, &err);
+
+  if (re == NULL) {
+    if (out_len != NULL) *out_len = err;
+    if (count != NULL) *count = 0;
+    return NULL;
+  }
+
+  r = preg_replace_re(re, s, len, repl, limit, out_len, count);
+  preg_re_free(re);
+
+  return r;
+}
+
+int preg_split(const char *pattern, const char *s, int len, int limit, int flags,
+               pl_span **out, int *nout) {
+
+  int err = PL_OK, rc;
+  preg_re *re = preg_compile(pattern, &err);
+
+  if (re == NULL)
+    return err;
+
+  rc = preg_split_re(re, s, len, limit, flags, out, nout);
+  preg_re_free(re);
+
+  return rc;
+}
+
+int preg_grep(const char *pattern, const char *const *subjects, const int *lens, int n,
+              int flags, int **out_idx) {
+
+  int err = PL_OK, rc;
+  preg_re *re = preg_compile(pattern, &err);
+
+  if (re == NULL) {
+    if (out_idx != NULL) *out_idx = NULL;
+    return err;
+  }
+
+  rc = preg_grep_re(re, subjects, lens, n, flags, out_idx);
+  preg_re_free(re);
+
+  return rc;
 }

@@ -1562,6 +1562,7 @@ enum ph7_vm_op {
   PH7_OP_BITNOT,         /* Bitwise not '~' */
   PH7_OP_LNOT,           /* Logical not '!' */
   PH7_OP_MUL,            /* Multiplication '*' */
+  PH7_OP_POW,            /* Power '**' */
   PH7_OP_DIV,            /* Division '/' */
   PH7_OP_MOD,            /* Modulus '%' */
   PH7_OP_ADD,            /* Add '+' */
@@ -1599,6 +1600,7 @@ enum ph7_vm_op {
   PH7_OP_ADD_STORE,      /* Add and store '+=' */
   PH7_OP_SUB_STORE,      /* Sub and store '-=' */
   PH7_OP_MUL_STORE,      /* Mul and store '*=' */
+  PH7_OP_POW_STORE,      /* Power and store '**=' */
   PH7_OP_DIV_STORE,      /* Div and store '/=' */
   PH7_OP_MOD_STORE,      /* Mod and store '%=' */
   PH7_OP_CAT_STORE,      /* Cat and store '.=' */
@@ -1653,7 +1655,8 @@ enum ph7_expr_id {
   EXPR_OP_INSTOF,     /* instanceof */
   EXPR_OP_LOGNOT,     /* logical not ! */
   EXPR_OP_MUL,        /* Multiplication */
-  EXPR_OP_DIV,        /* division */
+  EXPR_OP_POW,        /* Power */
+  EXPR_OP_DIV,        /* Division */
   EXPR_OP_MOD,        /* Modulus */
   EXPR_OP_ADD,        /* Addition */
   EXPR_OP_SUB,        /* Substraction */
@@ -1688,6 +1691,7 @@ enum ph7_expr_id {
   EXPR_OP_AND_ASSIGN, /* Combined operator: &= */
   EXPR_OP_OR_ASSIGN,  /* Combined operator: |= */
   EXPR_OP_XOR_ASSIGN, /* Combined operator: ^= */
+  EXPR_OP_POW_ASSIGN, /* Combined operator: **= */
   EXPR_OP_SHL_ASSIGN, /* Combined operator: <<= */
   EXPR_OP_SHR_ASSIGN, /* Combined operator: >>= */
   EXPR_OP_COMMA,       /* Comma expression */

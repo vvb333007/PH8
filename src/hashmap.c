@@ -2427,6 +2427,7 @@ static int ph7_hashmap_count(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   }
   if (!ph7_value_is_array(apArg[0])) {
     /* TICKET 1433-19: Handle objects */
+    // TODO: handle strings
     int res = !ph7_value_is_null(apArg[0]);
     ph7_result_int(pCtx, res);
     return PH7_OK;
@@ -5575,11 +5576,11 @@ PH7_PRIVATE sxi32 PH7_HashmapDump(SyBlob *pOut, ph7_hashmap *pMap, int ShowType,
 
   if (!ShowType) {
     //SyBlobAppend(&(*pOut), "Array(", sizeof("Array(") - 1);
-    SyBlobAppend(&(*pOut), "array(", sizeof("array(") - 1);
+    SyBlobAppend(&(*pOut), "[", sizeof("[") - 1);
   }
   /* Total entries */
   if (ShowType)  {
-    SyBlobFormat(&(*pOut), "%u) = {", pMap->nEntry);
+    SyBlobFormat(&(*pOut), "%u) = [", pMap->nEntry);
     SyBlobAppend(&(*pOut), "\n", sizeof(char));
   }
   for (;;) {
@@ -5607,7 +5608,7 @@ PH7_PRIVATE sxi32 PH7_HashmapDump(SyBlob *pOut, ph7_hashmap *pMap, int ShowType,
         isRef = 1;
       }
       rc = PH7_MemObjDump(&(*pOut), pObj, ShowType, nTab + 1, nDepth, isRef);
-      SyBlobAppend(&(*pOut), ",\n", ShowType ? sizeof(char)*2 : sizeof(char)*1);
+      SyBlobAppend(&(*pOut), ",\r\n", ShowType ? sizeof(char)*3 : sizeof(char)*1);
       if (rc == SXERR_LIMIT) {
         break;
       }
@@ -5616,10 +5617,10 @@ PH7_PRIVATE sxi32 PH7_HashmapDump(SyBlob *pOut, ph7_hashmap *pMap, int ShowType,
     n++;
     pEntry = pEntry->pPrev; /* Reverse link */
   }
-  for (i = 0; i < nTab; i++) {
+  for (i = 0; i < nTab-2; i++) {
     SyBlobAppend(&(*pOut), " ", sizeof(char));
   }
-  SyBlobAppend(&(*pOut), ShowType ? "}":")", sizeof(char));
+  SyBlobAppend(&(*pOut), ShowType ? "]":"]", sizeof(char));
   
   return rc;
 }

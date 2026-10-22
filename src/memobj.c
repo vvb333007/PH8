@@ -543,6 +543,8 @@ PH7_PRIVATE sxi32 PH7_MemObjToHashmap(ph7_value *pObj) {
  *   function __construct($v){ $this->value = $v; }"
  *  }
  * Refer to the official documentation for more information.
+ *
+ * TODO: casting of an array to an object must be done in a special way: properties must be created
  */
 PH7_PRIVATE sxi32 PH7_MemObjToObject(ph7_value *pObj) {
   if ((pObj->iFlags & MEMOBJ_OBJ) == 0) {
@@ -566,6 +568,7 @@ PH7_PRIVATE sxi32 PH7_MemObjToObject(ph7_value *pObj) {
       PH7_MemObjRelease(pObj);
       return SXRET_OK;
     }
+
     /* Check if a constructor is available */
     pCons = PH7_ClassExtractMethod(pClass, "__construct", sizeof("__construct") - 1);
     if (pCons) {

@@ -788,7 +788,7 @@ static int PH7_builtin_log10(ph7_context *pCtx, int nArg, ph7_value **apArg) {
  */
 static int PH7_builtin_pow(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   double r, x, y;
-  if (nArg < 1) {
+  if (nArg < 2) {  // BUG: was <1
     /* Missing argument,return 0 */
     ph7_result_int(pCtx, 0);
     return PH7_OK;

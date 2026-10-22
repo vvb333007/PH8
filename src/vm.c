@@ -1,5 +1,4 @@
-/*                         aLitObj
-
+/*
  * PH7-ESP32 — embeddable PHP bytecode compiler & virtual machine,
  * ported and maintained for ESP32/FreeRTOS, Linux and Windows(Cygwin).
  *
@@ -213,13 +212,7 @@ struct VmSlot {
 };
 /*
  * An entry in the reference table is represented by an instance of the
- * follwoing table.
- * The implementation of the reference mechanism in the PH7 engine
- * differ greatly from the one used by the zend engine. That is,
- * the reference implementation is consistent,solid and it's
- * behavior resemble the C++ reference mechanism.
- * Refer to the official for more information on this powerful
- * extension.
+ * following table.
  */
 struct VmRefObj {
   SySet aReference;                      /* Table of references to this memory object */
@@ -2113,9 +2106,11 @@ static ph7_value *VmExtractMemObj(
   /* Check the superglobals table first */
   pEntry = SyHashGet(&pVm->hSuper, (const void *)pName->zString, pName->nByte);
   if (pEntry == 0) {
+//    fprintf(stderr,"Here1: %.*s\n", pName->nByte,pName->zString);
     /* Query the top active frame */
     pEntry = SyHashGet(&pFrame->hVar, (const void *)pName->zString, pName->nByte);
     if (pEntry == 0) {
+//      fprintf(stderr,"Here2: %.*s\n", pName->nByte,pName->zString);
       char *zName = (char *)pName->zString;
       VmSlot sLocal;
       if (!bCreate) {
@@ -2160,6 +2155,7 @@ static ph7_value *VmExtractMemObj(
       pObj->nIdx = nIdx;
     } else {
       /* Extract variable contents */
+      
       nIdx = (sxu32)SX_PTR_TO_INT(pEntry->pUserData);
       pObj = (ph7_value *)SySetAt(&pVm->aMemObj, nIdx);
       if (bNullify && pObj) {
@@ -2168,6 +2164,7 @@ static ph7_value *VmExtractMemObj(
     }
   } else {
     /* Superglobal */
+    
     nIdx = (sxu32)SX_PTR_TO_INT(pEntry->pUserData);
     pObj = (ph7_value *)SySetAt(&pVm->aMemObj, nIdx);
   }
@@ -2574,12 +2571,6 @@ PH7_PRIVATE sxi32 VmByteCodeDump(
   ProcConsumer xConsumer, /* Dump consumer callback */
   void *pUserData         /* Last argument to xConsumer() */
 ) {
-  static const char zDump[] = {
-    "====================================================\n"
-    "PH7 VM Dump   Copyright (C) 2011-2012 Symisc Systems\n"
-    "                              http://www.symisc.net/\n"
-    "====================================================\n"
-  };
   VmInstr *pInstr, *pEnd;
   sxi32 rc = SXRET_OK;
   sxu32 n;
@@ -3377,7 +3368,7 @@ static sxi32 VmByteCodeExec(
           if (pInstr->p3 == 0) {
             /* Take the variable name from the top of the stack */
 
-          STACK_UNDERFLOW_GOTO(pTos);
+            STACK_UNDERFLOW_GOTO(pTos);
 
             /* Force a string cast */
             if ((pTos->iFlags & MEMOBJ_STRING) == 0) {
@@ -7095,6 +7086,7 @@ static char const * aOpNames[] = {
     [PH7_OP_BITNOT] = "NOT.B",
     [PH7_OP_LNOT] = "NOT.L",
     [PH7_OP_MUL] = "MUL",
+    [PH7_OP_POW] = "POW",
     [PH7_OP_DIV] = "DIV",
     [PH7_OP_MOD] = "MOD",
     [PH7_OP_ADD] = "ADD",
@@ -7135,6 +7127,7 @@ static char const * aOpNames[] = {
     [PH7_OP_ADD_STORE] = "ADD.STORE",
     [PH7_OP_SUB_STORE] = "SUB.STORE",
     [PH7_OP_MUL_STORE] = "MUL.STORE",
+    [PH7_OP_POW_STORE] = "POW.STORE",
     [PH7_OP_DIV_STORE] = "DIV.STORE",
     [PH7_OP_MOD_STORE] = "MOD.STORE",
     [PH7_OP_CAT_STORE] = "CAT.STORE",
@@ -10790,18 +10783,26 @@ static sxi32 VmUncaughtException(
     int i,j;
     SyBlobInit(&Blob, &pVm->sAllocator);
 
+    SyString *pFile = (SyString *)SySetPeek(&pVm->aFiles);
+
+
     for (i = 1, pFrame = pVm->pFrame; pFrame->pParent != NULL; pFrame = pFrame->pParent, i++) {
 
-      if (pFrame->nLine > 0)
-        SyBlobFormat(&Blob, "Line %u, ", pFrame->nLine );
+      if (pFrame->nLine > 0) {
+        if (pFile)
+          SyBlobAppend(&Blob, pFile->zString, pFile->nByte);
+        else
+          SyBlobAppend(&Blob, "Line", sizeof("Line")-1);
+        SyBlobFormat(&Blob, ":%u, ", pFrame->nLine );
+      }
 
       
       if (pFrame->iFlags & VM_FRAME_CATCH) {
         SyBlobAppend(&Blob, "in a catch() frame", sizeof("in a catch() frame")-1);
-        SyBlobAppend(&Blob, "\n           ↑\n", sizeof("\n           ↑\n")-1);
+        SyBlobAppend(&Blob, "\r\n           ↑\r\n", sizeof("\r\n           ↑\r\n")-1);
       } else if (pFrame->iFlags & VM_FRAME_EXCEPTION) {
         SyBlobAppend(&Blob, "in a try() frame", sizeof("in a try() frame")-1);
-        SyBlobAppend(&Blob, "\n           ↑\n", sizeof("\n           ↑\n")-1);
+        SyBlobAppend(&Blob, "\r\n           ↑\r\n", sizeof("\r\n           ↑\r\n")-1);
       }
       else {
         ph7_vm_func *pFunc = (ph7_vm_func *)pFrame->pUserData;
@@ -10824,14 +10825,19 @@ static sxi32 VmUncaughtException(
               }
             }
           }
-          SyBlobAppend(&Blob, ")\"\n           ↑\n", sizeof(")\"\n           ↑\n")-1);
+          SyBlobAppend(&Blob, ")\"\r\n           ↑\r\n", sizeof(")\"\r\n           ↑\r\n")-1);
         }
       }
     }
 
-    SyBlobAppend(&Blob, " GLOBAL FRAME CONTEXT\n", sizeof(" GLOBAL FRAME CONTEXT\n")-1);
-    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"%u: Uncaught exception '%z' in the '%z' frame context\n"
-                                       " ---- Call stack (GDB order): ---- \n%.*s\n",pVm->nExceptLine, &sName, &sFuncName, SyBlobLength(&Blob), SyBlobData(&Blob));
+    SyBlobAppend(&Blob, " GLOBAL FRAME CONTEXT\r\n", sizeof(" GLOBAL FRAME CONTEXT\r\n")-1);
+    VmErrorFormat(&(*pVm), PH7_CTX_ERR,"%u: Uncaught exception '%z' in the '%z' frame context\r\n"
+                                       " ---- Call stack (GDB order): ---- \r\n"
+                                       "%.*s\r\n",
+                                        pVm->nExceptLine,
+                                        &sName,
+                                        &sFuncName,
+                                        SyBlobLength(&Blob), SyBlobData(&Blob));
     SyBlobRelease(&Blob);
 
     /* Tell the upper layer to stop VM execution immediately  */
@@ -15362,6 +15368,7 @@ PH7_PRIVATE const ph7_io_stream *PH7_VmGetStreamDevice(
   }
   if (zIn >= zEnd) {
     /* No such scheme,return the default stream */
+    // TODO: display a warning
     return pVm->pDefStream;
   }
   SyStringInitFromBuf(&sDev, zCur, zIn - zCur);

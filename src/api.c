@@ -76,6 +76,58 @@ static struct Global_Data {
  */
 #define PH7_THREAD_LEVEL_SINGLE 1
 #define PH7_THREAD_LEVEL_MULTI 2
+
+#include <stdint.h> //TODO: INT32_MAX , replase with SyMisc macro
+
+static sxi32 GetWholeFile(ph7 *pEngine, const char *zPath, void **pMapView, ph7_int64 *nSize) {
+
+    FILE *fp;
+    void *pBuf;
+    long nFileSize;
+    size_t nRead;
+
+    *pMapView = 0;
+    *nSize = 0;
+
+    fp = fopen(zPath, "rb");
+    if(fp == 0) {
+        //puts("fopen() failed");
+        return SXERR_IO;
+    }
+
+    if(fseek(fp, 0, SEEK_END) != 0 ||
+       (nFileSize = ftell(fp)) < 0 ||
+       fseek(fp, 0, SEEK_SET) != 0 ||
+       nFileSize > INT32_MAX) {
+
+        fclose(fp);
+        //puts("fseek() failed");
+        return SXERR_IO;
+    }
+    pBuf = SyMemBackendAlloc(&pEngine->sAllocator, nFileSize ? (size_t)nFileSize : 1);
+    //pBuf = malloc(nFileSize ? (size_t)nFileSize : 1);
+    if(pBuf == 0) {
+        fclose(fp);
+        //puts("malloc() failed");
+        return SXERR_IO;
+    }
+
+    nRead = fread(pBuf, 1, (size_t)nFileSize, fp);
+    if(nRead != (size_t)nFileSize || ferror(fp)) {
+        //free(pBuf);
+        SyMemBackendFree(&pEngine->sAllocator, pBuf);
+        fclose(fp);
+        //puts("fread() failed");
+        return SXERR_IO;
+    }
+
+    fclose(fp);
+
+    *pMapView = pBuf;
+    *nSize = nRead;
+
+    return SXRET_OK;
+}
 /*
  * Configure a running PH7 engine instance.
  * return PH7_OK on success.Any other return
@@ -793,14 +845,25 @@ int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int 
     */
   pVfs = pEngine->pVfs;
   if (pVfs == 0 || pVfs->xMmap == 0) {
-    /* Memory map routine not implemented */
-    rc = PH7_IO_ERR;
+    /* Memory map routine not implemented, fallback to open/read */
+    rc = SXERR_IO;
   } else {
+
     void *pMapView = 0;  /* cc warning */
     ph7_int64 nSize = 0; /* cc warning */
     SyString sScript;
-    /* Try to get a memory view of the whole file */
+    int bMmapped = 1;
+
+    /* Try to get a memory view of the whole file via mmap().
+     * If mmap() is not supported by the underlying FS then fallback to malloc/fread
+    */
     rc = pVfs->xMmap(zFilePath, &pMapView, &nSize);
+
+    if (rc != PH7_OK) {
+      bMmapped = 0;
+      rc = GetWholeFile(pEngine, zFilePath, &pMapView, &nSize);
+    }
+
     if (rc != PH7_OK) {
       /* Assume an IO error */
       rc = PH7_IO_ERR;
@@ -809,8 +872,11 @@ int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int 
       SyStringInitFromBuf(&sScript, pMapView, nSize);
       rc = ProcessScript(&(*pEngine), ppOutVm, &sScript, iFlags, zFilePath);
       /* Release the memory view of the whole file */
-      if (pVfs->xUnmap) {
+      
+      if (bMmapped && pVfs->xUnmap) {
         pVfs->xUnmap(pMapView, nSize);
+      } else {
+        SyMemBackendFree(&pEngine->sAllocator, pMapView);
       }
     }
   }
@@ -911,6 +977,8 @@ int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus) {
  * Same as ph7_vm_exec() but doesn't run TOP code block: instead calls 'setup()' once and then 'loop()' in a loop
  */
 int ph7_vm_exec_sketch(ph7_vm *pVm) {
+
+  pVm = pVm;
 
 # if 0
   ph7_vm_call_function(pVm, "setup", 0, NULL, NULL); //TODO: check if NULL can be passed

@@ -14,6 +14,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <unistd.h>
 
 extern const ph7_io_stream sUnixFileStream;
@@ -2169,6 +2170,12 @@ int uname(struct utsname *out) {
 
   if (out == NULL)
     return -1;
+#if defined(__MINGW32__) || defined(__MINGW64__)
+
+#elif defined(__CYGWIN__)
+
+#elif defined(tskKERNEL_VERSION_MAJOR)
+
 #if portNUM_PROCESSORS > 1
   out->sysname = "FreeRTOS-SMP";
 #else
@@ -2182,6 +2189,9 @@ int uname(struct utsname *out) {
   out->machine = "Xtensa-LX6/LX7";
 #else
   out->machine = "RISCV";
+#endif
+#else
+#error "Unsupported platform"
 #endif
 
   return 0;
@@ -2205,6 +2215,8 @@ int uname(struct utsname *out) {
  *  OS description as a string.
  */
 static int PH7_vfs_ph7_uname(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+#if defined(__MINGW32__) || defined(__MINGW64__)
+#else
   struct utsname sName;
   const char *zMode = "a";
   if (nArg > 0 && ph7_value_is_string(apArg[0])) {
@@ -2247,7 +2259,7 @@ static int PH7_vfs_ph7_uname(ph7_context *pCtx, int nArg, ph7_value **apArg) {
                                sName.machine);
       break;
   }
-
+#endif
   return PH7_OK;
 }
 /*

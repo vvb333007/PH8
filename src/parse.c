@@ -214,9 +214,17 @@ static const ph7_expr_op aOpTable[] = {
   { { "(array)", sizeof("(array)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_ARRAY },
   { { "(object)", sizeof("(object)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_OBJ },
   { { "(unset)", sizeof("(unset)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_NULL },
+
   /* Binary operators */
-  /* Precedence 7,left-associative */
+  /* Precedence 5, right-assoc. Processed together with unary ops (iPrec == 4)
+   *in ONE right-to-left sweep in ExprMakeTree()
+   */
+  { { "**", sizeof(char) * 2 }, EXPR_OP_POW, 5, EXPR_OP_ASSOC_RIGHT, PH7_OP_POW },
+
+  /* Precedence 7,non-associative */
   { { "instanceof", sizeof("instanceof") - 1 }, EXPR_OP_INSTOF, 7, EXPR_OP_NON_ASSOC, PH7_OP_IS_A },
+
+  /* Precedence 7,left-associative */
   { { "*", sizeof(char) }, EXPR_OP_MUL, 7, EXPR_OP_ASSOC_LEFT, PH7_OP_MUL },
   { { "/", sizeof(char) }, EXPR_OP_DIV, 7, EXPR_OP_ASSOC_LEFT, PH7_OP_DIV },
   { { "%", sizeof(char) }, EXPR_OP_MOD, 7, EXPR_OP_ASSOC_LEFT, PH7_OP_MOD },
@@ -280,6 +288,7 @@ static const ph7_expr_op aOpTable[] = {
   { { "&=", sizeof(char) * 2 }, EXPR_OP_AND_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_BAND_STORE },
   { { "|=", sizeof(char) * 2 }, EXPR_OP_OR_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_BOR_STORE },
   { { "^=", sizeof(char) * 2 }, EXPR_OP_XOR_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_BXOR_STORE },
+  { { "**=", sizeof(char) * 3 }, EXPR_OP_POW_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_POW_STORE },
   { { "<<=", sizeof(char) * 3 }, EXPR_OP_SHL_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_SHL_STORE },
   { { ">>=", sizeof(char) * 3 }, EXPR_OP_SHR_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_SHR_STORE },
   /* Precedence 19,left-associative */
@@ -1415,6 +1424,7 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
           /* Link the node to the tree */
           pNode->pLeft = apNode[iLeft];
           apNode[iLeft] = 0;
+
           if (pNode->pLeft && pNode->pLeft->pOp && pNode->pLeft->pOp->iPrec > 4) {
             if (pNode->pLeft->pLeft == 0 || pNode->pLeft->pRight == 0) {
               /* Syntax error */
