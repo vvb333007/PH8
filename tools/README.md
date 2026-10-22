@@ -11,7 +11,7 @@ These are not automation-ready tests!
 
 
 
-retest.c and refuzz.c are tests for regexp.c library, these are AI GENERATED. 
+..._test.c are tests for regexp.c library, pl_test.c and preg_test.c are AI GENERATED. 
 
 These two files are not required to build the engine .
 
