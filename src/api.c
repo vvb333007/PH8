@@ -845,7 +845,10 @@ int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int 
     */
   pVfs = pEngine->pVfs;
   if (pVfs == 0 || pVfs->xMmap == 0) {
-    /* Memory map routine not implemented, fallback to open/read */
+    /* Memory map routine not implemented; Must not happen
+     * as xMmap() is implemented for all filesystems by blind call to mmap(), which decides if
+     * filesystem supports it or not.
+     */
     rc = SXERR_IO;
   } else {
 
@@ -959,14 +962,14 @@ int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus) {
     /* Exit status */
     *pExitStatus = pVm->iExitStatus;
   }
+
+  /* If there are class instances still left after GC, force removal and destructor calling */
+  PH7_VmPurgeClassInstances(pVm);
+
 #if defined(PH7_ENABLE_THREADS)
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
-
-  /* If there are class instances still left after GC, force removal and destructor calling */
-  /* TODO: what about reuse? */
-  PH7_VmPurgeClassInstances(pVm);
 
   /* Execution result */
   return rc;
@@ -974,23 +977,39 @@ int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus) {
 
 /*
  * [CAPIREF: ph7_vm_exec()]
- * Same as ph7_vm_exec() but doesn't run TOP code block: instead calls 'setup()' once and then 'loop()' in a loop
  */
 int ph7_vm_exec_sketch(ph7_vm *pVm) {
 
   pVm = pVm;
+  sxi32 rc = PH_OK;
 
 # if 0
+  int pExitStatus = -1;
+  
+
+  /* Execute top code block
+  */
+  if (PH7_OK != (rc = ph7_vm_exec(pVm, &pExitStatus)))
+    return rc;
+
+  /* Call setup() user function, if it is exist */
   ph7_vm_call_function(pVm, "setup", 0, NULL, NULL); //TODO: check if NULL can be passed
-  // TODO: atomic_load()
-  while (pVm->iAbort == 0) {
-    ph7_vm_call_function(pVm, "loop", 0, NULL, NULL); //TODO: check if NULL can be passed
-    // TODO: call OS-specific yield()
+
+  /* Rerun loop() in a loop.
+   */
+  while ( 1 ) {
+    rc = ph7_vm_call_function(pVm, "loop", 0, NULL, NULL); //TODO: check if NULL can be passed
+
+    if ( rc != PH7_OK ) {
+      /* VM has requested script abort OR script finished */
+      break;
+    }
+    /* Give others chance to run */
     xYield(); 
   }
 #endif
 
-  return PH7_OK;
+  return rc;
 }
 
 
@@ -2098,51 +2117,5 @@ int ph7_value_is_empty(ph7_value *pVal) {
   rc = PH7_MemObjIsEmpty(pVal);
   return rc;
 }
-/* END-OF-IMPLEMENTATION: ph7@embedded@symisc 345-09-46 */
-/*
- * Symisc PH7: An embeddable bytecode compiler and a virtual machine for the PHP(5) programming language.
- * Copyright (C) 2011-2012,Symisc Systems http://ph7.symisc.net/
- * Version 2.1.4
- * For information on licensing,redistribution of this file,and for a DISCLAIMER OF ALL WARRANTIES
- * please contact Symisc Systems via:
- *       legal@symisc.net
- *       licensing@symisc.net
- *       contact@symisc.net
- * or visit:
- *      http://ph7.symisc.net/
- */
-/*
- * Copyright (C) 2011, 2012 Symisc Systems. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Redistributions in any form must be accompanied by information on
- *    how to obtain complete source code for the PH7 engine and any 
- *    accompanying software that uses the PH7 engine software.
- *    The source code must either be included in the distribution
- *    or be available for no more than the cost of distribution plus
- *    a nominal fee, and must be freely redistributable under reasonable
- *    conditions. For an executable file, complete source code means
- *    the source code for all modules it contains.It does not include
- *    source code for modules or files that typically accompany the major
- *    components of the operating system on which the executable file runs.
- *
- * THIS SOFTWARE IS PROVIDED BY SYMISC SYSTEMS ``AS IS'' AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR
- * NON-INFRINGEMENT, ARE DISCLAIMED.  IN NO EVENT SHALL SYMISC SYSTEMS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+
 
