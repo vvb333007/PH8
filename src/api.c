@@ -981,7 +981,7 @@ int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus) {
 int ph7_vm_exec_sketch(ph7_vm *pVm) {
 
   pVm = pVm;
-  sxi32 rc = PH_OK;
+  sxi32 rc = PH7_OK;
 
 # if 0
   int pExitStatus = -1;
