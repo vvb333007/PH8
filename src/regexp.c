@@ -1,25 +1,20 @@
 /* 
- * This is the SLRE of 2025 (a fork from Aquefir) which was patched where possible against
- * known bugs and then wrapped in a PCRE-like API.
+ * This is the SLRE library of 2025 (a fork from Aquefir) which was 
+ * 1. patched where possible against known bugs and limitations (there are still limitations left)
+ * 2. A PCRE-like API on top of SLRE: functions and structures that starts from "pl_"
+ * 3. A PHP PREG API on top of PCRE API: functions and structures that starts from "preg_"
  * 
- * This is NOT a PHP PCRE. This is very similar regexp engine
- * which has some limitation, comparing to PCRE:
- * In particular, "/regexp/i" is not a valid sytax: '/' and flags are not supported (flags are supported through API, not through regexp itself)
- * Separators and flags are not required.
- *
- * Does it support SLRE or PCRE syntax? It support both: PCRE syntax is used in pl_ functions, SLRE syntax is used in slre_match()
- * PL wrapper works by converting a given regexp into something that SLRE (a patched version!) can understand
- *
  * No lookarounds, no UTF8 (only byte matching, no ranges e.g. [à-ÿ])
  *
  * Copyright (C) 2004-2013 Sergey Lyubka.
  * Copyright (C) 2013 Cesanta Software Limited.
  * Copyright (C) 2025 Aquefir Consulting LLC.
- * Copyright (C) 2026 Viacheslav Logunov (bug fixes)
- * Released under GNU General Public License v2
-
+ * Copyright (C) 2026 Viacheslav Logunov
  *
- * CODING STYLE IS KEPT SAME AS THE CODING STYLE OF THE SLRE LIBRARY!
+ * Released under GNU General Public License v2
+ *
+ * CODING STYLE IS KEPT SAME AS THE CODING STYLE OF THE SLRE LIBRARY 
+ * AND THUS DOES NOT FOLLOW PH7/PH8 CODING STYLE
  */
 #include "regexp.h"
 
@@ -95,11 +90,9 @@ typedef struct {
 } tr_t;
 
 
-/* utility function as pl_regex is opaque struct 
-*/
-int pl_ngroups(const pl_regex *re) {
-  return re->nuser;
-}
+/* UTILITY FUNCTIONS USED BY PCRE AND PREG APIs
+ *
+ */
 
 /* Put data into sbuf, reallocing for bigger size if needed.
  */
@@ -142,17 +135,59 @@ static inline void sb_puts(sbuf *b, const char *s) {
   sb_put(b, s, strlen(s));
 }
 
+static void put_hex(sbuf *b, unsigned char c) {
+  char tmp[8];
+  snprintf(tmp, sizeof tmp, "\\x%02x", c);
+  sb_puts(b, tmp);
+}
+
+
+static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
+  while (*t != '\0') {
+    char c = *t;
+    if ((c == '$' || c == '\\') && t[1] == c) { /* $$  or  \\ */
+      sb_putc(o, c);
+      t += 2;
+    } else if ((c == '$' || c == '\\') && isdigit((unsigned char) t[1])) {
+      int n = t[1] - '0';
+      t += 2;
+      if (isdigit((unsigned char) *t)) n = n * 10 + (*t++ - '0');
+      if (n <= m->ngroups && m->g[n].start >= 0)
+        sb_put(o, s + m->g[n].start, (size_t) (m->g[n].end - m->g[n].start));
+    } else if (c == '$' && t[1] == '{' && isdigit((unsigned char) t[2])) {
+      const char *q = t + 2;
+      int n = 0;
+      while (isdigit((unsigned char) *q) && n < 1000) n = n * 10 + (*q++ - '0');
+      if (*q == '}') {
+        if (n <= m->ngroups && m->g[n].start >= 0)
+          sb_put(o, s + m->g[n].start, (size_t) (m->g[n].end - m->g[n].start));
+        t = q + 1;
+      } else {
+        sb_putc(o, c);
+        t++;
+      }
+    } else {
+      sb_putc(o, c);
+      t++;
+    }
+  }
+}
+
+
+/*
+ * Inside [...] SLRE runs every element through match_op(), so a literal '.' becomes a
+ * wildcard, '$' never matches and '|' never matches (and [^|] matches '|').
+ * Such characters are emitted as \xHH instead.
+ */
+static inline int is_set_special(unsigned char c) {
+  return c == '.' || c == '$' || c == '|';
+}
+
 
 static void begin_atom(tr_t *t) {
   t->atom_pos = (int) t->out.len;
   t->atom_caps = t->ncaps;
   t->atom_user = t->nuser;
-}
-
-static void put_hex(sbuf *b, unsigned char c) {
-  char tmp[8];
-  snprintf(tmp, sizeof tmp, "\\x%02x", c);
-  sb_puts(b, tmp);
 }
 
 /* t->p points at the backslash.
@@ -250,14 +285,6 @@ static int tr_escape(tr_t *t, int in_class) {
   }
 }
 
-/*
- * Inside [...] SLRE runs every element through match_op(), so a literal '.' becomes a
- * wildcard, '$' never matches and '|' never matches (and [^|] matches '|').
- * Such characters are emitted as \xHH instead.
- */
-static inline int is_set_special(unsigned char c) {
-  return c == '.' || c == '$' || c == '|';
-}
 
 static int tr_class(tr_t *t) {
 
@@ -346,7 +373,7 @@ static int tr_class(tr_t *t) {
   }
 
   if (*t->p != ']') {
-    puts("regex: expecting ']'");
+    //puts("regex: expecting ']'");
     return PL_E_SYNTAX;
   }
 
@@ -637,6 +664,9 @@ static int check_slre_pattern(const char *p) {
   return PL_OK;
 }
 
+/* PCRE-like API
+ *
+ */
 pl_regex *pl_compile(const char *pattern, int flags, int *err) {
   tr_t t;
   pl_regex *re = NULL;
@@ -699,10 +729,15 @@ void pl_free(pl_regex *re) {
   }
 }
 
+/* utility functions (a couple of getters) as pl_regex is opaque struct 
+*/
 const char *pl_slre_pattern(const pl_regex *re) {
   return re->pat;
 }
 
+int pl_ngroups(const pl_regex *re) {
+  return re->nuser;
+}
 
 /* Matching
 */
@@ -770,41 +805,10 @@ int pl_match_all(const pl_regex *re, const char *s, int len, pl_each_fn fn, void
   return count;
 }
 
-/* ------------------------------------------------------------------ */
-/* Replace / split                                                     */
-/* ------------------------------------------------------------------ */
 
-static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
-  while (*t != '\0') {
-    char c = *t;
-    if ((c == '$' || c == '\\') && t[1] == c) { /* $$  or  \\ */
-      sb_putc(o, c);
-      t += 2;
-    } else if ((c == '$' || c == '\\') && isdigit((unsigned char) t[1])) {
-      int n = t[1] - '0';
-      t += 2;
-      if (isdigit((unsigned char) *t)) n = n * 10 + (*t++ - '0');
-      if (n <= m->ngroups && m->g[n].start >= 0)
-        sb_put(o, s + m->g[n].start, (size_t) (m->g[n].end - m->g[n].start));
-    } else if (c == '$' && t[1] == '{' && isdigit((unsigned char) t[2])) {
-      const char *q = t + 2;
-      int n = 0;
-      while (isdigit((unsigned char) *q) && n < 1000) n = n * 10 + (*q++ - '0');
-      if (*q == '}') {
-        if (n <= m->ngroups && m->g[n].start >= 0)
-          sb_put(o, s + m->g[n].start, (size_t) (m->g[n].end - m->g[n].start));
-        t = q + 1;
-      } else {
-        sb_putc(o, c);
-        t++;
-      }
-    } else {
-      sb_putc(o, c);
-      t++;
-    }
-  }
-}
-
+/*
+ * Replace
+ */
 char *pl_replace(const pl_regex *re, const char *s, int len, const char *tmpl, int limit,
                  int *out_len) {
   sbuf o;
@@ -839,6 +843,9 @@ char *pl_replace(const pl_regex *re, const char *s, int len, const char *tmpl, i
   return o.p;
 }
 
+/*
+ * Split
+ */
 int pl_split(const pl_regex *re, const char *s, int len, pl_span *out, int max_out) {
   pl_match m;
   int pos = 0, last = 0, n = 0, r;
@@ -2200,7 +2207,7 @@ int preg_grep_re(const preg_re *re, const char *const *subjects, const int *lens
 }
 
 
-/* Pattern-string variants
+/* Pattern-string variants: compile/exec/free at once
 */
 int preg_match(const char *pattern, const char *s, int len,
                preg_match_t *m, int flags, int offset) {

@@ -12,6 +12,9 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
 #ifndef TYPEEXCEPTION
 #   define TYPEEXCEPTION 0
 #endif
@@ -60,38 +63,10 @@ typedef struct ph7_foreach_step ph7_foreach_step;
 typedef struct ph7_hashmap_node ph7_hashmap_node;
 typedef struct ph7_hashmap ph7_hashmap;
 typedef struct ph7_class ph7_class;
-/* Symisc Standard types */
-#if !defined(SYMISC_STD_TYPES)
-#define SYMISC_STD_TYPES
 
-typedef signed char sxi8;         /* signed char */
-typedef unsigned char sxu8;       /* unsigned char */
-typedef signed short int sxi16;   /* 16 bits(2 bytes) signed integer */
-typedef unsigned short int sxu16; /* 16 bits(2 bytes) unsigned integer */
-typedef int sxi32;                /* 32 bits(4 bytes) integer */
-typedef unsigned int sxu32;       /* 32 bits(4 bytes) unsigned integer */
-typedef long sxptr;
-typedef unsigned long sxuptr;
-typedef long sxlong;
-typedef unsigned long sxulong;
-typedef sxi32 sxofft;
-typedef sxi64 sxofft64;
-typedef long double sxlongreal;
-typedef double sxreal;
-#define SXI8_HIGH 0x7F
-#define SXU8_HIGH 0xFF
-#define SXI16_HIGH 0x7FFF
-#define SXU16_HIGH 0xFFFF
-#define SXI32_HIGH 0x7FFFFFFF
-#define SXU32_HIGH 0xFFFFFFFF
-#define SXI64_HIGH 0x7FFFFFFFFFFFFFFF
-#define SXU64_HIGH 0xFFFFFFFFFFFFFFFF
-#if !defined(TRUE)
-#define TRUE 1
-#endif
-#if !defined(FALSE)
-#define FALSE 0
-#endif
+/* SyMisc scalar types */
+#include "types.h"
+
 /*
  * The following macros are used to cast pointers to integers and
  * integers to pointers.
@@ -106,9 +81,10 @@ typedef double sxreal;
 #define SX_INT_TO_PTR(X) ((void *)(X))
 #define SX_PTR_TO_INT(X) ((int)(X))
 #endif
+
 #define SXMIN(a, b) ((a < b) ? (a) : (b))
 #define SXMAX(a, b) ((a < b) ? (b) : (a))
-#endif /* SYMISC_STD_TYPES */
+
 /* Symisc Run-time API private definitions */
 #if !defined(SYMISC_PRIVATE_DEFS)
 #define SYMISC_PRIVATE_DEFS
@@ -783,6 +759,11 @@ struct ph7_value {
   SyBlob sBlob; /* String values */
   sxu32 nIdx;   /* Index number of this entry in the global object allocator */
 };
+
+/* Check if ph7_value is a constant 
+ */
+#define IS_CONSTANT(pObj_) ((pObj_)->nIdx == (SXU32_HIGH))
+
 /* Allowed value types.
  */
 #define MEMOBJ_STRING    0x001    /* Memory value is a UTF-8 string */
@@ -2207,6 +2188,7 @@ PH7_PRIVATE sxi32 SyMemBackendMakeThreadSafe(SyMemBackend *pBackend, const SyMut
 PH7_PRIVATE sxi32 SyMemBackendDisbaleMutexing(SyMemBackend *pBackend);
 #endif
 
+#include "multipart.h"
 
 /* ESP32 additions and overrides
  *
@@ -2240,4 +2222,3 @@ int uname(struct utsname *out);
 _Static_assert((VM_FUNC_RET_MASK & 0xffffff00) == VM_FUNC_RET_MASK);
 _Static_assert(VM_MAX_NESTING_DEPTH > VM_THROW_RESERVE_NESTING);
 _Static_assert((0xfffffe00 & VM_FUNC_RET_MASK) == (0xffffffff & VM_FUNC_RET_MASK));
-

@@ -38,7 +38,12 @@ enum {
   PL_E_LIMITS = -103, /* too many groups / repeat count or pattern too large */
   PL_E_ENGINE = -104, /* SLRE itself reported an error while matching */
   PL_E_GROUPS = -105, /* SLRE would mis-number these groups: nested / quantified / alternated
-                         groups followed by other groups, e.g. (a)?(b)  (a)|(b)  ((a)b)(c) */
+                        groups followed by other groups, e.g. (a)?(b)  (a)|(b)  ((a)b)(c) */
+
+  PREG_E_DELIMITER = -110, /* missing / bad delimiter */
+  PREG_E_MODIFIER  = -111, /* unsupported modifier */
+  PREG_E_OFFSET    = -112, /* offset is beyond the end of the subject */
+  PREG_E_ARGS      = -113,  /* NULL argument */
 
   SLRE_NO_MATCH = PL_NO_MATCH,
   SLRE_UNEXPECTED_QUANTIFIER = -2,
@@ -70,16 +75,6 @@ enum {
 
   PREG_GREP_INVERT          = 1
 };
-
-/* Extra error codes (PL_E_* are in regexp.h) */
-enum {
-  PREG_E_DELIMITER = -110, /* missing / bad delimiter */
-  PREG_E_MODIFIER  = -111, /* unsupported modifier */
-  PREG_E_OFFSET    = -112, /* offset is beyond the end of the subject */
-  PREG_E_ARGS      = -113  /* NULL argument */
-};
-
-
 
 typedef struct pl_regex pl_regex; /* opaque: compiled regex in PCRE-format */
 typedef struct preg_re  preg_re;  /* opaque: compiled in PHP's "/pattern/flags" */

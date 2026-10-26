@@ -58,6 +58,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "types.h"
+
 
 /*
  * Compile time engine version, signature, identification in the symisc source tree
@@ -180,8 +182,6 @@ extern "C" {
 #if !defined(SYMISC_STANDARD_DEFS)
 #define SYMISC_STANDARD_DEFS
 
-  typedef signed long long int sxi64;   /* 64 bits(8 bytes) signed int64 */
-  typedef unsigned long long int sxu64; /* 64 bits(8 bytes) unsigned int64 */
 
   /* Signature of the consumer routine */
   typedef int (*ProcConsumer)(const void *, unsigned int, void *);
@@ -592,7 +592,36 @@ typedef double ph7_real;
     int (*xSync)(void *);                                  /* Flush open stream data */
     int (*xStat)(void *, ph7_value *, ph7_value *);        /* Stat an open stream handle */
   };
-  /* 
+
+
+/* Same layout as picohttpparser's struct phr_header, but the engine does not
+ * depend on the parser. The httpd glue casts (with a _Static_assert). 
+*/
+typedef struct ph8_http_header {
+
+    const char *name;
+    sxu32       name_len;    /* name == NULL: obs-fold continuation line, ignored */
+    const char *value;
+    sxu32       value_len;
+
+} ph8_http_header;
+
+typedef struct ph8_http_request {
+
+    const char *method;
+    sxu32       method_len;
+    const char *target;
+    sxu32       target_len;   /* raw request-target: "/path?query", NOT decoded */
+    int         minor_version;                /* 0 = HTTP/1.0, 1 = HTTP/1.1 */
+    const ph8_http_header *headers;
+    sxu32       num_headers;
+    const sxu8 *body;         /* de-chunked, may be NULL when body_len == 0 */
+    sxu32       body_len;     
+
+} ph8_http_request;
+
+
+ /* 
  * C-API-REF: Please refer to the official documentation for interfaces
  * purpose and expected parameters. 
  */
@@ -606,6 +635,9 @@ typedef double ph7_real;
   PH7_APIEXPORT int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int iFlags);
   /* Virtual Machine Handling Interfaces */
   PH7_APIEXPORT int ph7_vm_config(ph7_vm *pVm, int iConfigOp, ...);
+  PH7_APIEXPORT int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *rq);
+  PH7_APIEXPORT int ph8_vm_clear_request(ph7_vm *pVm);
+
   PH7_APIEXPORT int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus);
   PH7_APIEXPORT int ph7_vm_reset(ph7_vm *pVm);
   PH7_APIEXPORT int ph7_vm_release(ph7_vm *pVm);
@@ -700,7 +732,9 @@ typedef double ph7_real;
   PH7_APIEXPORT const char *ph7_lib_signature(void);
   PH7_APIEXPORT const char *ph7_lib_ident(void);
   PH7_APIEXPORT const char *ph7_lib_copyright(void);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
+
 #endif /* _PH7_H_ */
