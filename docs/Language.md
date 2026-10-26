@@ -419,11 +419,72 @@ You can safely write anything that is the same in C and PHP: arithmetic with `* 
 
 ## 8. Language Constructs
 
-In PH8, `echo` is a function and can be used in an expression. `is_callable('echo')` returns `true`.
+
+
+### 8.1. Compile-Time Source Inclusion: `compile_time` and `compile_time_once`
+
+Unlike Zend PHP, PH8 provides two additional language constructs: `compile_time` and `compile_time_once`. They include source code from other files **at compile time**, similarly to the `#include` directive in C.
+
+- `compile_time "STRING_LITERAL"` — includes the source code of the specified file. Each occurrence of this construct includes the file again, even if it has already been included.
+- `compile_time_once "STRING_LITERAL"` — includes the source code of the specified file only once. Subsequent occurrences are ignored if the same source content has already been included using `compile_time_once`. Conceptually, this is similar to `#include` combined with `#pragma once` in C/C++.
+
+The argument to either construct must be a string literal.
+
+The included source code is processed by the compiler as part of the current program. However, syntactic constructs cannot cross file boundaries. For example, a `for` loop header cannot begin in one file and be completed by code included from another file. These constructs are intended for including source code, not for inserting arbitrary text fragments into the middle of a syntactic construct.
+
+**Example**
+
+`main.php`:
+
+```php
+<?php
+
+echo 'Hello, world!', PHP_EOL;
+
+compile_time_once "ct2.php";
+compile_time_once "ct2.php";
+
+echo 'Hello, world!!', PHP_EOL;
+
+compile_time "ct2.php";
+
+?>
+```
+
+`ct2.php`:
+
+```php
+<?php
+
+echo 'Hello, world from an included file!', PHP_EOL;
+
+?>
+```
+
+Output:
+
+```text
+Hello, world from an included file!
+Hello, world!!
+Hello, world from an included file!
+```
+
+The first `compile_time_once` includes `ct2.php`. The second occurrence is ignored because the same source content has already been included. The subsequent `compile_time` includes the file again, so its message is printed a second time.
+
+### 8.2. `echo` as function in expressions
+
+In PH8, `echo` can be used in contexts where function can be used. `echo` can be be used in an expression. `is_callable('echo')` returns `true`.
+
+
+
+### 8.3. Unsupported language constructs.
+
+Thera are many, but most notable these:
 
 `yield` (generators) and `match` are not supported.
 
-Namespaces are not supported. The parser recognizes the syntax but does not implement its semantics.
+Namespaces are not supported. The parser recognizes the syntax but does not implement its semantics (skips it).
+
 
 ## 9. Exceptions and Exception Handling
 
