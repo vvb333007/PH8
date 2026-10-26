@@ -1104,6 +1104,7 @@ static sxi32 BlobPrepareGrow(SyBlob *pBlob, sxu32 *pByte) {
   pBlob->mByte = nByte;
   return SXRET_OK;
 }
+
 PH7_PRIVATE sxi32 SyBlobAppend(SyBlob *pBlob, const void *pData, sxu32 nSize) {
   sxu8 *zBlob;
   sxi32 rc;

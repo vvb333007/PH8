@@ -77,9 +77,9 @@ static struct Global_Data {
 #define PH7_THREAD_LEVEL_SINGLE 1
 #define PH7_THREAD_LEVEL_MULTI 2
 
+#if 0
 #include <stdint.h> //TODO: INT32_MAX , replase with SyMisc macro
-
-static sxi32 GetWholeFile(ph7 *pEngine, const char *zPath, void **pMapView, ph7_int64 *nSize) {
+PH7_PRIVATE  sxi32 PH7_GetWholeFile(ph7 *pEngine, const char *zPath, void **pMapView, ph7_int64 *nSize) {
 
     FILE *fp;
     void *pBuf;
@@ -128,6 +128,7 @@ static sxi32 GetWholeFile(ph7 *pEngine, const char *zPath, void **pMapView, ph7_
 
     return SXRET_OK;
 }
+#endif
 /*
  * Configure a running PH7 engine instance.
  * return PH7_OK on success.Any other return
@@ -864,7 +865,7 @@ int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int 
 
     if (rc != PH7_OK) {
       bMmapped = 0;
-      rc = GetWholeFile(pEngine, zFilePath, &pMapView, &nSize);
+      rc = PH7_GetWholeFile(pEngine, zFilePath, &pMapView, &nSize);
     }
 
     if (rc != PH7_OK) {
@@ -1393,7 +1394,7 @@ void *ph7_value_to_resource(ph7_value *pValue) {
  */
 int ph7_value_compare(ph7_value *pLeft, ph7_value *pRight, int bStrict) {
   int rc;
-  if (pLeft == 0 || pRight == 0) {
+  if (pLeft == NULL || pRight == NULL) {
     /* TICKET 1433-24: NULL values is harmless operation */
     return 1;
   }

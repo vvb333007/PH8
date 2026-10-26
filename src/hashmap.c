@@ -3072,16 +3072,17 @@ static int ph7_hashmap_keys(ph7_context *pCtx, int nArg, ph7_value **apArg) {
       if (pValue) {
         PH7_MemObjLoad(pValue, &sVal);
         /* Filter key */
-        rc = ph7_value_compare(&sVal, apArg[1], bStrict);
-        PH7_MemObjRelease(pValue); // TODO: BUG: wtf we are freeing here? must be sVal!!!
+        rc = ph7_value_compare(&sVal, apArg[1], bStrict); // BUG: apArg[1] may be damaged by ObjCmp!!
+        PH7_MemObjRelease(pValue); // BUG: wtf we are freeing here? must be sVal!!!
       }
 #else
       if (pValue) {
+        /* Load is cheap */
         PH7_MemObjLoad(pValue, &sVal);
         PH7_MemObjLoad(apArg[1], &sNeedle);
 
-        rc = ph7_value_compare(&sVal, &sNeedle, bStrict);
-        //rc = PH7_MemObjCmp(&sVal, &sNeedle, bStrict, 0);
+        /* Filter key */
+        rc = PH7_MemObjCmp(&sVal, &sNeedle, bStrict, 0);
 
         PH7_MemObjRelease(&sVal);
         PH7_MemObjRelease(&sNeedle);
