@@ -11,6 +11,7 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 #include "ph7int.h"
 
 /*
@@ -105,6 +106,73 @@ static sxi32 PH7_CompileReturn(ph7_gen_state *pGen);
 /*
  * Local utility routines used in the code generation phase.
  */
+
+
+#define CT_INCLUDE_MAX_DEPTH 16
+
+static int GenStateIsCTInclude(const SyString *pName) {
+  if (pName->nByte == sizeof("compile_time") - 1) {
+    return SyMemcmp(pName->zString, "compile_time", pName->nByte) == 0;
+  }
+  if (pName->nByte == sizeof("compile_time_once") - 1) {
+    return SyMemcmp(pName->zString, "compile_time_once", pName->nByte) == 0;
+  }
+  return 0;
+}
+
+
+/* Resolve the path relative to the file being compiled (like C's #include "...") */
+static char *CtResolvePath(ph7_gen_state *pGen, const SyString *pRel) {
+  ph7_vm *pVm = pGen->pVm;
+  SyString *pCur = (SyString *)SySetPeek(&pVm->aFiles);
+  SyBlob sPath;
+  char *zRes;
+
+  SyBlobInit(&sPath, &pVm->sAllocator);
+  if (pRel->zString[0] != '/' && pCur && pCur->nByte > 0) {
+    sxu32 n = pCur->nByte;
+    while (n > 0 && pCur->zString[n - 1] != '/') {
+      n--;
+    }
+    SyBlobAppend(&sPath, pCur->zString, n); /* directory part, with trailing '/' */
+  }
+  SyBlobAppend(&sPath, pRel->zString, pRel->nByte);
+  zRes = SyMemBackendStrDup(&pVm->sAllocator, (const char *)SyBlobData(&sPath), SyBlobLength(&sPath));
+  SyBlobRelease(&sPath);
+  return zRes;
+}
+
+/* TODO: read the whole file into pOut using the same VFS/stream API that
+ * VmExecIncludedFile() uses. Return SXRET_OK or an error code. 
+*/
+
+static sxi32 CtReadFile(ph7_vm *pVm, const char *zPath, sxi32 nLen, SyBlob *pOut) {
+
+  void *pMapView = 0;  /* cc warning */
+  ph7_int64 nSize = 0; /* cc warning */
+  sxi32 rc;
+  char aTmp[nLen + 1];
+
+  memcpy(aTmp, zPath, nLen);
+  aTmp[nLen] = '\0';
+
+  rc = PH7_GetWholeFile(pVm->pEngine, aTmp, &pMapView, &nSize);
+
+  if (rc != SXRET_OK) {
+    puts("Can not read file");
+    puts(aTmp);
+    return rc;
+  }
+
+  return SyBlobAppend(pOut, pMapView, nSize);
+}
+
+
+
+
+
+
+
 /*
  * Check if the given name refer to a valid label.
  * Return SXRET_OK and write a pointer to that label on success.
@@ -7051,6 +7119,123 @@ static int GenStateisLangConstruct(sxu32 nKeyword) {
   }
   return rc;
 }
+
+
+
+
+/* Strip a leading "<?php"/"<?" and a trailing "?>" so the text can be treated as pure PHP,
+ * the way it would be if it were pasted into the middle of a PHP block.
+*/
+static void CtStripTags(SyString *pS) {
+
+  const char *z = pS->zString;
+  sxu32 n = pS->nByte;
+
+  while (n > 0 && SyisSpace(z[0])) { z++; n--; }
+
+  if (n >= 5 && SyStrnicmp(z, "<?php", 5) == 0) { z += 5; n -= 5; }
+  else if (n >= 2 && z[0] == '<' && z[1] == '?') { z += 2; n -= 2; }
+
+  while (n > 0 && SyisSpace(z[n - 1])) { n--; }
+
+  if (n >= 2 && z[n - 2] == '?' && z[n - 1] == '>') { n -= 2; }
+
+  pS->zString = z;
+  pS->nByte = n;
+}
+
+/* Compile `compile_time` and `compile_time_once` language constructs
+ *
+ */
+static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
+  ph7_vm *pVm = pGen->pVm;
+  sxu32 nLine = pGen->pIn->nLine;
+  int bOnce = (pGen->pIn->sData.nByte == sizeof("compile_time_once") - 1);
+  int bOwned = 0;
+  SyString sRel, sPath, sScript;
+  SyBlob sSrc;
+  SySet sTok;
+  char *zPath;
+  sxu32 nLen, nFilesBefore;
+  sxi32 rc;
+
+  pGen->pIn++;                 /* the directive */
+  sRel = pGen->pIn->sData;     /* the string literal */
+  pGen->pIn++;
+
+  if (pGen->nCtDepth >= CT_INCLUDE_MAX_DEPTH) {
+    rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "compile_time: nesting too deep (recursive include?)");
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
+  }
+  zPath = CtResolvePath(pGen, &sRel);
+  if (zPath == 0) { PH7_GenCompileOOM(pGen); return SXERR_ABORT; }
+  nLen = (sxu32)SyStrlen(zPath);
+
+  if (SyHashGet(&pGen->hCtOnce, zPath, nLen) != 0) {
+    if (bOnce) { SyMemBackendFree(&pVm->sAllocator, zPath); return SXRET_OK; }
+  } else {
+    SyHashInsert(&pGen->hCtOnce, zPath, nLen, zPath);   /* the hash owns zPath */
+    bOwned = 1;
+  }
+
+  SyStringInitFromBuf(&sPath, zPath, nLen);
+  SyBlobInit(&sSrc, &pVm->sAllocator);
+  nFilesBefore = SySetUsed(&pVm->aFiles);
+  rc = CtReadFile(pVm, zPath, nLen, &sSrc);
+  if (rc != SXRET_OK) {
+    while (SySetUsed(&pVm->aFiles) > nFilesBefore) { (void)SySetPop(&pVm->aFiles); }
+    SyBlobRelease(&sSrc);
+    if (!bOwned) { SyMemBackendFree(&pVm->sAllocator, zPath); }
+    rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "compile_time: cannot read '%z'", &sPath);
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
+  }
+  if (SySetUsed(&pVm->aFiles) == nFilesBefore) {
+    SySetPut(&pVm->aFiles, (const void *)&sPath);       /* for error messages */
+  }
+
+  SyStringInitFromBuf(&sScript, SyBlobData(&sSrc), SyBlobLength(&sSrc));
+  CtStripTags(&sScript);
+
+  /* Tokenize and compile in place, as if the text had been pasted here */
+  SySetInit(&sTok, &pVm->sAllocator, sizeof(SyToken));
+  SySetAlloc(&sTok, 0x40);
+  PH7_TokenizePHP(sScript.zString, sScript.nByte, 1, &sTok);
+
+  {
+    SyToken *pSaveIn = pGen->pIn, *pSaveEnd = pGen->pEnd;
+    SyToken *pSaveRawIn = pGen->pRawIn, *pSaveRawEnd = pGen->pRawEnd;
+    SySet *pSaveTokSet = pGen->pTokenSet;
+
+    pGen->pIn = (SyToken *)SySetBasePtr(&sTok);
+    pGen->pEnd = &pGen->pIn[SySetUsed(&sTok)];
+    pGen->pRawIn = pGen->pRawEnd = 0;     /* GenStateNextChunk() must hit EOF, not eat outer chunks */
+    pGen->nCtDepth++;
+
+    rc = SXRET_OK;
+    if (pGen->pIn < pGen->pEnd) {
+      rc = GenStateCompileChunk(pGen, 0);
+    }
+
+    pGen->nCtDepth--;
+    pGen->pTokenSet = pSaveTokSet;
+    pGen->pRawIn = pSaveRawIn;
+    pGen->pRawEnd = pSaveRawEnd;
+    pGen->pIn = pSaveIn;
+    pGen->pEnd = pSaveEnd;
+  }
+
+  SySetRelease(&sTok);
+  while (SySetUsed(&pVm->aFiles) > nFilesBefore) { (void)SySetPop(&pVm->aFiles); }
+  SyBlobRelease(&sSrc);
+  if (!bOwned) { SyMemBackendFree(&pVm->sAllocator, zPath); }
+  return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
+}
+
+
+
+
+
+
 /*
  * Compile a PHP chunk.
  * If something goes wrong while compiling the PHP chunk,this function
@@ -7092,11 +7277,19 @@ static sxi32 GenStateCompileChunk(
            */
           xCons = PH7_ErrorRecover;
         }
+      } else if ((pGen->pIn->nType & PH7_TK_ID) && &pGen->pIn[1] < pGen->pEnd
+                 && (pGen->pIn[1].nType & (PH7_TK_SSTR | PH7_TK_DSTR))
+                 && GenStateIsCTInclude(&pGen->pIn->sData)) {
+        /* A compile-time include keyword found */
+        xCons = PH7_CompileCTInclude;
+
       } else if ((pGen->pIn->nType & PH7_TK_ID) && (&pGen->pIn[1] < pGen->pEnd)
                  && (pGen->pIn[1].nType & PH7_TK_COLON /*':'*/)) {
         /* Label found [i.e: Out: ],point to the routine responsible of compiling it */
         xCons = PH7_CompileLabel;
       }
+
+
       if (xCons == 0) {
         /* Assume an expression an try to compile it */
         rc = PH7_CompileExpr(&(*pGen), 0, 0);
@@ -7350,6 +7543,7 @@ PH7_PRIVATE sxi32 PH7_InitCodeGenerator(
   SySetInit(&pGen->aGoto, &pVm->sAllocator, sizeof(JumpFixup));
   SyHashInit(&pGen->hLiteral, &pVm->sAllocator, 0, 0);
   SyHashInit(&pGen->hVar, &pVm->sAllocator, 0, 0);
+  SyHashInit(&pGen->hCtOnce, &pVm->sAllocator, 0, 0);
   /* Error log buffer */
   SyBlobInit(&pGen->sErrBuf, &pVm->sAllocator);
   /* General purpose working buffer */

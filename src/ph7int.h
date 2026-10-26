@@ -1075,6 +1075,9 @@ struct ph7_gen_state {
   SySet *pTokenSet;   /* Token containers */
   sxu32 bInClass:1;   /* Compiling a 'class' statement */
   sxu32 bReserved:31; /* Reserved/Unused */
+  sxu8   nCtDepth;    /* compile_time / compile_time_once nesting depth */
+  SyHash hCtOnce;     /* paths already included at compile time */
+
 };
 /* Forward references */
 typedef struct ph7_vm_func_closure_env ph7_vm_func_closure_env;
@@ -2043,6 +2046,7 @@ PH7_PRIVATE const ph7_vfs *PH7_ExportBuiltinVfs(void);
 PH7_PRIVATE void *PH7_ExportStdin(ph7_vm *pVm);
 PH7_PRIVATE void *PH7_ExportStdout(ph7_vm *pVm);
 PH7_PRIVATE void *PH7_ExportStderr(ph7_vm *pVm);
+PH7_PRIVATE sxi32 PH7_GetWholeFile(ph7 *pEngine, const char *zPath, void **pMapView, ph7_int64 *nSize);
 /* lib.c function prototypes */
 #ifndef PH7_DISABLE_BUILTIN_FUNC
 PH7_PRIVATE sxi32 SyXMLParserInit(SyXMLParser *pParser, SyMemBackend *pAllocator, sxi32 iFlags);
