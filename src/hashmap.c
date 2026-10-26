@@ -3017,6 +3017,7 @@ static int ph7_hashmap_keys(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   ph7_value *pArray;
   ph7_value sObj;
   ph7_value sVal;
+  ph7_value sNeedle;
   SyString sKey;
   int bStrict;
   sxi32 rc;
@@ -3040,13 +3041,23 @@ static int ph7_hashmap_keys(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     ph7_result_null(pCtx);
     return PH7_OK;
   }
-  bStrict = FALSE;
+
+  /* We are strict by default just as Zend PHP8
+   * the reason for that is array_keys([0,'abc'], 'abc'); will match both keys since "abc"
+   * will be cast to int(0) in order to compare it to the actual key.
+  */
+  //bStrict = FALSE; PH7
+  bStrict = TRUE;
+
   if (nArg > 2 && ph7_value_is_bool(apArg[2])) {
     bStrict = ph7_value_to_bool(apArg[2]);
   }
   /* Perform the requested operation */
   pNode = pMap->pFirst;
+
   PH7_MemObjInit(pMap->pVm, &sVal);
+  PH7_MemObjInit(pMap->pVm, &sNeedle);
+
   for (n = 0; n < pMap->nEntry; ++n) {
     if (pNode->iType == HASHMAP_INT_NODE) {
       PH7_MemObjInitFromInt(pMap->pVm, &sObj, pNode->xKey.iKey);
@@ -3057,12 +3068,25 @@ static int ph7_hashmap_keys(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     rc = 0;
     if (nArg > 1) {
       ph7_value *pValue = HashmapExtractNodeValue(pNode);
+#if 0
       if (pValue) {
         PH7_MemObjLoad(pValue, &sVal);
         /* Filter key */
         rc = ph7_value_compare(&sVal, apArg[1], bStrict);
-        PH7_MemObjRelease(pValue);
+        PH7_MemObjRelease(pValue); // TODO: BUG: wtf we are freeing here? must be sVal!!!
       }
+#else
+      if (pValue) {
+        PH7_MemObjLoad(pValue, &sVal);
+        PH7_MemObjLoad(apArg[1], &sNeedle);
+
+        rc = ph7_value_compare(&sVal, &sNeedle, bStrict);
+        //rc = PH7_MemObjCmp(&sVal, &sNeedle, bStrict, 0);
+
+        PH7_MemObjRelease(&sVal);
+        PH7_MemObjRelease(&sNeedle);
+      }
+#endif
     }
     if (rc == 0) {
       /* Perform the insertion */
