@@ -358,7 +358,8 @@ PH7_PRIVATE sxi32 PH7_VmRegisterConstant(
   /* Initialize cached constant value (for user constants only. FFI constants, like
   * M_PI are resolved through FFI call and are never cached)
   *
-  * Values are released as a part of a massive VM purge at the script end
+  * Values are released as a part of a massive VM purge at the script end. Corresponding code
+  * will be executed upon first access to the constant - this is where aValue is populated
   */
   PH7_MemObjInit(pVm, &pCons->aValue);
 
@@ -1255,45 +1256,37 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "" \
   "  protected $message = 'Unknown';" \
   "  protected $code = 0;" \
-  "  protected $file;" \
-  "  protected $line;" \
   "  protected $trace;" \
   "  protected $previous;" \
   "" \
   "  public function __construct(?string $message = null," \
-  "                                  int $code = 0," \
-  "                              ?string $file = null," \
-  "                                  int $line = 0 ) {" \
+  "                                  int $code = 0) {" \
   "" \
   "    if( isset($message) ) {" \
   "      $this->message = $message;" \
   "    }" \
   "" \
   "    $this->code = $code;" \
-  "    $this->file = $file;" \
-  "    $this->line = $line;" \
   "    $this->trace = debug_backtrace();" \
   "  }" \
   "" \
   "  public function getMessage() { return $this->message; }" \
   "  public function getCode() { return $this->code; }" \
-  "  public function getFile() { return $this->file; }" \
-  "  public function getLine() { return $this->line; }" \
+  "  public function getFile() { return __FILE__; }" \
+  "  public function getLine() { return __ELINE__; }" \
   "  public function getTrace(){ return $this->trace; }" \
   "  public function getTraceAsString() { return debug_string_backtrace(); }" \
   "  public function getPrevious() { return null; }" \
-  "  public function __toString() { return $this->file.' '.$this->line.' '.$this->code.' '.$this->message; }" \
+  "  public function __toString() { return __FILE__.':'.__ELINE__.', code='.$this->code.', message: '.$this->message; }" \
   "}" \
   "/* Exception. These exceptions are user thrown" \
   " *" \
   " */" \
   "class Exception extends Throwable {" \
   "  public function __construct(?string $message = null," \
-  "                              int $code = 0," \
-  "                              ?string $filename = null ," \
-  "                              int $lineno = 0) {" \
+  "                              int $code = 0) {" \
   "" \
-  "    parent::__construct($message,$code,$filename,$lineno);" \
+  "    parent::__construct($message,$code);" \
   "  }" \
   "}" \
   "" \
@@ -1302,49 +1295,41 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   " */" \
   "class Error extends Throwable {" \
   "  public function __construct(?string $message = null," \
-  "                              int $code = 0," \
-  "                              ?string $filename = null ," \
-  "                              int $lineno = 0) {" \
+  "                              int $code = 0) {" \
   "" \
-  "    parent::__construct($message,$code,$filename,$lineno);" \
+  "    parent::__construct($message,$code);" \
   "  }" \
-  "  public function __toString() { return 'Error: '.$this->message.' in '.$this->file.':'.$this->line; }" \
+  "  public function __toString() { return 'Error: '.parent::__toString(); }" \
   "}" \
   "" \
   "class DivisionByZeroError extends Error {" \
   "  public function __construct(?string $message = null," \
-  "                              int $code = 0," \
-  "                              ?string $filename = null ," \
-  "                              int $lineno = 0) {" \
+  "                              int $code = 0) {" \
   "" \
-  "    parent::__construct($message,$code,$filename,$lineno);" \
+  "    parent::__construct($message,$code);" \
   "  }" \
   "}" \
   "" \
   "class TypeError extends Error {" \
   "  public function __construct(?string $message = null," \
-  "                              int $code = 0," \
-  "                              ?string $filename = null ," \
-  "                              int $lineno = 0) {" \
+  "                              int $code = 0) {" \
   "" \
-  "    parent::__construct($message,$code,$filename,$lineno);" \
+  "    parent::__construct($message,$code);" \
   "  }" \
   "}" \
   "" \
   "class ArgumentCountError extends Error {" \
   "  public function __construct(?string $message = null," \
-  "                              int $code = 0," \
-  "                              ?string $filename = null ," \
-  "                              int $lineno = 0) {" \
+  "                              int $code = 0) {" \
   "" \
-  "    parent::__construct($message,$code,$filename,$lineno);" \
+  "    parent::__construct($message,$code);" \
   "  }" \
   "}" \
   "function __nullderef($arg) {" \
   "  throw(new Error('Null dereference (null->): '.$arg));" \
   "}" \
   "function __badcallable($arg) {" \
-  "  throw(new TypeError('Attempt to use a bad callable (returned by a function)'));" \
+  "  throw(new TypeError('Attempt to use a bad callable ['.$arg.'] (returned by a function)'));" \
   "}" \
   "function __divbyzero($arg) {" \
   "  throw(new DivisionByZeroError('Division by zero: '.$arg));" \
@@ -3326,8 +3311,7 @@ static sxi32 VmByteCodeExec(
                   //puts("cache hit: loading cached value...");
                 /*
                  * Load calculated value
-                 *  TODO: CITO: should it be MemObjStore() instead? 
-                 * No, it should not as it creates unnecessary copies
+                 * TODO: CITO: should it be MemObjStore() instead? Check with different types
                  */
                   PH7_MemObjLoad(&pCons->aValue, pTos);
                 } 
@@ -7154,7 +7138,7 @@ static char const * aOpNames[] = {
 static const char *VmInstrToString(sxi32 nOp) {
   
   return (nOp < 0 ||
-          nOp >= sizeof(aOpNames)/sizeof(aOpNames[0])) ? "ILL"
+          nOp >= (sxi32)(sizeof(aOpNames)/sizeof(aOpNames[0]))) ? "ILL"
                                                    : aOpNames[nOp];
 }
 /*
@@ -10899,7 +10883,7 @@ static sxi32 VmThrowException(
     }
   }
 
-  /* Execute the cached block if available */
+  /* Execute the catch block if available */
   if (pCatch == NULL) {
     sxi32 rc;
 
@@ -10936,7 +10920,9 @@ static sxi32 VmThrowException(
     }
 
     /* Create a private frame first */
-    rc = VmEnterFrame(&(*pVm), 0, 0,0, &pFrame); /* TODO: must be a valid line number here */
+    /* TODO: must be a valid line number here:
+     */
+    rc = VmEnterFrame(&(*pVm), 0, 0,0, &pFrame); 
     if (rc == SXRET_OK) {
       /* Mark as catch frame */
       ph7_value *pObj = VmExtractMemObj(&(*pVm), &pCatch->sThis, FALSE, TRUE);
@@ -15392,7 +15378,8 @@ PH7_PRIVATE const ph7_io_stream *PH7_VmGetStreamDevice(
   return 0;
 }
 #endif /* PH7_DISABLE_BUILTIN_FUNC */
-       /*
+
+/*
  * Section:
  *    HTTP/URI related routines.
  * Authors:
@@ -15552,12 +15539,15 @@ PathSplit:
  * Extract a single line from a raw HTTP request.
  * Return SXRET_OK on success,SXERR_EOF when end of input
  * and SXERR_MORE when more input is needed.
+ *
+ * TODO: BUG
+ *
  */
 static sxi32 VmGetNextLine(SyString *pCursor, SyString *pCurrent) {
   const char *zIn;
   sxu32 nPos;
   /* Jump leading white spaces */
-  SyStringLeftTrim(pCursor);
+  SyStringLeftTrim(pCursor);  // BUG: affects how ExtractHeaders processes the rest. 
   if (pCursor->nByte < 1) {
     SyStringInitFromBuf(pCurrent, 0, 0);
     return SXERR_EOF; /* End of input */
@@ -16124,3 +16114,4 @@ static sxi32 VmHttpProcessRequest(ph7_vm *pVm, const char *zRequest, int nByte) 
   return SXRET_OK;
 }
 
+#include "ph8_vm_request.inc"
