@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
+#include <stdint.h> //TODO: INT32_MAX , replase with SyMisc macro
 
 extern const ph7_io_stream sUnixFileStream;
 
@@ -5917,3 +5918,59 @@ PH7_PRIVATE void *PH7_ExportStderr(ph7_vm *pVm) {
 #endif
 }
 
+/* Load file into memory. This function is only intended for source code loading (i.e. relatively small text files)
+ * 
+ * TODO: this function is used when xMmap() fails to load a file from a filesystem which does not support
+ * mmap(). Also, this same function is called when compiling `compile_time` language construct. In the latter case
+ * we must try xMmap() first to load the file. This function must be refactored: add 1 argument saying if we should try xMmap first
+ * Then the content must be unmapped
+ */
+PH7_PRIVATE sxi32 PH7_GetWholeFile(ph7 *pEngine, const char *zPath, void **pMapView, ph7_int64 *nSize) {
+
+    FILE *fp;
+    void *pBuf;
+    long nFileSize;
+    size_t nRead;
+
+    *pMapView = 0;
+    *nSize = 0;
+
+    fp = fopen(zPath, "rb");
+    if(fp == 0) {
+        //puts("fopen() failed");
+        return SXERR_IO;
+    }
+
+    if(fseek(fp, 0, SEEK_END) != 0 ||
+       (nFileSize = ftell(fp)) < 0 ||
+       fseek(fp, 0, SEEK_SET) != 0 ||
+       nFileSize > INT32_MAX) {
+
+        fclose(fp);
+        //puts("fseek() failed");
+        return SXERR_IO;
+    }
+    pBuf = SyMemBackendAlloc(&pEngine->sAllocator, nFileSize ? (size_t)nFileSize : 1);
+    //pBuf = malloc(nFileSize ? (size_t)nFileSize : 1);
+    if(pBuf == 0) {
+        fclose(fp);
+        //puts("malloc() failed");
+        return SXERR_IO;
+    }
+
+    nRead = fread(pBuf, 1, (size_t)nFileSize, fp);
+    if(nRead != (size_t)nFileSize || ferror(fp)) {
+        //free(pBuf);
+        SyMemBackendFree(&pEngine->sAllocator, pBuf);
+        fclose(fp);
+        //puts("fread() failed");
+        return SXERR_IO;
+    }
+
+    fclose(fp);
+
+    *pMapView = pBuf;
+    *nSize = nRead;
+
+    return SXRET_OK;
+}
