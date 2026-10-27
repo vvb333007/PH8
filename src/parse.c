@@ -1002,6 +1002,9 @@ static int ExprIsModifiableValue(ph7_expr_node *pNode, sxu8 bFunc) {
 static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nToken);
 /* Macro to check if the given node is a terminal */
 #define NODE_ISTERM(NODE) (apNode[NODE] && (!apNode[NODE]->pOp || apNode[NODE]->pLeft))
+
+#if 0
+/* Buggy [] as function arguments: func([1,2],3)*/
 /*
  * Buid an expression tree for each given function argument.
  * When errors,PH7 take care of generating the appropriate error message.
@@ -1072,6 +1075,81 @@ static sxi32 ExprProcessFuncArguments(ph7_gen_state *pGen, ph7_expr_node *pOp, p
   }
   return SXRET_OK;
 }
+#else
+/* Buid an expression tree for each given function argument.
+ * When errors,PH7 take care of generating the appropriate error message.
+ */
+static sxi32 ExprProcessFuncArguments(ph7_gen_state *pGen, ph7_expr_node *pOp, ph7_expr_node **apNode, sxi32 nToken) {
+  sxi32 iNest, iCur, iNode;
+  sxi32 rc;
+  /* Process function arguments from left to right */
+  iCur = 0;
+  for (;;) {
+    if (iCur >= nToken) {
+      /* No more arguments to process */
+      break;
+    }
+    iNode = iCur;
+    iNest = 0;
+    while (iCur < nToken) {
+      if (apNode[iCur]) {
+        if (apNode[iCur]->xCode == PH7_CompileArray) {
+          /* Terminal node: a short-syntax array literal [ ... ] has its own brackets already
+           * swallowed during node extraction, so its pStart ('[') must not touch the nesting level.
+           */
+        } else if ((apNode[iCur]->pStart->nType & PH7_TK_COMMA) && apNode[iCur]->pLeft == 0 && iNest <= 0) {
+          break;
+        } else if (apNode[iCur]->pStart->nType & (PH7_TK_LPAREN | PH7_TK_OSB | PH7_TK_OCB)) {
+          iNest++;
+        } else if (apNode[iCur]->pStart->nType & (PH7_TK_RPAREN | PH7_TK_CCB | PH7_TK_CSB)) {
+          iNest--;
+        }
+      }
+      iCur++;
+    }
+    if (iCur > iNode) {
+      if (apNode[iNode] && (apNode[iNode]->pStart->nType & PH7_TK_AMPER /*'&'*/) && ((iCur - iNode) == 2)
+          && apNode[iNode + 1]->xCode == PH7_CompileVariable) {
+        PH7_GenCompileError(&(*pGen), E_WARNING, apNode[iNode]->pStart->nLine,
+                            "call-time pass-by-reference is depreceated");
+        ExprFreeTree(&(*pGen), apNode[iNode]);
+        apNode[iNode] = 0;
+      }
+      ExprMakeTree(&(*pGen), &apNode[iNode], iCur - iNode);
+      if (apNode[iNode]) {
+        /* Put a pointer to the root of the tree in the arguments set */
+        SySetPut(&pOp->aNodeArgs, (const void *)&apNode[iNode]);
+      } else {
+        /* Empty function argument */
+        rc = PH7_GenCompileError(&(*pGen), E_ERROR, pOp->pStart->nLine, "Empty function argument");
+        if (rc != SXERR_ABORT) {
+          rc = SXERR_SYNTAX;
+        }
+        return rc;
+      }
+    } else {
+      rc = PH7_GenCompileError(&(*pGen), E_ERROR, pOp->pStart->nLine, "Missing function argument");
+      if (rc != SXERR_ABORT) {
+        rc = SXERR_SYNTAX;
+      }
+      return rc;
+    }
+    /* Jump trailing comma */
+    if (iCur < nToken && apNode[iCur] && (apNode[iCur]->pStart->nType & PH7_TK_COMMA)) {
+      iCur++;
+      if (iCur >= nToken) {
+        /* missing function argument */
+        rc = PH7_GenCompileError(&(*pGen), E_ERROR, pOp->pStart->nLine, "Missing function argument");
+        if (rc != SXERR_ABORT) {
+          rc = SXERR_SYNTAX;
+        }
+        return rc;
+      }
+    }
+  }
+  return SXRET_OK;
+}
+#endif
 /*
   * Create an expression tree from an array of tokens.
   * If successful, the root of the tree is stored in apNode[0].
