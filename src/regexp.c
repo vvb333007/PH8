@@ -16,6 +16,7 @@
  * CODING STYLE IS KEPT SAME AS THE CODING STYLE OF THE SLRE LIBRARY 
  * AND THUS DOES NOT FOLLOW PH7/PH8 CODING STYLE
  */
+#include "ph7int.h"
 #include "regexp.h"
 
 #include <ctype.h>
@@ -141,7 +142,7 @@ static void put_hex(sbuf *b, unsigned char c) {
   sb_puts(b, tmp);
 }
 
-
+#if 0
 static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
   while (*t != '\0') {
     char c = *t;
@@ -172,7 +173,7 @@ static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
     }
   }
 }
-
+#endif
 
 /*
  * Inside [...] SLRE runs every element through match_op(), so a literal '.' becomes a
@@ -667,7 +668,7 @@ static int check_slre_pattern(const char *p) {
 /* PCRE-like API
  *
  */
-pl_regex *pl_compile(const char *pattern, int flags, int *err) {
+PH7_PRIVATE pl_regex *pl_compile(const char *pattern, int flags, int *err) {
   tr_t t;
   pl_regex *re = NULL;
   int rc = PL_OK, anchored = 0;
@@ -722,7 +723,7 @@ pl_regex *pl_compile(const char *pattern, int flags, int *err) {
   return re;
 }
 
-void pl_free(pl_regex *re) {
+PH7_PRIVATE void pl_free(pl_regex *re) {
   if (re != NULL) {
     free(re->pat);
     free(re);
@@ -731,17 +732,17 @@ void pl_free(pl_regex *re) {
 
 /* utility functions (a couple of getters) as pl_regex is opaque struct 
 */
-const char *pl_slre_pattern(const pl_regex *re) {
+PH7_PRIVATE const char *pl_slre_pattern(const pl_regex *re) {
   return re->pat;
 }
 
-int pl_ngroups(const pl_regex *re) {
+PH7_PRIVATE int pl_ngroups(const pl_regex *re) {
   return re->nuser;
 }
 
 /* Matching
 */
-int pl_exec(const pl_regex *re, const char *s, int len, int start, pl_match *m) {
+PH7_PRIVATE int pl_exec(const pl_regex *re, const char *s, int len, int start, pl_match *m) {
   struct slre_cap caps[PL_MAX_SLRE_CAPS];
   int r, i, ms, me;
 
@@ -788,8 +789,10 @@ int pl_exec(const pl_regex *re, const char *s, int len, int start, pl_match *m) 
   }
   return PL_OK;
 }
+#if 0
+//Unused
 
-int pl_match_all(const pl_regex *re, const char *s, int len, pl_each_fn fn, void *ud) {
+PH7_PRIVATE int pl_match_all(const pl_regex *re, const char *s, int len, pl_each_fn fn, void *ud) {
   int pos = 0, count = 0, r;
   pl_match m;
 
@@ -806,10 +809,11 @@ int pl_match_all(const pl_regex *re, const char *s, int len, pl_each_fn fn, void
 }
 
 
+
 /*
  * Replace
  */
-char *pl_replace(const pl_regex *re, const char *s, int len, const char *tmpl, int limit,
+PH7_PRIVATE char *pl_replace(const pl_regex *re, const char *s, int len, const char *tmpl, int limit,
                  int *out_len) {
   sbuf o;
   pl_match m;
@@ -843,10 +847,12 @@ char *pl_replace(const pl_regex *re, const char *s, int len, const char *tmpl, i
   return o.p;
 }
 
+
+
 /*
  * Split
  */
-int pl_split(const pl_regex *re, const char *s, int len, pl_span *out, int max_out) {
+PH7_PRIVATE int pl_split(const pl_regex *re, const char *s, int len, pl_span *out, int max_out) {
   pl_match m;
   int pos = 0, last = 0, n = 0, r;
 
@@ -871,7 +877,7 @@ int pl_split(const pl_regex *re, const char *s, int len, pl_span *out, int max_o
   }
   return n + 1;
 }
-
+#endif
 
 /* A Patched SLRE
  *
@@ -1566,7 +1572,12 @@ static int foo( const char * re,
   return baz( s, s_len, info );
 }
 
-int slre_match( const char * regexp,
+/*
+ * SLRE PUBLIC API
+ *
+ */
+
+PH7_PRIVATE int slre_match( const char * regexp,
   const char * s,
   int s_len,
   struct slre_cap * caps,
@@ -1589,9 +1600,9 @@ int slre_match( const char * regexp,
 }
 
 
-/* PREG-style API, for PHP (PH8 engine)
- *
- */
+
+/* Helpers for preg_-style API
+*/
 static void sp_push(spans_t *a, int start, int end) {
 
   if (!a->oom) {
@@ -1691,84 +1702,6 @@ static int parse_pattern(const char *pat, char **body_out, int *flags, int *anch
   return PL_OK;
 }
 
-preg_re *preg_compile(const char *pattern, int *err) {
-
-  preg_re *r;
-  char *body = NULL;
-  int flags = 0, anchored = 0, rc, e = PL_OK;
-
-  if (pattern == NULL) {
-    if (err != NULL) *err = PREG_E_ARGS;
-    return NULL;
-  }
-
-  rc = parse_pattern(pattern, &body, &flags, &anchored);
-
-  if (rc != PL_OK) {
-    if (err != NULL) *err = rc;
-    return NULL;
-  }
-
-  r = (preg_re *) calloc(1, sizeof *r);
-
-  if (r == NULL) {
-    free(body);
-    if (err != NULL) *err = PL_E_NOMEM;
-    return NULL;
-  }
-
-  r->anchored = anchored;
-
-  if (*body != '\0') { /* empty pattern is fine in PHP, pl_compile() would refuse it */
-    r->re = pl_compile(body, flags, &e);
-    if (r->re == NULL) {
-      free(body);
-      free(r);
-      if (err != NULL) *err = e;
-      return NULL;
-    }
-    r->ngroups = pl_ngroups(r->re);
-  }
-
-  free(body);
-
-  if (err != NULL) *err = PL_OK;
-
-  return r;
-}
-
-void preg_re_free(preg_re *re) {
-  if (re != NULL) {
-    pl_free(re->re);
-    free(re);
-  }
-}
-
-void preg_all_free(preg_all_t *all) {
-  if (all != NULL) {
-    free(all->spans);
-    free(all->counts);
-    memset(all, 0, sizeof *all);
-  }
-}
-
-const char *preg_strerror(int code) {
-  switch (code) {
-    case PL_OK:             return "no error";
-    case PL_NO_MATCH:       return "no match";
-    case PL_E_UNSUPPORTED:  return "unsupported regex construct";
-    case PL_E_SYNTAX:       return "regex syntax error";
-    case PL_E_NOMEM:        return "out of memory";
-    case PL_E_LIMITS:       return "regex limits exceeded";
-    case PL_E_ENGINE:       return "regex engine error";
-    case PL_E_GROUPS:       return "unsupported group layout";
-    case PREG_E_DELIMITER:  return "missing or invalid delimiter";
-    case PREG_E_MODIFIER:   return "unsupported modifier";
-    case PREG_E_OFFSET:     return "offset is out of range";
-    case PREG_E_ARGS:       return "invalid argument";
-    default:                return "unknown error";
-  }
-}
 
 
 /* Common helpers
@@ -1827,11 +1760,168 @@ static int norm_offset(int *off, int len) {
   return PL_OK;
 }
 
+static int get_backref(const char **pp, int *ref) {
+
+  const char *w = *pp;
+  int brace = 0, n;
+
+  if (w[1] == '\0')
+    return 0;
+
+  if (*w == '$' && w[1] == '{') {
+    brace = 1;
+    w++;
+  }
+
+  w++;
+
+  if (*w >= '0' && *w <= '9')
+    n = *w++ - '0';
+  else
+    return 0;
+
+  if (*w >= '0' && *w <= '9')
+    n = n * 10 + (*w++ - '0');
+
+  if (brace) {
+    if (*w != '}')
+      return 0;
+    w++;
+  }
+
+  *ref = n;
+  *pp = w;
+
+  return 1;
+}
+
+static void expand2(sbuf *o, const char *s, const pl_match *m, const char *t) {
+
+  char last = 0;
+  int ref;
+
+  while (*t != '\0') {
+
+    if (*t == '\\' || *t == '$') {
+
+      if (last == '\\') { /* "\\" -> "\"   "\$" -> "$": overwrite the backslash just emitted */
+        if (!o->oom)
+          o->p[o->len - 1] = *t;
+        t++;
+        last = 0;
+        continue;
+      }
+
+      if (get_backref(&t, &ref)) {
+        if (ref <= m->ngroups && m->g[ref].start >= 0)
+          sb_put(o, s + m->g[ref].start, (size_t) (m->g[ref].end - m->g[ref].start));
+        last = 0;
+        continue;
+      }
+    }
+
+    sb_putc(o, *t);
+    last = *t;
+    t++;
+  }
+}
+
+
+/* PREG PUBLIC API
+ *  Compile pattern 
+ */
+PH7_PRIVATE preg_re *preg_compile(const char *pattern, int *err) {
+
+  preg_re *r;
+  char *body = NULL;
+  int flags = 0, anchored = 0, rc, e = PL_OK;
+
+  if (pattern == NULL) {
+    if (err != NULL) *err = PREG_E_ARGS;
+    return NULL;
+  }
+
+  rc = parse_pattern(pattern, &body, &flags, &anchored);
+
+  if (rc != PL_OK) {
+    if (err != NULL) *err = rc;
+    return NULL;
+  }
+
+  r = (preg_re *) calloc(1, sizeof *r);
+
+  if (r == NULL) {
+    free(body);
+    if (err != NULL) *err = PL_E_NOMEM;
+    return NULL;
+  }
+
+  r->anchored = anchored;
+
+  if (*body != '\0') { /* empty pattern is fine in PHP, pl_compile() would refuse it */
+    r->re = pl_compile(body, flags, &e);
+    if (r->re == NULL) {
+      free(body);
+      free(r);
+      if (err != NULL) *err = e;
+      return NULL;
+    }
+    r->ngroups = pl_ngroups(r->re);
+  }
+
+  free(body);
+
+  if (err != NULL) *err = PL_OK;
+
+  return r;
+}
+
+/* Free compiled pattern
+ *
+ */
+PH7_PRIVATE void preg_re_free(preg_re *re) {
+  if (re != NULL) {
+    pl_free(re->re);
+    free(re);
+  }
+}
+
+/* Free all matches returned by preg_match_all()
+ *
+ */
+PH7_PRIVATE void preg_all_free(preg_all_t *all) {
+  if (all != NULL) {
+    free(all->spans);
+    free(all->counts);
+    memset(all, 0, sizeof *all);
+  }
+}
+
+/* Human-readable error code
+ *
+ */
+PH7_PRIVATE const char *preg_strerror(int code) {
+  switch (code) {
+    case PL_OK:             return "no error";
+    case PL_NO_MATCH:       return "no match";
+    case PL_E_UNSUPPORTED:  return "unsupported regex construct";
+    case PL_E_SYNTAX:       return "regex syntax error";
+    case PL_E_NOMEM:        return "out of memory";
+    case PL_E_LIMITS:       return "regex limits exceeded";
+    case PL_E_ENGINE:       return "regex engine error";
+    case PL_E_GROUPS:       return "unsupported group layout";
+    case PREG_E_DELIMITER:  return "missing or invalid delimiter";
+    case PREG_E_MODIFIER:   return "unsupported modifier";
+    case PREG_E_OFFSET:     return "offset is out of range";
+    case PREG_E_ARGS:       return "invalid argument";
+    default:                return "unknown error";
+  }
+}
+
 
 /* preg_match()
 */
-int preg_match_re(const preg_re *re, const char *s, int len,
-                  preg_match_t *out, int flags, int offset) {
+PH7_PRIVATE int preg_match_re(const preg_re *re, const char *s, int len, preg_match_t *out, int flags, int offset) {
 
   pl_match m;
   int rc, i, n;
@@ -1871,8 +1961,7 @@ int preg_match_re(const preg_re *re, const char *s, int len,
 
 /* preg_match_all()
 */
-int preg_match_all_re(const preg_re *re, const char *s, int len,
-                      preg_all_t *all, int flags, int offset) {
+PH7_PRIVATE int preg_match_all_re(const preg_re *re, const char *s, int len, preg_all_t *all, int flags, int offset) {
 
   pl_match m;
   pl_span *sp = NULL;
@@ -1959,77 +2048,17 @@ fail:
 }
 
 
-/* preg_replace(): PHP replacement syntax.
- * Mirrors php_pcre_replace_impl()/preg_get_backref(): $n ${n} \n, n = 0..99.
+
+/* preg_replace_re(): precompiled preg_replace() variant
+ *
  */
-static int get_backref(const char **pp, int *ref) {
-
-  const char *w = *pp;
-  int brace = 0, n;
-
-  if (w[1] == '\0')
-    return 0;
-
-  if (*w == '$' && w[1] == '{') {
-    brace = 1;
-    w++;
-  }
-
-  w++;
-
-  if (*w >= '0' && *w <= '9')
-    n = *w++ - '0';
-  else
-    return 0;
-
-  if (*w >= '0' && *w <= '9')
-    n = n * 10 + (*w++ - '0');
-
-  if (brace) {
-    if (*w != '}')
-      return 0;
-    w++;
-  }
-
-  *ref = n;
-  *pp = w;
-
-  return 1;
-}
-
-static void expand2(sbuf *o, const char *s, const pl_match *m, const char *t) {
-
-  char last = 0;
-  int ref;
-
-  while (*t != '\0') {
-
-    if (*t == '\\' || *t == '$') {
-
-      if (last == '\\') { /* "\\" -> "\"   "\$" -> "$": overwrite the backslash just emitted */
-        if (!o->oom)
-          o->p[o->len - 1] = *t;
-        t++;
-        last = 0;
-        continue;
-      }
-
-      if (get_backref(&t, &ref)) {
-        if (ref <= m->ngroups && m->g[ref].start >= 0)
-          sb_put(o, s + m->g[ref].start, (size_t) (m->g[ref].end - m->g[ref].start));
-        last = 0;
-        continue;
-      }
-    }
-
-    sb_putc(o, *t);
-    last = *t;
-    t++;
-  }
-}
-
-char *preg_replace_re(const preg_re *re, const char *s, int len, const char *repl,
-                      int limit, int *out_len, int *count) {
+PH7_PRIVATE char *preg_replace_re(const preg_re *re, 
+                                  const char *s, 
+                                  int len, 
+                                  const char *repl,
+                                  int limit, 
+                                  int *out_len, 
+                                  int *count) {
 
   sbuf o;
   pl_match m;
@@ -2084,11 +2113,17 @@ char *preg_replace_re(const preg_re *re, const char *s, int len, const char *rep
 }
 
 
+
 /* preg_split(): unlike pl_split(), empty matches DO split (preg_split('//', 'abc')
  * gives "", "a", "b", "c", "").
  */
-int preg_split_re(const preg_re *re, const char *s, int len, int limit, int flags,
-                  pl_span **out, int *nout) {
+PH7_PRIVATE int preg_split_re(const preg_re *re,
+                              const char *s,
+                              int len,
+                              int limit,
+                              int flags,
+                              pl_span **out,
+                              int *nout) {
 
   spans_t a;
   pl_match m;
@@ -2155,8 +2190,12 @@ int preg_split_re(const preg_re *re, const char *s, int len, int limit, int flag
 
 /* preg_grep()
 */
-int preg_grep_re(const preg_re *re, const char *const *subjects, const int *lens, int n,
-                 int flags, int **out_idx) {
+PH7_PRIVATE int preg_grep_re(const preg_re *re,
+                             const char * const *subjects,
+                             const int *lens,
+                             int n,
+                             int flags,
+                             int **out_idx) {
 
   pl_match m;
   int *idx = NULL;
@@ -2209,8 +2248,12 @@ int preg_grep_re(const preg_re *re, const char *const *subjects, const int *lens
 
 /* Pattern-string variants: compile/exec/free at once
 */
-int preg_match(const char *pattern, const char *s, int len,
-               preg_match_t *m, int flags, int offset) {
+PH7_PRIVATE int preg_match(const char *pattern,
+                           const char *s, 
+                           int len, 
+                           preg_match_t *m, 
+                           int flags, 
+                           int offset) {
 
   int err = PL_OK, rc;
   preg_re *re = preg_compile(pattern, &err);
@@ -2224,8 +2267,15 @@ int preg_match(const char *pattern, const char *s, int len,
   return rc;
 }
 
-int preg_match_all(const char *pattern, const char *s, int len,
-                   preg_all_t *all, int flags, int offset) {
+/*
+ *
+ */
+PH7_PRIVATE int preg_match_all( const char *pattern, 
+                                const char *s, 
+                                int len, 
+                                preg_all_t *all, 
+                                int flags, 
+                                int offset) {
 
   int err = PL_OK, rc;
   preg_re *re = preg_compile(pattern, &err);
@@ -2239,8 +2289,18 @@ int preg_match_all(const char *pattern, const char *s, int len,
   return rc;
 }
 
-char *preg_replace(const char *pattern, const char *repl, const char *s, int len,
-                   int limit, int *out_len, int *count) {
+#if 0
+Unused
+/*
+ *
+ */
+PH7_PRIVATE char *preg_replace( const char *pattern,
+                                const char *repl,
+                                const char *s,
+                                int len,
+                                int limit,
+                                int *out_len,
+                                int *count) {
 
   int err = PL_OK;
   char *r;
@@ -2257,9 +2317,18 @@ char *preg_replace(const char *pattern, const char *repl, const char *s, int len
 
   return r;
 }
+#endif
 
-int preg_split(const char *pattern, const char *s, int len, int limit, int flags,
-               pl_span **out, int *nout) {
+/*
+ *
+ */
+PH7_PRIVATE int preg_split( const char *pattern,
+                            const char *s,
+                            int len,
+                            int limit,
+                            int flags,
+                            pl_span **out,
+                            int *nout) {
 
   int err = PL_OK, rc;
   preg_re *re = preg_compile(pattern, &err);
@@ -2273,8 +2342,17 @@ int preg_split(const char *pattern, const char *s, int len, int limit, int flags
   return rc;
 }
 
-int preg_grep(const char *pattern, const char *const *subjects, const int *lens, int n,
-              int flags, int **out_idx) {
+#if 0
+Unused
+/*
+ *
+ */
+PH7_PRIVATE int preg_grep(const char *pattern,
+                          const char * const *subjects,
+                          const int *lens,
+                          int n,
+                          int flags,
+                          int **out_idx) {
 
   int err = PL_OK, rc;
   preg_re *re = preg_compile(pattern, &err);
@@ -2289,3 +2367,4 @@ int preg_grep(const char *pattern, const char *const *subjects, const int *lens,
 
   return rc;
 }
+#endif

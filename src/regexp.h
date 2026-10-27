@@ -133,19 +133,19 @@ typedef struct {
 #define PREG_ALL_SPAN(a, i, g) ((a)->spans[(size_t)(i) * (size_t)((a)->ngroups + 1) + (size_t)(g)])
 
 /* Compile "/pattern/flags". Returns NULL and stores an error code in *err (may be NULL). */
-preg_re    *preg_compile(const char *pattern, int *err);  // function preg_compile(string $pattern): resource;
-void        preg_re_free(preg_re *re);
-void        preg_all_free(preg_all_t *all);
-const char *preg_strerror(int code);
+PH7_PRIVATE preg_re    *preg_compile(const char *pattern, int *err);  // function preg_compile(string $pattern): resource;
+PH7_PRIVATE void        preg_re_free(preg_re *re);
+PH7_PRIVATE void        preg_all_free(preg_all_t *all);
+PH7_PRIVATE const char *preg_strerror(int code);
 
 /* 
  * compile + run + free
  */
-int   preg_match(const char *pattern, const char *s, int len, preg_match_t *m, int flags, int offset);
-int   preg_match_all(const char *pattern, const char *s, int len, preg_all_t *all, int flags, int offset);
-char *preg_replace(const char *pattern, const char *repl, const char *s, int len, int limit, int *out_len, int *count);
-int   preg_split(const char *pattern, const char *s, int len, int limit, int flags, pl_span **out, int *nout);
-int   preg_grep(const char *pattern, const char *const *subjects, const int *lens, int n, int flags, int **out_idx);
+PH7_PRIVATE int   preg_match(const char *pattern, const char *s, int len, preg_match_t *m, int flags, int offset);
+PH7_PRIVATE int   preg_match_all(const char *pattern, const char *s, int len, preg_all_t *all, int flags, int offset);
+PH7_PRIVATE char *preg_replace(const char *pattern, const char *repl, const char *s, int len, int limit, int *out_len, int *count);
+PH7_PRIVATE int   preg_split(const char *pattern, const char *s, int len, int limit, int flags, pl_span **out, int *nout);
+PH7_PRIVATE int   preg_grep(const char *pattern, const char *const *subjects, const int *lens, int n, int flags, int **out_idx);
 
 /* 
  * Precompiled variants (compile once, use many times).
@@ -155,32 +155,32 @@ int   preg_grep(const char *pattern, const char *const *subjects, const int *len
 /* Returns 1 (match), 0 (no match) or a negative error code.
  * `m` may be NULL. flags: PREG_UNMATCHED_AS_NULL. offset < 0 counts from the end. 
  */
-int preg_match_re(const preg_re *re, const char *s, int len, preg_match_t *m, int flags, int offset);
+PH7_PRIVATE int preg_match_re(const preg_re *re, const char *s, int len, preg_match_t *m, int flags, int offset);
 
 /* Returns the number of matches or a negative error code.
  * `all` may be NULL (count only). flags: PREG_PATTERN_ORDER/SET_ORDER (storage is the same)
  * and PREG_UNMATCHED_AS_NULL. 
  */
-int preg_match_all_re(const preg_re *re, const char *s, int len, preg_all_t *all, int flags, int offset);
+PH7_PRIVATE int preg_match_all_re(const preg_re *re, const char *s, int len, preg_all_t *all, int flags, int offset);
 
 /* Returns malloc()ed NUL-terminated string (free() it) or NULL on error.
  * *out_len: result length, or a negative error code if NULL is returned (out_len may be NULL).
  * *count:   number of replacements (may be NULL).
  * limit < 0: unlimited (PHP default is -1); limit == 0: nothing is replaced. 
  */
-char *preg_replace_re(const preg_re *re, const char *s, int len, const char *repl, int limit, int *out_len, int *count);
+PH7_PRIVATE char *preg_replace_re(const preg_re *re, const char *s, int len, const char *repl, int limit, int *out_len, int *count);
 
 /* Returns 0 or a negative error code. On success *out is a malloc()ed array of *nout spans
  * (NULL if *nout == 0) - free() it. limit: -1 or 0 = no limit.
  * flags: PREG_SPLIT_NO_EMPTY, PREG_SPLIT_DELIM_CAPTURE. 
  */
-int preg_split_re(const preg_re *re, const char *s, int len, int limit, int flags, pl_span **out, int *nout);
+PH7_PRIVATE int preg_split_re(const preg_re *re, const char *s, int len, int limit, int flags, pl_span **out, int *nout);
 
 /* subjects[i] / lens[i]; lens may be NULL (then strlen). Returns the number of selected
  * elements or a negative error code. *out_idx = malloc()ed array of their indices
  * (may be NULL if only the count is needed). flags: PREG_GREP_INVERT. 
  */
-int preg_grep_re(const preg_re *re, const char *const *subjects, const int *lens, int n, int flags, int **out_idx);
+PH7_PRIVATE int preg_grep_re(const preg_re *re, const char *const *subjects, const int *lens, int n, int flags, int **out_idx);
 
 
 
@@ -190,24 +190,25 @@ int preg_grep_re(const preg_re *re, const char *const *subjects, const int *lens
 */
 typedef int (*pl_each_fn)(const pl_match *m, void *userdata);
 
+PH7_PRIVATE int pl_ngroups(const pl_regex *re);
 
 /* Compile.
  * Returns NULL on error and stores the PL_E_* code in *err (err may be NULL)
  */
-pl_regex *pl_compile( const char *pattern,
+PH7_PRIVATE pl_regex *pl_compile( const char *pattern,
                       int flags,  /* So far only 1 flag is supported : ignore case*/
                       int *err);
 
 /* Release the compiled regexp
 */
-void pl_free(pl_regex *re);
+PH7_PRIVATE void pl_free(pl_regex *re);
 
 
 /* Search for the leftmost match starting at offset `start` (like pcre_exec).
  * '^' still means "start of the whole subject", not "start offset".
  * Returns PL_OK, PL_NO_MATCH or a negative PL_E_* code.
  */
-int pl_exec(const pl_regex *re,
+PH7_PRIVATE int pl_exec(const pl_regex *re,
             const char *s,
             int len,
             int start,
@@ -218,7 +219,7 @@ int pl_exec(const pl_regex *re,
  * if it returns non-zero the iteration stops. `fn` may be NULL (just count).
  * Returns the number of matches, or a negative PL_E_* code.
  */
-int pl_match_all( const pl_regex *re,
+PH7_PRIVATE int pl_match_all( const pl_regex *re,
                   const char *s,
                   int len,
                   pl_each_fn fn,
@@ -233,7 +234,7 @@ int pl_match_all( const pl_regex *re,
  * *out_len (NULL is ok). On failure returns NULL and, if out_len != NULL,
  * stores a negative PL_E_* code in *out_len.
  */
-char *pl_replace( const pl_regex *re,
+PH7_PRIVATE char *pl_replace( const pl_regex *re,
                   const char *s, 
                   int len,
                   const char *tmpl,
@@ -246,7 +247,7 @@ char *pl_replace( const pl_regex *re,
  * Writes up to max_out pieces to out (out may be NULL) and returns the TOTAL
  * number of pieces (may be > max_out), or a negative PL_E_* code.
  */
-int pl_split( const pl_regex *re,
+PH7_PRIVATE int pl_split( const pl_regex *re,
               const char *s,
               int len,
               pl_span *out,
@@ -256,7 +257,7 @@ int pl_split( const pl_regex *re,
 
 /* The translated pattern that is actually handed to SLRE (for debugging).
 */
-const char *pl_slre_pattern(const pl_regex *re);
+PH7_PRIVATE const char *pl_slre_pattern(const pl_regex *re);
 
 int pl_ngroups(const pl_regex *re);
 
@@ -264,7 +265,7 @@ int pl_ngroups(const pl_regex *re);
 
 /* Native PH7 lightweright regex engine, only 1 function:
  */
-int slre_match( const char * regexp,
+PH7_PRIVATE int slre_match( const char * regexp,
                 const char * buf,
                 int buf_len,
                 struct slre_cap * caps,
