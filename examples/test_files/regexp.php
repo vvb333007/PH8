@@ -1,16 +1,5 @@
 <?php
 
-
-
-
-
-function __preg_replace($a, $b, $c, int $limit = -1, int &$cnt = null) {
-  $ret = preg_replace($a, $b, $c, $limit, $cnt);
-  return $ret;
-}
-
-
-
 function t($name, $ok) {
     echo ($ok ? "[ok]   " : "[FAIL] ") . $name . "\n";
 }
