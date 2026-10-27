@@ -16,7 +16,17 @@
 #endif
 
 
-/* This file implement built-in constants for the PH7 engine. */
+/* This file implement built-in constants for the PH7 engine.
+ * Generic constants: many PH8 built-in constants resolve to the same number. These are grouped here as
+ * anonymous constants
+ */
+static void PH7_1_Const(ph7_value *pVal, void *pUnused) { SXUNUSED(pUnused); ph7_value_int(pVal, 1); }
+static void PH7_2_Const(ph7_value *pVal, void *pUnused) { SXUNUSED(pUnused); ph7_value_int(pVal, 2); }
+static void PH7_4_Const(ph7_value *pVal, void *pUnused) { SXUNUSED(pUnused); ph7_value_int(pVal, 4); }
+static void PH7_256_Const(ph7_value *pVal, void *pUnused) { SXUNUSED(pUnused); ph7_value_int(pVal, 256); }
+static void PH7_512_Const(ph7_value *pVal, void *pUnused) { SXUNUSED(pUnused); ph7_value_int(pVal, 512); }
+
+
 /*
  * PH7_VERSION
  * __PH7__
@@ -120,11 +130,9 @@ static void PH7_DATE_Const(ph7_value *pVal, void *pUnused) {
   /* Expand */
   ph7_value_string_format(pVal, "%04d-%02d-%02d", sTm.tm_year, sTm.tm_mon + 1, sTm.tm_mday);
 }
-/*
- *TODO: this is wrong  __ELINE__
+/* __ELINE__ (Exception LINE)
  *  A source file line number, where exception was thrown
  */
-
 static void PH7_ELINE_Const(ph7_value *pVal, void *pUserData) {
 
   ph7_vm *pVm = (ph7_vm *)pUserData;
@@ -1688,6 +1696,7 @@ static void PH7_CALL_Const(ph7_value *pVal, void *pUserData) {
  * Table of built-in constants.
  */
 static const ph7_builtin_constant aBuiltIn[] = {
+
   { "PH7_VERSION", PH7_VER_Const },
   { "PH7_ENGINE", PH7_VER_Const },
   { "__PH7__", PH7_VER_Const },
@@ -1874,6 +1883,16 @@ static const ph7_builtin_constant aBuiltIn[] = {
   { "XML_OPTION_SKIP_TAGSTART", PH7_XML_OPTION_SKIP_TAGSTART_Const },
   { "XML_OPTION_SKIP_WHITE", PH7_XML_OPTION_SKIP_WHITE_Const },
   { "XML_SAX_IMPL", PH7_XML_SAX_IMP_Const },
+#if PH7_ENABLE_REGEX
+  { "PREG_PATTERN_ORDER", PH7_1_Const },
+  { "PREG_SET_ORDER", PH7_2_Const },
+  { "PREG_OFFSET_CAPTURE", PH7_256_Const },
+  { "PREG_UNMATCHED_AS_NULL", PH7_512_Const },
+  { "PREG_SPLIT_NO_EMPTY", PH7_1_Const },
+  { "PREG_SPLIT_DELIM_CAPTURE", PH7_2_Const },
+  { "PREG_SPLIT_OFFSET_CAPTURE", PH7_4_Const },
+  { "PREG_GREP_INVERT", PH7_1_Const },
+#endif /* #if PH7_ENABLE_REGEX */
 #endif /* PH7_DISABLE_BUILTIN_FUNC */
   { "JSON_HEX_TAG", PH7_JSON_HEX_TAG_Const },
   { "JSON_HEX_AMP", PH7_JSON_HEX_AMP_Const },
