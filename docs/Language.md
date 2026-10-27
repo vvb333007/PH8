@@ -421,12 +421,12 @@ You can safely write anything that is the same in C and PHP: arithmetic with `* 
 
 
 
-### 8.1. Compile-Time Source Inclusion: `compile_time` and `compile_time_once`
+### 8.1. Compile-Time Source Inclusion: `compile` and `compile_once`
 
-Unlike Zend PHP, PH8 provides two additional language constructs: `compile_time` and `compile_time_once`. They include source code from other files **at compile time**, similarly to the `#include` directive in C.
+Unlike Zend PHP, PH8 provides two additional language constructs: `compile` and `compile_once`. They include source code from other files **at compile time**, similarly to the `#include` directive in C.
 
-- `compile_time "STRING_LITERAL"` — includes the source code of the specified file. Each occurrence of this construct includes the file again, even if it has already been included.
-- `compile_time_once "STRING_LITERAL"` — includes the source code of the specified file only once. Subsequent occurrences are ignored if the same source content has already been included using `compile_time_once`. Conceptually, this is similar to `#include` combined with `#pragma once` in C/C++.
+- `compile "STRING_LITERAL"` — includes the source code of the specified file. Each occurrence of this construct includes the file again, even if it has already been included.
+- `compile_once "STRING_LITERAL"` — includes the source code of the specified file only once. Subsequent occurrences are ignored if the same source content has already been included using `compile_once`. Conceptually, this is similar to `#include` combined with `#pragma once` in C/C++.
 
 The argument to either construct must be a string literal.
 
@@ -441,12 +441,12 @@ The included source code is processed by the compiler as part of the current pro
 
 echo 'Hello, world!', PHP_EOL;
 
-compile_time_once "ct2.php";
-compile_time_once "ct2.php";
+compile_once "ct2.php";
+compile_once "ct2.php";
 
 echo 'Hello, world!!', PHP_EOL;
 
-compile_time "ct2.php";
+compile "ct2.php";
 
 ?>
 ```
@@ -469,7 +469,7 @@ Hello, world!!
 Hello, world from an included file!
 ```
 
-The first `compile_time_once` includes `ct2.php`. The second occurrence is ignored because the same source content has already been included. The subsequent `compile_time` includes the file again, so its message is printed a second time.
+The first `compile_once` includes `ct2.php`. The second occurrence is ignored because the same source content has already been included. The subsequent `compile` includes the file again, so its message is printed a second time.
 
 ### 8.2. `echo` as function in expressions
 
