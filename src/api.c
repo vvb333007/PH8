@@ -1293,6 +1293,17 @@ int ph7_vm_call_function(
   return rc;
 }
 
+/* Obtains a reference to the variable. By reference we mean direct access 
+ */
+ph7_value *ph7_value_to_ref(ph7_vm *pVm, ph7_value *pValue) {
+  if (pValue && ((pValue->iFlags & MEMOBJ_NULL) == 0)) {
+    if (pValue->nIdx != SXU32_HIGH) {
+      pValue = (ph7_value *)SySetAt(&pVm->aMemObj, pValue->nIdx);
+    }
+  }
+  return pValue;
+}
+
 /*
  * [CAPIREF: ph7_release_value()]
  * Please refer to the official documentation for function purpose and expected parameters.
