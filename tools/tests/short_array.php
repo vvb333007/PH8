@@ -26,9 +26,15 @@ function &foo() : array {
   return [4,5,6];
 }
 
+function bar(array $x) {
+  var_dump($x);
+}
+
 $s = "x"; echo $s[0];
 
 echo foo()[0];
 echo ($s)[0];
+
+bar([1,2,3,4],1);   // BUG
 
 ?>
