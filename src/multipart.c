@@ -1,3 +1,21 @@
+/*
+ * PH7-ESP32 — embeddable PHP bytecode compiler & virtual machine,
+ * ported and maintained for ESP32/FreeRTOS, Linux and Windows(Cygwin).
+ *
+ * Copyright (C) 2011-2018 Symisc Systems <http://ph7.symisc.net/>
+ * Copyright (C) 2026-present Viacheslav Logunov <vvb333007@gmail.com>
+ *
+ * Licensed under the Symisc Public License (modified BSD with mandatory
+ * source disclosure, clause 3); commercial licensing available from
+ * Symisc Systems. Full terms: see LICENSE. Contacts: see CONTACTS.
+ */
+
+/* This code is shared between PH8 and HTTPD code bases, thats why it is separated from
+ * other sources
+ *
+ * multipart/form-data parsing for small (<1MiB files)
+ */
+
 #include "ph7int.h"
 
 #include <string.h>
