@@ -649,6 +649,7 @@ typedef struct ph8_http_request {
   PH7_APIEXPORT int ph7_create_constant(ph7_vm *pVm, const char *zName, void (*xExpand)(ph7_value *, void *), void *pUserData);
   PH7_APIEXPORT int ph7_delete_constant(ph7_vm *pVm, const char *zName);
   /* Foreign Function Parameter Values */
+  PH7_APIEXPORT ph7_value *ph7_value_to_ref(ph7_vm *pVm, ph7_value *pValue);
   PH7_APIEXPORT int ph7_value_to_int(ph7_value *pValue);
   PH7_APIEXPORT int ph7_value_to_bool(ph7_value *pValue);
   PH7_APIEXPORT ph7_int64 ph7_value_to_int64(ph7_value *pValue);

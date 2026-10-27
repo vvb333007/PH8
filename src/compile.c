@@ -111,11 +111,11 @@ static sxi32 PH7_CompileReturn(ph7_gen_state *pGen);
 #define CT_INCLUDE_MAX_DEPTH 16
 
 static int GenStateIsCTInclude(const SyString *pName) {
-  if (pName->nByte == sizeof("compile_time") - 1) {
-    return SyMemcmp(pName->zString, "compile_time", pName->nByte) == 0;
+  if (pName->nByte == sizeof("compile") - 1) {
+    return SyMemcmp(pName->zString, "compile", pName->nByte) == 0;
   }
-  if (pName->nByte == sizeof("compile_time_once") - 1) {
-    return SyMemcmp(pName->zString, "compile_time_once", pName->nByte) == 0;
+  if (pName->nByte == sizeof("compile_once") - 1) {
+    return SyMemcmp(pName->zString, "compile_once", pName->nByte) == 0;
   }
   return 0;
 }
@@ -7144,13 +7144,13 @@ static void CtStripTags(SyString *pS) {
   pS->nByte = n;
 }
 
-/* Compile `compile_time` and `compile_time_once` language constructs
+/* Compile `compile` and `compile_once` language constructs
  *
  */
 static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
   ph7_vm *pVm = pGen->pVm;
   sxu32 nLine = pGen->pIn->nLine;
-  int bOnce = (pGen->pIn->sData.nByte == sizeof("compile_time_once") - 1);
+  int bOnce = (pGen->pIn->sData.nByte == sizeof("compile_once") - 1);
   int bOwned = 0;
   SyString sRel, sPath, sScript;
   SyBlob sSrc;
@@ -7164,7 +7164,7 @@ static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
   pGen->pIn++;
 
   if (pGen->nCtDepth >= CT_INCLUDE_MAX_DEPTH) {
-    rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "compile_time: nesting too deep (recursive include?)");
+    rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "compile: nesting too deep (recursive include?)");
     return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
   }
   zPath = CtResolvePath(pGen, &sRel);
@@ -7186,7 +7186,7 @@ static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
     while (SySetUsed(&pVm->aFiles) > nFilesBefore) { (void)SySetPop(&pVm->aFiles); }
     SyBlobRelease(&sSrc);
     if (!bOwned) { SyMemBackendFree(&pVm->sAllocator, zPath); }
-    rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "compile_time: cannot read '%z'", &sPath);
+    rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "compile: cannot read '%z'", &sPath);
     return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
   }
   if (SySetUsed(&pVm->aFiles) == nFilesBefore) {

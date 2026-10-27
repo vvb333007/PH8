@@ -1218,11 +1218,10 @@ PH7_PRIVATE ph7_value *VmReserveMemObj(ph7_vm *pVm, sxu32 *pIndex) {
  */
 PH7_PRIVATE void PH7_VmPurgeClassInstances(ph7_vm *pVm) {
 
-  sxi32 Index;
+  sxi32 Index, nKilled = 0;
 
-  
   if (0 < (Index = SySetUsed(&pVm->aMemObj))) {
-    
+
     ph7_value *pObj = (ph7_value *)SySetBasePtr(&pVm->aMemObj);
 
     do {
@@ -1235,11 +1234,16 @@ PH7_PRIVATE void PH7_VmPurgeClassInstances(ph7_vm *pVm) {
           PH7_ClassInstanceUnref(((ph7_class_instance *)pObj->x.pOther));
 
         PH7_MemObjRelease(pObj);
+        nKilled++;
       }
       pObj++;
 
     } while (--Index);
   }
+#if ADDREFLOG
+    fprintf(stderr,"Purge class instances: %d stale objects killed\n", nKilled);
+#endif
+
 }
 
 
@@ -6219,16 +6223,19 @@ static sxi32 VmByteCodeExec(
                 pMeth = PH7_ClassExtractMethod(pThis->pClass, "__invoke", sizeof("__invoke") - 1 );
 
                 if (pMeth == 0) {
-                  VM_EXCEPTION_GOTO("__unknownfn", 11, "Calling object as function requires __invoke to be implemented by class '%z'\n", &pClass->sName)
+                  VM_EXCEPTION_GOTO("__unknownfn", 11, "Calling object as function requires __invoke to be implemented by class '%z'\n", &pThis->pClass->sName)
                 } else {
                   /* Replace object on the stack with a method name */
-                  PH7_MemObjRelease(pTos);  // (new Class)() ?
+                  //fprintf(stderr,"before\n");
+                  PH7_MemObjRelease(pTos);  // (new Class)(); will kill the class before __invoke
+                  //fprintf(stderr,"after\n");
                   SyBlobAppend(&pTos->sBlob, SyStringData(&pMeth->sVmName), SyStringLength(&pMeth->sVmName));
                   MemObjSetType(pTos, MEMOBJ_STRING);
                 }
                 pTos->nIdx = SXU32_HIGH;
                 goto NameIsString;
 #else
+                /* TODO: Arguments are not passed. Must refactor PH7_CallMagicMethod() to accept ph7_values as arguments */
                 if (SXRET_OK != PH7_CallMagicMethod(&(*pVm), pThis->pClass, pThis, "__invoke", sizeof("__invoke") - 1, NULL, &pValue)) {
                   VM_EXCEPTION_GOTO("__unknownat", 11, "'__invoke()' magic method is not implemented by class '%z'. at [PC: %08x]\n", &pThis->pClass->sName, pc)
                 }

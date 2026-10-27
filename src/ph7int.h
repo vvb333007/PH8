@@ -19,13 +19,19 @@
 #   define TYPEEXCEPTION 0
 #endif
 
-/* If user didn't specify ENABLE_THREADS and MATH_FUNC - set them to default (OFF)*/
+/* If user didn't specify ENABLE_THREADS and MATH_FUNC - set them to default (DISABLE)*/
 #ifndef PH7_ENABLE_THREADS
 #  define PH7_ENABLE_THREADS 0
 #endif
 #ifndef PH7_ENABLE_MATH_FUNC
 #  define PH7_ENABLE_MATH_FUNC 0
 #endif
+
+/* If user didn't specify ENABLE_REGEX - set them to default (ENABLE)*/
+#ifndef PH7_ENABLE_REGEX
+#  define PH7_ENABLE_REGEX 1
+#endif
+
 
 /* Internal interface definitions for PH7. */
 #ifdef AMALGAM

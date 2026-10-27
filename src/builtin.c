@@ -16,6 +16,8 @@
 #endif
 
 #ifndef PH7_DISABLE_BUILTIN_FUNC
+#include "regexp.h"
+#include <string.h>
 #ifdef PH7_ENABLE_MATH_FUNC
 #include <math.h>
 #endif
@@ -88,6 +90,7 @@ static int PH7_builtin_is_float(ph7_context *pCtx, int nArg, ph7_value **apArg) 
   int res = 0; /* Assume false by default */
   if (nArg > 0) {
     res = ph7_value_is_float(apArg[0]);
+//    fprintf(stderr,"ph7_value->nIdx = %d\r\n",apArg[0]->nIdx);
   }
   /* Query result */
   ph7_result_bool(pCtx, res);
@@ -8561,7 +8564,808 @@ static int PH7_builtin_urldecode(ph7_context *pCtx, int nArg, ph7_value **apArg)
   SyUriDecode(zIn, (sxu32)nLen, Consumer, pCtx, TRUE);
   return PH7_OK;
 }
+
+
+
+#if PH7_ENABLE_REGEX
+
+/*
+ *  PREG extensions for PH8, built on top of regexp.h
+ *
+ *    preg_match_all  preg_replace  preg_split  preg_grep
+ *    preg_quote      preg_last_error  preg_last_error_msg
+ *
+ */
+
+/* Last error code of the most recent preg_* call (0 = no error).
+ */
+_Thread_local static int s_pregx_last_error = 0;
+
+
+/*
+ * Fill a scalar with a capture: its text, or NULL / "" for a group that
+ * did not participate. ph7_value_string() APPENDS to the blob, so the
+ * cursor must be reset before every reuse of the same scalar.
+ */
+static void pregx_fill(ph7_value *pVal, const char *zSubject, pl_span sp, int flags) {
+    if (sp.start < 0) {
+        if (flags & PREG_UNMATCHED_AS_NULL) {
+            ph7_value_null(pVal);
+            return;
+        }
+        ph7_value_reset_string_cursor(pVal);
+        ph7_value_string(pVal, "", 0);
+        return;
+    }
+    ph7_value_reset_string_cursor(pVal);
+    ph7_value_string(pVal, zSubject + sp.start, PREG_SPAN_LEN(sp));
+}
+
+/* Append one capture to pArr (automatic index). Takes PREG_OFFSET_CAPTURE
+ * and PREG_UNMATCHED_AS_NULL into account. TODO: make thses to be builtin constants.
+ * pTmp is a reusable scratch scalar. 
+ */
+static void pregx_push(ph7_context *pCtx, ph7_value *pArr, ph7_value *pTmp,
+                       const char *zSubject, pl_span sp, int flags) {
+    if (flags & PREG_OFFSET_CAPTURE) {
+        ph7_value *pPair = ph7_context_new_array(pCtx);
+        if (pPair == 0) {
+            return;
+        }
+        pregx_fill(pTmp, zSubject, sp, flags);
+        ph7_array_add_elem(pPair, 0, pTmp);
+        ph7_value_int(pTmp, sp.start < 0 ? -1 : sp.start);
+        ph7_array_add_elem(pPair, 0, pTmp);
+        ph7_array_add_elem(pArr, 0, pPair);
+    } else {
+        pregx_fill(pTmp, zSubject, sp, flags);
+        ph7_array_add_elem(pArr, 0, pTmp);
+    }
+}
+
+/* By-reference output array: must already be an array
+*/
+static int pregx_prepare_out(ph7_context *pCtx, ph7_value *pVal, const char *zMsg) {
+
+    if ((pVal->iFlags & MEMOBJ_HASHMAP) == 0) {
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, zMsg);
+        return 0;
+    }
+    /* Purge array before adding new elements */
+    PH7_HashmapRelease((ph7_hashmap *)pVal->x.pOther, FALSE);
+    return 1;
+}
+
+/*
+ * Helpers for preg_replace(): a list of strings taken either from a single
+ * string argument or from an array argument. Array elements are COPIED
+ * (the walker only gives us temporary values) into chunks that are
+ * released automatically when the foreign function returns.
+ */
+typedef struct {
+    const char *z;  /* NUL-terminated */
+    int         n;
+} pregx_str;
+
+typedef struct {
+    ph7_context *pCtx;
+    pregx_str   *a;
+    int          n;
+    int          cap;
+    int          oom;
+} pregx_list;
+
+static int pregx_collect_cb(ph7_value *pKey, ph7_value *pVal, void *pUser) {
+    pregx_list *L = (pregx_list *)pUser;
+    const char *z;
+    char *zDup;
+    int n;
+
+    SXUNUSED(pKey);
+    if (L->n >= L->cap) {
+        return PH7_ABORT;
+    }
+    z = ph7_value_to_string(pVal, &n);
+    zDup = (char *)ph7_context_alloc_chunk(L->pCtx, (unsigned int)n + 1, FALSE, TRUE);
+    if (zDup == 0) {
+        L->oom = 1;
+        return PH7_ABORT;
+    }
+    SyMemcpy(z, zDup, (sxu32)n);
+    zDup[n] = 0;
+    L->a[L->n].z = zDup;
+    L->a[L->n].n = n;
+    L->n++;
+    return PH7_OK;
+}
+
+/* Returns 0 on success, -1 on out-of-memory. *pIsArray tells what the arg was. */
+static int pregx_list_init(ph7_context *pCtx, ph7_value *pVal, pregx_list *L, int *pIsArray) {
+    L->pCtx = pCtx;
+    L->n = 0;
+    L->cap = 0;
+    L->oom = 0;
+    L->a = 0;
+
+    if (ph7_value_is_array(pVal)) {
+        unsigned int cnt = (unsigned int)ph7_array_count(pVal);
+        *pIsArray = 1;
+        L->a = (pregx_str *)ph7_context_alloc_chunk(
+            pCtx, (cnt + 1) * (unsigned int)sizeof(pregx_str), TRUE, TRUE);
+        if (L->a == 0) {
+            return -1;
+        }
+        L->cap = (int)cnt;
+        ph7_array_walk(pVal, pregx_collect_cb, L);
+        return L->oom ? -1 : 0;
+    }
+
+    *pIsArray = 0;
+    L->a = (pregx_str *)ph7_context_alloc_chunk(pCtx, (unsigned int)sizeof(pregx_str), TRUE, TRUE);
+    if (L->a == 0) {
+        return -1;
+    }
+    L->a[0].z = ph7_value_to_string(pVal, &L->a[0].n);
+    L->cap = 1;
+    L->n = 1;
+    return 0;
+}
+
+/* Run all patterns over ONE subject, one after another (PHP semantics).
+ * Returns 0 and a malloc()ed NUL-terminated string in *pOut (free() it),
+ * or a negative PL_E_* code. *pCount is incremented by the number of
+ * replacements. */
+static int pregx_apply(
+    preg_re **aRe, int nRe,
+    const pregx_list *pRepl, int bReplArray,
+    const char *z, int n, int limit,
+    char **pOut, int *pOutLen, int *pCount
+) {
+    char *zCur = 0;
+    int nCur = n;
+    int i;
+
+    for (i = 0; i < nRe; ++i) {
+        const char *zR = "";
+        int cnt = 0, nOut = 0;
+        char *zNew;
+
+        if (bReplArray) {
+            if (i < pRepl->n) {
+                zR = pRepl->a[i].z;
+            }
+        } else {
+            zR = pRepl->a[0].z;
+        }
+
+        zNew = preg_replace_re(aRe[i], zCur ? zCur : z, nCur, zR, limit, &nOut, &cnt);
+        if (zNew == 0) {
+            free(zCur);
+            return nOut < 0 ? nOut : PL_E_NOMEM;
+        }
+        free(zCur);
+        zCur = zNew;
+        nCur = nOut;
+        *pCount += cnt;
+    }
+
+    if (zCur == 0) {
+        /* Empty pattern array: the subject is returned unchanged */
+        zCur = (char *)malloc((size_t)n + 1);
+        if (zCur == 0) {
+            return PL_E_NOMEM;
+        }
+        memcpy(zCur, z, (size_t)n);
+        zCur[n] = 0;
+        nCur = n;
+    }
+
+    *pOut = zCur;
+    *pOutLen = nCur;
+    return 0;
+}
+
+typedef struct {
+    preg_re         **aRe;
+    int               nRe;
+    const pregx_list *pRepl;
+    int               bReplArray;
+    int               limit;
+    int               count;
+    int               err;
+    ph7_value        *pOut;
+    ph7_value        *pTmp;
+} pregx_rep_ctx;
+
+/* Walker for array subjects: keys are preserved, nested arrays and
+ * elements that failed to process are skipped. 
+ */
+static int pregx_replace_cb(ph7_value *pKey, ph7_value *pVal, void *pUser) {
+    pregx_rep_ctx *R = (pregx_rep_ctx *)pUser;
+    const char *z;
+    char *zOut = 0;
+    int n, nOut = 0, rc;
+
+    if (ph7_value_is_array(pVal)) {
+        return PH7_OK;
+    }
+    z = ph7_value_to_string(pVal, &n);
+    rc = pregx_apply(R->aRe, R->nRe, R->pRepl, R->bReplArray,
+                     z, n, R->limit, &zOut, &nOut, &R->count);
+    if (rc != 0) {
+        R->err = rc;
+        return PH7_OK;
+    }
+    ph7_value_reset_string_cursor(R->pTmp);
+    ph7_value_string(R->pTmp, zOut, nOut);
+    ph7_array_add_elem(R->pOut, pKey, R->pTmp);
+    free(zOut);
+    return PH7_OK;
+}
+
+
+/* 
+ * preg_grep() helpers
+ */
+typedef struct {
+    const preg_re *re;
+    int            invert;
+    int            err;
+    ph7_value     *pOut;
+} pregx_grep_ctx;
+
+static int pregx_grep_cb(ph7_value *pKey, ph7_value *pVal, void *pUser) {
+    pregx_grep_ctx *G = (pregx_grep_ctx *)pUser;
+    const char *z;
+    int n, rc;
+
+    z = ph7_value_to_string(pVal, &n);
+    rc = preg_match_re(G->re, z, n, 0, 0, 0);
+    if (rc < 0) {
+        G->err = rc;
+        return PH7_OK;
+    }
+    if ((rc == 1) != (G->invert != 0)) {
+        ph7_array_add_elem(G->pOut, pKey, pVal); /* key and value type preserved */
+    }
+    return PH7_OK;
+}
+
+
+/* REGEXP machinery. It has bugs which are rooted in inability of the engine to pass arguemtnts
+ * by reference to an FFI. Only arrays are passed by reference, so `int &$cnt` arguments to preg_ family functions
+ * result in a value on the stack, not a refrence. For that reason preg_replace() is not able to return number of replacements
+ * made so far.
+ */
+
+
+
+/* 
+ * int preg_match(
+ *     string $pattern,
+ *     string $subject,
+ *     array &$matches = null,
+ *     int $flags = 0,
+ *     int $offset = 0
+ * )
+*/
+static int PH7_builtin_preg_match(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+
+    const char *zPattern;
+    const char *zSubject;
+    int nPattern, nSubject;
+    int flags = 0;
+    int offset = 0;
+    int rc, i;
+
+    preg_match_t match;
+    ph7_value *pTmp;
+
+    if (nArg < 2) {
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    zPattern = ph7_value_to_string(apArg[0], &nPattern);
+    zSubject = ph7_value_to_string(apArg[1], &nSubject);
+
+    if (nArg > 3) {
+        flags = ph7_value_to_int(apArg[3]);
+    }
+    if (nArg > 4) {
+        offset = ph7_value_to_int(apArg[4]);
+    }
+
+    rc = preg_match(
+        zPattern,
+        zSubject,
+        nSubject,
+        &match,
+        flags & PREG_UNMATCHED_AS_NULL,
+        offset
+    );
+
+    s_pregx_last_error = (rc < 0) ? rc : 0;
+
+    /* Regex engine error */
+    if (rc < 0) {
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    /* Store matches to an array */
+    if (nArg > 2) {
+        if (!pregx_prepare_out(pCtx, apArg[2],
+                "third argument must be defined as an array (e.g. '$matches = []')")) {
+            ph7_result_bool(pCtx, 0);
+            return PH7_OK;
+        }
+
+        /* On "no match" the array stays empty, same as in PHP */
+        if (rc == 1) {
+            pTmp = ph7_context_new_scalar(pCtx);
+            if (pTmp == 0) {
+                ph7_context_throw_error(pCtx, PH7_CTX_ERR, "PH7 is running out of memory");
+                ph7_result_bool(pCtx, 0);
+                return PH7_OK;
+            }
+            for (i = 0; i < match.count; ++i) {
+                pregx_push(pCtx, apArg[2], pTmp, zSubject, match.g[i], flags);
+            }
+        }
+    }
+
+    ph7_result_int(pCtx, rc);
+    return PH7_OK;
+}
+
+/*
+ * int preg_match_all(
+ *     string $pattern,
+ *     string $subject,
+ *     array &$matches = null,
+ *     int $flags = PREG_PATTERN_ORDER,
+ *     int $offset = 0
+ * )
+ */
+static int PH7_builtin_preg_match_all(ph7_context *pCtx, int nArg,  ph7_value **apArg) {
+    const char *zPattern;
+    const char *zSubject;
+    int nPattern, nSubject;
+    int flags = 0;
+    int offset = 0;
+    int rc, i, g;
+    preg_all_t all;
+    ph7_value *pMatches = 0;
+    ph7_value *pTmp;
+
+    if (nArg < 2) {
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    zPattern = ph7_value_to_string(apArg[0], &nPattern);
+    zSubject = ph7_value_to_string(apArg[1], &nSubject);
+
+    if (nArg > 3) {
+        flags = ph7_value_to_int(apArg[3]);
+    }
+    if (nArg > 4) {
+        offset = ph7_value_to_int(apArg[4]);
+    }
+
+    if ((flags & PREG_PATTERN_ORDER) && (flags & PREG_SET_ORDER)) {
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, "can not use both PREG_PATTERN_ORDER and PREG_SET_ORDER together");
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    if (nArg > 2) {
+        pMatches = apArg[2];
+        // TODO: FFI can not receive references, so undefined variables just converted to null and are passed as values
+        if (!pregx_prepare_out(pCtx, pMatches, "third argument must be defined as an array (e.g. '$matches = []')")) {
+            ph7_result_bool(pCtx, 0);
+            return PH7_OK;
+        }
+    }
+
+    memset(&all, 0, sizeof(all));
+    rc = preg_match_all(
+        zPattern,
+        zSubject,
+        nSubject,
+        pMatches ? &all : 0,
+        flags & (PREG_PATTERN_ORDER | PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL),
+        offset
+    );
+
+    s_pregx_last_error = (rc < 0) ? rc : 0;
+
+    if (rc < 0) {
+        if (pMatches) {
+            preg_all_free(&all);
+        }
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    if (pMatches) {
+        pTmp = ph7_context_new_scalar(pCtx);
+        if (pTmp == 0) {
+            preg_all_free(&all);
+            ph7_context_throw_error(pCtx, PH7_CTX_ERR, "PH7 is running out of memory");
+            ph7_result_bool(pCtx, 0);
+            return PH7_OK;
+        }
+
+        if (flags & PREG_SET_ORDER) {
+            /* $m[match][group] */
+            for (i = 0; i < all.nmatches; ++i) {
+                ph7_value *pRow = ph7_context_new_array(pCtx);
+                if (pRow == 0) {
+                    break;
+                }
+                for (g = 0; g < all.counts[i]; ++g) {
+                    pregx_push(pCtx, pRow, pTmp, zSubject,
+                               PREG_ALL_SPAN(&all, i, g), flags);
+                }
+                ph7_array_add_elem(pMatches, 0, pRow);
+            }
+        } else {
+            /* PREG_PATTERN_ORDER (default): $m[group][match] */
+            for (g = 0; g <= all.ngroups; ++g) {
+                ph7_value *pCol = ph7_context_new_array(pCtx);
+                if (pCol == 0) {
+                    break;
+                }
+                for (i = 0; i < all.nmatches; ++i) {
+                    pregx_push(pCtx, pCol, pTmp, zSubject,
+                               PREG_ALL_SPAN(&all, i, g), flags);
+                }
+                ph7_array_add_elem(pMatches, 0, pCol);
+            }
+        }
+        preg_all_free(&all);
+    }
+
+    ph7_result_int(pCtx, rc);
+    return PH7_OK;
+}
+
+
+/* 
+ * mixed preg_replace(
+ *     string|array $pattern,
+ *     string|array $replacement,
+ *     string|array $subject,
+ *     int $limit = -1,
+ *     int &$count = null   ---> ignored for now, this is a known bug
+ * )
+ *
+ * Returns string (or array for an array subject), NULL on error.
+ */
+static int PH7_builtin_preg_replace(ph7_context *pCtx,int nArg, ph7_value **apArg) {
+    pregx_list lPat, lRepl;
+    int bPatArr, bReplArr;
+    preg_re **aRe;
+    int i, nCompiled = 0;
+    int limit = -1;
+    int total = 0;
+    int err = 0;
+
+    if (nArg < 3) {
+        ph7_result_null(pCtx);
+        return PH7_OK;
+    }
+    if (nArg > 3 && !ph7_value_is_null(apArg[3])) {
+        limit = ph7_value_to_int(apArg[3]);
+    }
+
+    if (pregx_list_init(pCtx, apArg[0], &lPat, &bPatArr) < 0 ||
+        pregx_list_init(pCtx, apArg[1], &lRepl, &bReplArr) < 0) {
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, "PH7 is running out of memory");
+        ph7_result_null(pCtx);
+        return PH7_OK;
+    }
+    if (!bPatArr && bReplArr) {
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR,"replacement must be a string when pattern is a string");
+        ph7_result_null(pCtx);
+        return PH7_OK;
+    }
+
+    aRe = (preg_re **)ph7_context_alloc_chunk(
+        pCtx, (unsigned int)(lPat.n + 1) * (unsigned int)sizeof(preg_re *), TRUE, TRUE);
+    if (aRe == 0) {
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, "PH7 is running out of memory");
+        ph7_result_null(pCtx);
+        return PH7_OK;
+    }
+
+    /* Compile every pattern once */
+    for (i = 0; i < lPat.n; ++i) {
+        int cerr = 0;
+        //fprintf(stderr,"compiling pattern: %s\r\n",lPat.a[i].z);
+        aRe[i] = preg_compile(lPat.a[i].z, &cerr);
+        if (aRe[i] == 0) {
+            err = cerr ? cerr : PL_E_SYNTAX;
+            //pregx_throw(pCtx, "preg_replace", err);
+            ph7_context_throw_error(pCtx, PH7_CTX_ERR, preg_strerror(err));
+            ph7_result_null(pCtx);
+
+            //puts(lPat.a[i].z);
+            goto done;
+        }
+        nCompiled++;
+    }
+
+    if (ph7_value_is_array(apArg[2])) {
+        /* Array of subjects -> array of results (keys preserved) */
+        pregx_rep_ctx R;
+        ph7_value *pArr = ph7_context_new_array(pCtx);
+        ph7_value *pTmp = ph7_context_new_scalar(pCtx);
+        if (pArr == 0 || pTmp == 0) {
+            ph7_context_throw_error(pCtx, PH7_CTX_ERR, "PH7 is running out of memory");
+            ph7_result_null(pCtx);
+            err = PL_E_NOMEM;
+            goto done;
+        }
+        R.aRe = aRe;
+        R.nRe = lPat.n;
+        R.pRepl = &lRepl;
+        R.bReplArray = bReplArr;
+        R.limit = limit;
+        R.count = 0;
+        R.err = 0;
+        R.pOut = pArr;
+        R.pTmp = pTmp;
+        ph7_array_walk(apArg[2], pregx_replace_cb, &R);
+        total = R.count;
+        err = R.err;
+        ph7_result_value(pCtx, pArr);
+    } else {
+        /* Single subject -> string result */
+        const char *z;
+        char *zOut = 0;
+        int n, nOut = 0, rc;
+
+        z = ph7_value_to_string(apArg[2], &n);
+        rc = pregx_apply(aRe, lPat.n, &lRepl, bReplArr, z, n, limit, &zOut, &nOut, &total);
+        if (rc != 0) {
+            err = rc;
+            //pregx_throw(pCtx, "preg_replace", rc);
+            ph7_context_throw_error(pCtx, PH7_CTX_ERR, preg_strerror(rc));
+            ph7_result_null(pCtx);
+        } else {
+            ph7_result_string(pCtx, zOut, nOut);
+            free(zOut);
+        }
+    }
+
+    if (nArg > 4) {
+        //fprintf(stderr,"total=%u\r\n",total);
+        ph7_value *cnt = ph7_value_to_ref(pCtx->pVm, apArg[4]);
+        ph7_value_int(cnt, total);
+    }
+
+done:
+    for (i = 0; i < nCompiled; ++i) {
+        preg_re_free(aRe[i]);
+    }
+    s_pregx_last_error = err;
+    return PH7_OK;
+}
+
+/* 
+ * array|false preg_split(
+ *     string $pattern,
+ *     string $subject,
+ *     int $limit = -1,
+ *     int $flags = 0
+ * )
+ * flags: PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_OFFSET_CAPTURE
+ */
+static int PH7_builtin_preg_split(ph7_context *pCtx,int nArg, ph7_value **apArg) {
+
+    const char *zPattern;
+    const char *zSubject;
+    int nPattern, nSubject;
+    int limit = -1;
+    int flags = 0;
+    int rc, i, nOut = 0;
+    pl_span *spans = 0;
+    ph7_value *pArr;
+    ph7_value *pTmp;
+    int pushFlags;
+
+    if (nArg < 2) {
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    zPattern = ph7_value_to_string(apArg[0], &nPattern);
+    zSubject = ph7_value_to_string(apArg[1], &nSubject);
+
+    if (nArg > 2 && !ph7_value_is_null(apArg[2])) {
+        limit = ph7_value_to_int(apArg[2]);
+    }
+    if (nArg > 3) {
+        flags = ph7_value_to_int(apArg[3]);
+    }
+
+    rc = preg_split(
+        zPattern,
+        zSubject,
+        nSubject,
+        limit,
+        flags & (PREG_SPLIT_NO_EMPTY | PREG_SPLIT_DELIM_CAPTURE),
+        &spans,
+        &nOut
+    );
+
+    s_pregx_last_error = (rc < 0) ? rc : 0;
+
+    if (rc < 0) {
+        //pregx_throw(pCtx, "preg_split", rc);
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, preg_strerror(rc));
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    pArr = ph7_context_new_array(pCtx);
+    pTmp = ph7_context_new_scalar(pCtx);
+    if (pArr == 0 || pTmp == 0) {
+        free(spans);
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, "PH7 is running out of memory");
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    /* PREG_SPLIT_OFFSET_CAPTURE (4) != PREG_OFFSET_CAPTURE (256) */
+    pushFlags = (flags & PREG_SPLIT_OFFSET_CAPTURE) ? PREG_OFFSET_CAPTURE : 0;
+
+    for (i = 0; i < nOut; ++i) {
+        if (spans[i].start < 0) {
+            continue;
+        }
+        pregx_push(pCtx, pArr, pTmp, zSubject, spans[i], pushFlags);
+    }
+    free(spans);
+
+    ph7_result_value(pCtx, pArr);
+    return PH7_OK;
+}
+
+
+/*
+ * array|false preg_grep(string $pattern, array $array, int $flags = 0)
+ * flags: PREG_GREP_INVERT
+ */
+static int PH7_builtin_preg_grep(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+    const char *zPattern;
+    int nPattern;
+    int flags = 0;
+    int cerr = 0;
+    preg_re *re;
+    ph7_value *pArr;
+    pregx_grep_ctx G;
+
+    if (nArg < 2 || !ph7_value_is_array(apArg[1])) {
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+    zPattern = ph7_value_to_string(apArg[0], &nPattern);
+    if (nArg > 2) {
+        flags = ph7_value_to_int(apArg[2]);
+    }
+
+    re = preg_compile(zPattern, &cerr);
+    if (re == 0) {
+        s_pregx_last_error = cerr ? cerr : PL_E_SYNTAX;
+        //pregx_throw(pCtx, "preg_grep", s_pregx_last_error);
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, preg_strerror(s_pregx_last_error));
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    pArr = ph7_context_new_array(pCtx);
+    if (pArr == 0) {
+        preg_re_free(re);
+        ph7_context_throw_error(pCtx, PH7_CTX_ERR, "PH7 is running out of memory");
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+
+    G.re = re;
+    G.invert = flags & PREG_GREP_INVERT;
+    G.err = 0;
+    G.pOut = pArr;
+    ph7_array_walk(apArg[1], pregx_grep_cb, &G);
+    preg_re_free(re);
+
+    s_pregx_last_error = G.err;
+    ph7_result_value(pCtx, pArr);
+    return PH7_OK;
+}
+
+/*
+ * string preg_quote(string $str, ?string $delimiter = null)
+ * Escapes  . \ + * ? [ ^ ] $ ( ) { } = ! < > | : - #  and NUL
+ * (plus the first character of $delimiter, if given).
+ */
+static int PH7_builtin_preg_quote(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+
+    static const char zSpecial[] = ".\\+*?[^]$(){}=!<>|:-#";
+    const char *zIn, *zEnd, *zCur;
+    const char *zDelim = 0;
+    int nIn, nDelim = 0;
+
+    if (nArg < 1) {
+        ph7_result_bool(pCtx, 0);
+        return PH7_OK;
+    }
+    zIn = ph7_value_to_string(apArg[0], &nIn);
+    if (nArg > 1 && !ph7_value_is_null(apArg[1])) {
+        zDelim = ph7_value_to_string(apArg[1], &nDelim);
+    }
+
+    if (nIn < 1) {
+        ph7_result_string(pCtx, "", 0);
+        return PH7_OK;
+    }
+
+    zEnd = &zIn[nIn];
+    zCur = zIn;
+    while (zIn < zEnd) {
+        char c = *zIn;
+        if (c == 0) {
+            if (zIn > zCur) {
+                ph7_result_string(pCtx, zCur, (int)(zIn - zCur));
+            }
+            ph7_result_string(pCtx, "\\000", 4);
+            zCur = ++zIn;
+            continue;
+        }
+        if (strchr(zSpecial, c) != 0 || (nDelim > 0 && c == zDelim[0])) {
+            if (zIn > zCur) {
+                ph7_result_string(pCtx, zCur, (int)(zIn - zCur));
+            }
+            ph7_result_string(pCtx, "\\", 1);
+            zCur = zIn++; /* the character itself starts the next run */
+            continue;
+        }
+        ++zIn;
+    }
+    if (zEnd > zCur) {
+        ph7_result_string(pCtx, zCur, (int)(zEnd - zCur));
+    }
+    return PH7_OK;
+}
+
+/* int preg_last_error(): 0 = no error, otherwise a negative PL_E_* / PREG_E_* code */
+static int PH7_builtin_preg_last_error( ph7_context *pCtx,  int nArg,  ph7_value **apArg) {
+    SXUNUSED(nArg);
+    SXUNUSED(apArg);
+    ph7_result_int(pCtx, s_pregx_last_error);
+    return PH7_OK;
+}
+
+/* string preg_last_error_msg() */
+static int PH7_builtin_preg_last_error_msg( ph7_context *pCtx, int nArg, ph7_value **apArg) {
+    const char *zMsg = "No error";
+    SXUNUSED(nArg);
+    SXUNUSED(apArg);
+    if (s_pregx_last_error != 0) {
+        zMsg = preg_strerror(s_pregx_last_error);
+    }
+    ph7_result_string(pCtx, zMsg, -1);
+    return PH7_OK;
+}
+#endif /* #if PH7_ENABLE_REGEX */
 #endif /* PH7_DISABLE_BUILTIN_FUNC */
+
+
+
+
 /* Table of the built-in functions */
 static const ph7_builtin_func aBuiltInFunc[] = {
   /* Variable handling functions */
@@ -8586,6 +9390,16 @@ static const ph7_builtin_func aBuiltInFunc[] = {
   { "empty", PH7_builtin_empty },
 
 #ifndef PH7_DISABLE_BUILTIN_FUNC
+#if PH7_ENABLE_REGEX
+  { "preg_match",          PH7_builtin_preg_match },
+  { "preg_match_all",      PH7_builtin_preg_match_all },
+  { "preg_replace",        PH7_builtin_preg_replace },  // TODO: BUG: CITO: last arg is unused because FFI's can not have references as their args except for arrays, which are always passed by reference
+  { "preg_split",          PH7_builtin_preg_split },
+  { "preg_grep",           PH7_builtin_preg_grep },
+  { "preg_quote",          PH7_builtin_preg_quote },
+  { "preg_last_error",     PH7_builtin_preg_last_error }, // TODO: BUG: shared between VM's! must be __Thread_local variable
+  { "preg_last_error_msg", PH7_builtin_preg_last_error_msg },
+#endif
 #ifdef PH7_ENABLE_MATH_FUNC
   /* Math functions */
   { "is_finite", PH7_builtin_is_finite },
