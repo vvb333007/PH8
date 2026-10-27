@@ -6,6 +6,7 @@
 #include "../../src/ph7.h"
 #include "../../src/ph7int.h"
 #include "../../src/vm.c"
+#include "../../src/multipart.c"
 #include "../../src/vfs.c"
 #include "../../src/posix_vfs.c"
 #include "../../src/parse.c"
