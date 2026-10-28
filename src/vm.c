@@ -7476,7 +7476,7 @@ static int vm_builtin_is_callable(ph7_context *pCtx, int nArg, ph7_value **apArg
   /* Point to the target VM */
   pVm = pCtx->pVm;
   /* Perform the requested operation */
-  res = PH7_VmIsCallable(pVm, apArg[0], TRUE);
+  res = PH7_VmIsCallable(pVm, apArg[0], FALSE); //BUG: was TRUE, which caused callable execution in place
   ph7_result_bool(pCtx, res);
   return SXRET_OK;
 }
