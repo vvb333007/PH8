@@ -1,23 +1,43 @@
-/* 
- * This is the SLRE of 2025 (a fork from Aquefir) which was patched where possible against
- * known bugs and then wrapped in a PCRE-like API ("pl_...." functions).
+/*
+ * MicroRegExp — A lightweight regular expression library for C for microcontrollers
  *
- * A month later, when author realized that his pl_ functions are not quite PHP-ready, an alternative
- * was introduced ("preg_..." functions)
- * 
- * All three API are available: the eaiest is "slre_..." (which is just 1 function)
+ * LIMITATIONS:
  *
- * No lookarounds, no UTF8 (only byte matching, no ranges e.g. [à-ÿ])
+ *  1. Lookarounds are not supported.
+ *  2. Matching operates on bytes: UTF-8 character ranges such as [à-ÿ] are not supported.
+ *
+ * A patched and extended fork of SLRE, originally based on the work
+ * of Sergey Lyubka and subsequently maintained by Aquefir Consulting.
+ * (https://github.com/aquefir/slre)
+ *
+ * The library provides three APIs, all available for direct use:
+ *
+ *   1. PHP preg-style API
+ *      A well-known preg_* interface inspired by PHP's 
+ *      regular expression functions.
+ *
+ *   2. PCRE-like API
+ *      An additional API with pl_* function and structure names
+ *
+ *   3. Native SLRE API
+ *      The original low-level matching interface - slre_match()
+ *
+ * The PHP preg-style API is the primary high-level interface.
+ *
  *
  * Copyright (C) 2004-2013 Sergey Lyubka.
  * Copyright (C) 2013 Cesanta Software Limited.
  * Copyright (C) 2025 Aquefir Consulting LLC.
- * Copyright (C) 2026 Viacheslav Logunov (bug fixes, preg and pcre-like compatibility syntax extensions)
- * Released under GNU General Public License v2
+ * Copyright (C) 2026 Viacheslav Logunov.
  *
+ * Released under the GNU General Public License, version 2.
  */
 
 #pragma once
+
+#ifndef PH7_PRIVATE
+#  define  PH7_PRIVATE
+#endif
 
 #define PL_SLRE_PATCHED 1       /* do not change. SLRE library variant (patched or not) */
 #define PL_SLRE_FIXED_GROUPS 1  /* do not change. SLRE library variant (patched or not) */
@@ -62,7 +82,9 @@ enum {
   SLRE_IGNORE_CASE = PL_ICASE,
 };
 
-/* Same numeric values as in PHP */
+/* Same numeric values as in PHP; Do not change these numeric values as they must be kept in sync with
+ * PH8 engine code
+ */
 enum {
   PREG_PATTERN_ORDER        = 1,
   PREG_SET_ORDER            = 2,
@@ -77,8 +99,10 @@ enum {
 };
 
 typedef struct pl_regex pl_regex; /* opaque: compiled regex in PCRE-format */
-typedef struct preg_re  preg_re;  /* opaque: compiled in PHP's "/pattern/flags" */
+typedef struct preg_re  preg_re;  /* opaque: compiled in PHP's PREG-format "/pattern/flags" */
 
+/* Captures for PCRE
+ */
 typedef struct {
 
   int start;
@@ -86,7 +110,6 @@ typedef struct {
 
 } pl_span;
 
-/* Captures for PL */
 typedef struct {
 
   int     ngroups;                /* number of capture groups in the pattern */
@@ -94,7 +117,10 @@ typedef struct {
 
 } pl_match;
 
-/* Captures for SLRE */
+/* Captures for SLRE
+ * Result of slre_match() : captured groups. Pointers point to the source buffer
+ * no free() is needed
+ */
 struct slre_cap {
 
   const char * ptr;
@@ -132,14 +158,30 @@ typedef struct {
 #define PREG_SPAN_LEN(sp) ((sp).start < 0 ? 0 : (sp).end - (sp).start)
 #define PREG_ALL_SPAN(a, i, g) ((a)->spans[(size_t)(i) * (size_t)((a)->ngroups + 1) + (size_t)(g)])
 
-/* Compile "/pattern/flags". Returns NULL and stores an error code in *err (may be NULL). */
+/* Matcher callback type, for pl_... functions */
+typedef int (*pl_each_fn)(const pl_match *m, void *userdata);
+
+
+
+/* Compile PHP PREG pattern (e.g. "/^hello/i". 
+ * Returns NULL and stores an error code in *err (may be NULL).
+ */
 PH7_PRIVATE preg_re    *preg_compile(const char *pattern, int *err);  // function preg_compile(string $pattern): resource;
+
+/* Free memory occupied by the compiled expression
+ */
 PH7_PRIVATE void        preg_re_free(preg_re *re);
+
+/* Free memory (result of operation, returned by preg_match / preg_match_all)
+ */
 PH7_PRIVATE void        preg_all_free(preg_all_t *all);
+
+/* Error code to a human-readable string
+*/
 PH7_PRIVATE const char *preg_strerror(int code);
 
-/* 
- * compile + run + free
+/* Classic PHP preg_ functions:
+ * Take the pattern, compile it, run the regex operation, free compiled pattern and return the result
  */
 PH7_PRIVATE int   preg_match(const char *pattern, const char *s, int len, preg_match_t *m, int flags, int offset);
 PH7_PRIVATE int   preg_match_all(const char *pattern, const char *s, int len, preg_all_t *all, int flags, int offset);
@@ -147,7 +189,7 @@ PH7_PRIVATE char *preg_replace(const char *pattern, const char *repl, const char
 PH7_PRIVATE int   preg_split(const char *pattern, const char *s, int len, int limit, int flags, pl_span **out, int *nout);
 PH7_PRIVATE int   preg_grep(const char *pattern, const char *const *subjects, const int *lens, int n, int flags, int **out_idx);
 
-/* 
+/* Classic PHP preg_ functions (precompiled pattern):
  * Precompiled variants (compile once, use many times).
  * In all functions `len` < 0 means strlen(s).
  */
@@ -184,15 +226,12 @@ PH7_PRIVATE int preg_grep_re(const preg_re *re, const char *const *subjects, con
 
 
 
-
-
-/* Matcher callback type, for PL
+/* internal helper: pl_regex is opaque struct, thats why
+ * 
 */
-typedef int (*pl_each_fn)(const pl_match *m, void *userdata);
-
 PH7_PRIVATE int pl_ngroups(const pl_regex *re);
 
-/* Compile.
+/* Compile PCRE pattern.
  * Returns NULL on error and stores the PL_E_* code in *err (err may be NULL)
  */
 PH7_PRIVATE pl_regex *pl_compile( const char *pattern,
@@ -258,9 +297,6 @@ PH7_PRIVATE int pl_split( const pl_regex *re,
 /* The translated pattern that is actually handed to SLRE (for debugging).
 */
 PH7_PRIVATE const char *pl_slre_pattern(const pl_regex *re);
-
-int pl_ngroups(const pl_regex *re);
-
 
 
 /* Native PH7 lightweright regex engine, only 1 function:

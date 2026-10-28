@@ -3291,7 +3291,8 @@ static sxi32 VmByteCodeExec(
                  * This is required to optimize code like
                  * const A = 1+1+1+1+1;
                  * const B = A+A+A+A+A;
-                 * echo B;
+                 * echo B, B, B;  // 3 calls to xExpand(B), each of which: 5 calls t xExpand(A), each of which is a VM code execution (1+1+1+1+1)
+                 * resulting in 15 calls to xExpand
                  *
                  * Classic PH7 calls xExpand on A once to calculate A, then expands A 5 times to calculate B
                  * Then when echo B is called process repeats again resulting in a snowball of VmLocalExec

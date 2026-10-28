@@ -1,22 +1,37 @@
-/* 
- * This is the SLRE library of 2025 (a fork from Aquefir) which was 
- * 1. patched where possible against known bugs and limitations (there are still limitations left)
- * 2. A PCRE-like API on top of SLRE: functions and structures that starts from "pl_"
- * 3. A PHP PREG API on top of PCRE API: functions and structures that starts from "preg_"
- * 
- * No lookarounds, no UTF8 (only byte matching, no ranges e.g. [à-ÿ])
+/*
+ * MicroRegExp — A lightweight regular expression library for C for microcontrollers
+ *
+ * LIMITATIONS:
+ *
+ *  1. Lookarounds are not supported.
+ *  2. Matching operates on bytes: UTF-8 character ranges such as [à-ÿ] are not supported.
+ *
+ * A patched and extended fork of SLRE, originally based on the work
+ * of Sergey Lyubka and subsequently maintained by Aquefir Consulting.
+ * (https://github.com/aquefir/slre)
+ *
+ * The library provides three APIs, all available for direct use:
+ *
+ *   1. PHP preg-style API
+ *      A well-known preg_* interface inspired by PHP's 
+ *      regular expression functions.
+ *
+ *   2. PCRE-like API
+ *      An additional API with pl_* function and structure names
+ *
+ *   3. Native SLRE API
+ *      The original low-level matching interface - slre_match()
+ *
+ * The PHP preg-style API is the primary high-level interface.
+ *
  *
  * Copyright (C) 2004-2013 Sergey Lyubka.
  * Copyright (C) 2013 Cesanta Software Limited.
  * Copyright (C) 2025 Aquefir Consulting LLC.
- * Copyright (C) 2026 Viacheslav Logunov
+ * Copyright (C) 2026 Viacheslav Logunov.
  *
- * Released under GNU General Public License v2
- *
- * CODING STYLE IS KEPT SAME AS THE CODING STYLE OF THE SLRE LIBRARY 
- * AND THUS DOES NOT FOLLOW PH7/PH8 CODING STYLE
+ * Released under the GNU General Public License, version 2.
  */
-#include "ph7int.h"
 #include "regexp.h"
 
 #include <ctype.h>
@@ -142,7 +157,7 @@ static void put_hex(sbuf *b, unsigned char c) {
   sb_puts(b, tmp);
 }
 
-#if 0
+
 static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
   while (*t != '\0') {
     char c = *t;
@@ -173,7 +188,7 @@ static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
     }
   }
 }
-#endif
+
 
 /*
  * Inside [...] SLRE runs every element through match_op(), so a literal '.' becomes a
@@ -789,8 +804,6 @@ PH7_PRIVATE int pl_exec(const pl_regex *re, const char *s, int len, int start, p
   }
   return PL_OK;
 }
-#if 0
-//Unused
 
 PH7_PRIVATE int pl_match_all(const pl_regex *re, const char *s, int len, pl_each_fn fn, void *ud) {
   int pos = 0, count = 0, r;
@@ -877,7 +890,6 @@ PH7_PRIVATE int pl_split(const pl_regex *re, const char *s, int len, pl_span *ou
   }
   return n + 1;
 }
-#endif
 
 /* A Patched SLRE
  *
@@ -2289,8 +2301,6 @@ PH7_PRIVATE int preg_match_all( const char *pattern,
   return rc;
 }
 
-#if 0
-Unused
 /*
  *
  */
@@ -2317,7 +2327,6 @@ PH7_PRIVATE char *preg_replace( const char *pattern,
 
   return r;
 }
-#endif
 
 /*
  *
@@ -2342,8 +2351,7 @@ PH7_PRIVATE int preg_split( const char *pattern,
   return rc;
 }
 
-#if 0
-Unused
+
 /*
  *
  */
@@ -2367,4 +2375,3 @@ PH7_PRIVATE int preg_grep(const char *pattern,
 
   return rc;
 }
-#endif

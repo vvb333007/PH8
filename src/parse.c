@@ -185,11 +185,10 @@ static const ph7_expr_op aOpTable[] = {
   /* Precedence 1: non-associative */
   { { "new", sizeof("new") - 1 }, EXPR_OP_NEW, 1, EXPR_OP_NON_ASSOC, PH7_OP_NEW },
   { { "clone", sizeof("clone") - 1 }, EXPR_OP_CLONE, 1, EXPR_OP_NON_ASSOC, PH7_OP_CLONE },
-//  { { "", sizeof("clone") - 1 }, EXPR_OP_CLONE, 1, EXPR_OP_NON_ASSOC, PH7_OP_CLONE },
-//  { { "clone", sizeof("clone") - 1 }, EXPR_OP_CLONE, 1, EXPR_OP_NON_ASSOC, PH7_OP_CLONE },
-  /* Postfix operators */
-  /* Precedence 2(Highest),left-associative */
 
+  /* Postfix operators */
+
+  /* Precedence 2(Highest),left-associative */
   { { "?->", sizeof(char) * 3 }, EXPR_OP_ARROW, 2, EXPR_OP_ASSOC_LEFT, PH7_OP_MEMBERNS }, 
   { { "->", sizeof(char) * 2 }, EXPR_OP_ARROW, 2, EXPR_OP_ASSOC_LEFT, PH7_OP_MEMBER },
   { { "::", sizeof(char) * 2 }, EXPR_OP_DC, 2, EXPR_OP_ASSOC_LEFT, PH7_OP_MEMBER },
@@ -197,15 +196,41 @@ static const ph7_expr_op aOpTable[] = {
   /* Precedence 3,non-associative  */
   { { "++", sizeof(char) * 2 }, EXPR_OP_INCR, 3, EXPR_OP_NON_ASSOC, PH7_OP_INCR },
   { { "--", sizeof(char) * 2 }, EXPR_OP_DECR, 3, EXPR_OP_NON_ASSOC, PH7_OP_DECR },
+
   /* Unary operators */
+
   /* Precedence 4,right-associative  */
   { { "-", sizeof(char) }, EXPR_OP_UMINUS, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_UMINUS },
   { { "+", sizeof(char) }, EXPR_OP_UPLUS, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_UPLUS },
   { { "~", sizeof(char) }, EXPR_OP_BITNOT, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_BITNOT },
   { { "!", sizeof(char) }, EXPR_OP_LOGNOT, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_LNOT },
   { { "@", sizeof(char) }, EXPR_OP_ALT, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_ERR_CTRL },
+
+#if PH7_ENABLE_MATH_FUNC
+#if 0
+  /* Precedence 4,right-associative (trigonometry, exponents and ln)  */
+  { { "sin", sizeof("sin") - 1}, EXPR_OP_SIN, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_SIN },
+  { { "cos", sizeof("sin") - 1}, EXPR_OP_COS, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_COS },
+  { { "tan", sizeof("sin") - 1}, EXPR_OP_TAN, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_TAN },
+  { { "asin", sizeof("sinh") - 1}, EXPR_OP_ASIN, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_ASIN },
+  { { "acos", sizeof("sinh") - 1}, EXPR_OP_ACOS, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_ACOS },
+  { { "atan", sizeof("sinh") - 1}, EXPR_OP_ATAN, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_ATAN },
+  { { "sinh", sizeof("sinh") - 1}, EXPR_OP_SINH, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_SINH },
+  { { "cosh", sizeof("sinh") - 1}, EXPR_OP_COSH, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_COSH },
+  { { "tanh", sizeof("sinh") - 1}, EXPR_OP_TANH, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_TANH },
+  { { "asinh", sizeof("asinh") - 1}, EXPR_OP_ASINH, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_ASINH },
+  { { "acosh", sizeof("asinh") - 1}, EXPR_OP_ACOSH, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_ACOSH },
+  { { "atanh", sizeof("asinh") - 1}, EXPR_OP_ATANH, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_ATANH },
+  { { "ln", sizeof("ln") - 1}, EXPR_OP_LN, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_LN },
+  { { "exp", sizeof("exp") - 1}, EXPR_OP_EXP, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_EXP },
+  { { "invexp", sizeof("invexp") - 1}, EXPR_OP_INVEXP, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_INVEXP },
+#endif
+#endif /* #if PH7_ENABLE_MATH_FUNC */
+
   /* Cast operators */
-  /* NOTE: Adding a new type conversion operator also requires changes to lex.c */
+  /* NOTE: Adding a new type conversion operator also requires changes to lex.c 
+  * because these operators need a special handling (they are assembled out of 3 tokens)
+  */
   { { "(int)", sizeof("(int)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_INT },
   { { "(bool)", sizeof("(bool)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_BOOL },
   { { "(string)", sizeof("(string)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_STR },
@@ -216,6 +241,7 @@ static const ph7_expr_op aOpTable[] = {
   { { "(unset)", sizeof("(unset)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_NULL },
 
   /* Binary operators */
+
   /* Precedence 5, right-assoc. Processed together with unary ops (iPrec == 4)
    *in ONE right-to-left sweep in ExprMakeTree()
    */
@@ -223,6 +249,17 @@ static const ph7_expr_op aOpTable[] = {
 
   /* Precedence 7,non-associative */
   { { "instanceof", sizeof("instanceof") - 1 }, EXPR_OP_INSTOF, 7, EXPR_OP_NON_ASSOC, PH7_OP_IS_A },
+
+#if PH7_ENABLE_MATH_FUNC
+#if 0
+   /* mathlib operators, non-associative */
+  { { "log", sizeof("log") - 1 }, EXPR_OP_LOG, 7, EXPR_OP_NON_ASSOC, PH7_OP_LOG },        // 2 log 16 == 4
+  { { "root", sizeof("root") - 1 }, EXPR_OP_ROOT, 7, EXPR_OP_NON_ASSOC, PH7_OP_ROOT },    // 3 root -8 == -2
+  { { "invroot", sizeof("invroot") - 1 }, EXPR_OP_ROOT, 7, EXPR_OP_NON_ASSOC, PH7_OP_INVROOT },   // 3 root -8 == -0.5
+  { { "gcd", sizeof("gcd") - 1 }, EXPR_OP_GCD, 7, EXPR_OP_NON_ASSOC, PH7_OP_GCD },        // 9 gcd 18 == 9
+  { { "lcm", sizeof("lcm") - 1 }, EXPR_OP_LCM, 7, EXPR_OP_NON_ASSOC, PH7_OP_LCM },        // 16 lcd 32  == 2
+#endif
+#endif /* #if PH7_ENABLE_MATH_FUNC */
 
   /* Precedence 7,left-associative */
   { { "*", sizeof(char) }, EXPR_OP_MUL, 7, EXPR_OP_ASSOC_LEFT, PH7_OP_MUL },
@@ -322,7 +359,7 @@ PH7_PRIVATE const ph7_expr_op *PH7_ExprExtractOperator(SyString *pStr, SyToken *
       break;
     }
     if (SyisAlpha(aOpTable[n].sOp.zString[0])) {
-      /* TICKET 1433-012: Alpha stream operators [i.e: and,or,xor,new...] */
+      /* TICKET 1433-012: Alpha stream operators [i.e: sin, and,or,xor,new...] */
       rc = SyStringCmp(pStr, &aOpTable[n].sOp, SyStrnicmp);
     } else {
       rc = SyStringCmp(pStr, &aOpTable[n].sOp, SyMemcmp);
@@ -431,6 +468,7 @@ static sxi32 ExprVerifyNodes(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 
     }
     if (apNode[i]->pStart->nType & PH7_TK_LPAREN /*'('*/) {
       if (i > 0 && (apNode[i - 1]->xCode == PH7_CompileVariable || apNode[i - 1]->xCode == PH7_CompileLiteral || (apNode[i - 1]->pStart->nType & (PH7_TK_ID | PH7_TK_KEYWORD | PH7_TK_SSTR | PH7_TK_DSTR | PH7_TK_RPAREN /*')'*/ | PH7_TK_CSB /*']'*/ | PH7_TK_CCB /*'}'*/)))) {
+        // TODO: do not change node type. So we can implement  $a = 3 sqrt ($a + 10); as an operator not function call which is costly
         /* Ticket 1433-033: Take care to ignore alpha-stream [i.e: or,xor] operators followed by an opening parenthesis */
         if ((apNode[i - 1]->pStart->nType & PH7_TK_OP) == 0) {
           /* We are dealing with a postfix [i.e: function call]  operator
