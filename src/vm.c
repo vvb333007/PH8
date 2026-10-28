@@ -6201,41 +6201,35 @@ static sxi32 VmByteCodeExec(
               PH7_MemObjRelease(&sResult);
             } else {
 
-              ph7_value pValue;
+              ph7_value pValue;             // function return value
               PH7_MemObjInit(pVm, &pValue);
   
               if (pTos->iFlags & MEMOBJ_OBJ) {
                 ph7_class_instance *pThis = (ph7_class_instance *)pTos->x.pOther;
 
               /* class name as function: invoke magic __invoke() call */
-#if 0
-                // THIS IS WRONG, DO NOT UNCOMMENT
-                //
-                // No we can not sumply replace the object on Tos: if we release it and place there a function name
-                // then we simply loose 1 ref, and this will be deadly in cases like (new Object)->mathod(), as GC
-                // will destroy object completely. Calling then __invoke() on dead object is a game: if __invoke()
-                // uses `this` then ...
-                // If we don't release it, then we can get a leak. Do we?
-                //
-                // This needs to be brainstormed
-                //
+#if 1
                 ph7_class_method *pMeth;
                 pMeth = PH7_ClassExtractMethod(pThis->pClass, "__invoke", sizeof("__invoke") - 1 );
 
                 if (pMeth == 0) {
-                  VM_EXCEPTION_GOTO("__unknownfn", 11, "Calling object as function requires __invoke to be implemented by class '%z'\n", &pThis->pClass->sName)
+                  VM_EXCEPTION_GOTO("__unknownat", 11, "'__invoke()' magic method is not implemented by class '%z'. at [PC: %08x]\n", &pThis->pClass->sName, pc)
                 } else {
-                  /* Replace object on the stack with a method name */
-                  //fprintf(stderr,"before\n");
-                  PH7_MemObjRelease(pTos);  // (new Class)(); will kill the class before __invoke
-                  //fprintf(stderr,"after\n");
-                  SyBlobAppend(&pTos->sBlob, SyStringData(&pMeth->sVmName), SyStringLength(&pMeth->sVmName));
-                  MemObjSetType(pTos, MEMOBJ_STRING);
+                  /* Copy function arguments and call __invoke(); TODO: can we NOT copy args?
+                  */
+                  SySetReset(&aArg);
+                  while (pArg < pTos) {
+                    SySetPut(&aArg, (const void *)&pArg);
+                    pArg++;
+                  }
+
+                  rc = PH7_VmCallClassMethod(pVm, &(*pThis), pMeth, &pValue, (int)SySetUsed(&aArg), (ph7_value **)SySetBasePtr(&aArg));
+//                  if (rc == PH7_EXCEPTION)
+//                    goto Exception;
+                  if (rc == PH7_ABORT)
+                    goto Abort;
                 }
-                pTos->nIdx = SXU32_HIGH;
-                goto NameIsString;
 #else
-                /* TODO: Arguments are not passed. Must refactor PH7_CallMagicMethod() to accept ph7_values as arguments */
                 if (SXRET_OK != PH7_CallMagicMethod(&(*pVm), pThis->pClass, pThis, "__invoke", sizeof("__invoke") - 1, NULL, &pValue)) {
                   VM_EXCEPTION_GOTO("__unknownat", 11, "'__invoke()' magic method is not implemented by class '%z'. at [PC: %08x]\n", &pThis->pClass->sName, pc)
                 }
@@ -6243,7 +6237,7 @@ static sxi32 VmByteCodeExec(
 
               } else {
                 /* Raise exception: Invalid function name, most likely NULL */
-                VM_EXCEPTION_GOTO("__unknownfn", 11, "function/method is 'null' and is not callable. at [PC: %08x]\n", pc)
+                VM_EXCEPTION_GOTO("__unknownfn", 11, "function/method is not callable (type mismatch). at [PC: %08x]\n", pc)
               }
               /* Pop given arguments */
               if (pInstr->iP1 > 0) {
