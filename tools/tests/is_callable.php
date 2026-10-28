@@ -12,7 +12,7 @@ Hello, guest
 Testing class as a callable
 
 /* 'callable' as an argument type enforces strict argument check: VM stops if argument is not callable
- *
+ * (argument poisoning)
  */
 function test(callable $callback = function() { echo "Hello World!\n";}) {
 
@@ -46,12 +46,11 @@ test($z);
 class Test {
 
   public function oke($x,$y,$z) {
+    die("Failed: PH7 is_callable() bug");
   }
 
   public function __invoke($x,$y,$z) {
-    var_dump($x);
-    var_dump($y);
-    var_dump($z);
+    die("Failed: PH7 is_callable() bug");
   }
 }
 
@@ -65,6 +64,8 @@ $z = new Test;
 if (!is_callable($z))
   die("Failed; Class is expected to be a callable");
 
+
+echo "Testing array as a callable\n";
 $b = [$z, 'oke'];
 if (!is_callable($b))
   die("Failed; Array is expected to be a callable");
