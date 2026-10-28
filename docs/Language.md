@@ -78,7 +78,7 @@ If a class has no constructor, its properties retain their initialized values, i
 
 Zend PHP does not support this kind of overloading, and its support for complex expressions in initializers is more limited.
 
-### 2.5. Complex Expressions in Default Values and Constants
+### 2.5. Complex Expressions in Default Values
 
 In PH8, function arguments can have default values defined by complex expressions. The same approach applies to `const`, `static`, and `enum` values.
 
@@ -110,7 +110,53 @@ test(function() {
 test(10); // Prints: Expecting a callback
 ```
 
-### 2.6. Function Overloading by Argument Count and Type
+
+### 2.6. Complex Expressions in Constants
+
+In PH8, constant values are not limited to literals and simple constant expressions. A constant can be initialized with an arbitrary expression, including variables, function calls, object creation, and anonymous functions.
+
+Constants are evaluated lazily: the expression is evaluated when the constant is first accessed, and the resulting value is cached and reused on subsequent accesses. Thus, the expression is evaluated only once, and the constant retains the value obtained during initialization.
+
+Example:
+
+```php
+
+const HELLO = 'Hello ' . $a;
+const OBJ = new stdClass(1);
+const NUM = 1 + 2 + $z;
+const RANDOM = rand_str(16);
+const FUNC = function($a) {
+    echo $a, PHP_EOL;
+};
+const IX = $var ? 1 : 2;
+
+```
+
+In this example:
+
+- `HELLO` is a string concatenated from a literal and the value of `$a`.
+- `OBJ` is a reference to an instance of `stdClass`. Accessing the constant repeatedly returns the same object instance rather than creating a new one.
+- `NUM` is the result of an arithmetic expression involving the variable `$z`.
+- `RANDOM` is a string produced by calling `rand_str()`. On subsequent accesses, the function is not called again; the cached result is used instead.
+- `FUNC` is an anonymous function (closure) stored in a constant.
+- `IX` is the result of a ternary expression.
+
+Since the value is evaluated on first access, variables used in the expression must have the intended values at the time the constant is initialized. Subsequent changes to those variables do not cause the expression to be evaluated again.
+
+A constant can hold an object or a closure, so its value is not necessarily a scalar or an array. However, the immutability of a constant means that its stored value cannot be replaced; it does not automatically make an object held by the constant immutable.
+
+A closure stored in a constant can be assigned to a variable and invoked through that variable:
+
+```php
+$a = FUNC;
+$a('Hello');
+```
+
+The expression `FUNC('Hello')` is interpreted as a regular function call by name, not as an invocation of the value stored in the constant. To invoke the closure dynamically, first retrieve the constant's value, for example by assigning it to a variable.
+
+In PH8, a similar approach is used for default argument values, `static` declarations, and `enum` elements. This allows complex expressions to be used in contexts where Zend PHP imposes stricter restrictions on constant expressions.
+
+### 2.7. Function Overloading by Argument Count and Type
 
 PH8 supports function overloading by argument count and type. Zend PHP does not support this mechanism.
 
@@ -129,7 +175,7 @@ foo(52); // a is integer
 foo(array(14, __TIME__, __DATE__)); // a is an array
 ```
 
-### 2.7. The Comma Operator
+### 2.8. The Comma Operator
 
 In PH8, the comma operator can be used in expressions.
 
@@ -152,7 +198,7 @@ enum Hello: int {
 }
 ```
 
-### 2.8. Simplified `__call()` and `__callStatic()` semantics
+### 2.9. Simplified `__call()` and `__callStatic()` semantics
 
 PH8 implements a simplified and more direct semantics for the `__call()` and `__callStatic()` magic methods compared to Zend PHP 8. Instead of receiving the name of the missing method as the first parameter and all original arguments packed into a single array as the second, the magic method receives the original arguments directly, preserving their number, order, and normal parameter-passing semantics. The name of the intercepted method is available through the special __CALL__ constant. This eliminates the need to unpack an argument array and makes magic methods behave more like transparent handlers for otherwise undefined method calls, while allowing their parameters to be declared according to the actual intercepted call.
 
