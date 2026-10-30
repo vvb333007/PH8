@@ -151,7 +151,7 @@ echo A[1]; // PH7 throws an error here
 
 ### 5.  __call() and  __callStatic()
 
-Currently do not receive called method name.
+~~Currently do not receive called method name.~~
 
 
 ### 6. UNIX-like `fork()` to make a full clone of a VM
