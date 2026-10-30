@@ -102,7 +102,7 @@ Refactor `(object)` cast of arrays: instead of wrapping up arrays to stdClass we
 
 ### Magic methods
 
-__invoke() does not receive any arguements right now. __call and __callStatic do not receive method name
+~__invoke() does not receive any arguements right now. __call and __callStatic do not receive method name~~
 
 implement __terminate() magic method
 implement __oom() magic method
