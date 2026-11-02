@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тест HTML-формы</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 680px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    h1 { font-size: 1.6rem; }
+    form { display: grid; gap: 1rem; }
+    fieldset { border: 1px solid #8888; border-radius: 8px; padding: 1rem; }
+    label { display: grid; gap: .35rem; }
+    input, select, textarea, button {
+      box-sizing: border-box;
+      font: inherit;
+      padding: .55rem .65rem;
+      border: 1px solid #8888;
+      border-radius: 5px;
+    }
+    input[type="checkbox"], input[type="radio"] { width: auto; }
+    .inline { display: flex; align-items: center; gap: .5rem; }
+    .actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+    button { cursor: pointer; }
+    .hint { opacity: .75; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h1>Тест приёма HTML-формы</h1>
+  <p class="hint">Метод POST, кодировка multipart/form-data. Форма содержит одно поле для загрузки файла.</p>
+
+  <form method="post" action="upload.php" enctype="multipart/form-data" accept-charset="UTF-8">
+    <label>
+      Имя
+      <input type="text" name="name" value="Иван" required>
+    </label>
+
+    <label>
+      Email
+      <input type="email" name="email" value="ivan@example.com">
+    </label>
+
+    <label>
+      Возраст
+      <input type="number" name="age" min="0" max="120" value="30">
+    </label>
+
+    <label>
+      Устройство
+      <select name="device">
+        <option value="esp32s3">ESP32-S3</option>
+        <option value="esp32p4" selected>ESP32-P4</option>
+        <option value="esp32c6">ESP32-C6</option>
+        <option value="other">Другое</option>
+      </select>
+    </label>
+
+    <fieldset>
+      <legend>Режим работы</legend>
+      <label class="inline"><input type="radio" name="mode" value="auto" checked> Автоматический</label>
+      <label class="inline"><input type="radio" name="mode" value="manual"> Ручной</label>
+      <label class="inline"><input type="radio" name="mode" value="maintenance"> Обслуживание</label>
+    </fieldset>
+
+    <label class="inline">
+      <input type="checkbox" name="enabled" value="1" checked>
+      Устройство включено
+    </label>
+
+    <label>
+      Температурный порог
+      <input type="text" name="threshold" value="27.5">
+    </label>
+
+    <label>
+      Комментарий
+      <textarea name="comment" rows="4">приёма русских символов и обычных полей.</textarea>
+    </label>
+
+    <label>
+      Файл для загрузки
+      <input type="file" name="upload">
+    </label>
+
+    <div class="actions">
+      <button type="submit">Отправить форму</button>
+      <button type="reset">Сбросить</button>
+    </div>
+  </form>
+</body>
+</html>
