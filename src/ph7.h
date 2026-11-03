@@ -596,6 +596,7 @@ typedef double ph7_real;
 
 /* Same layout as picohttpparser's struct phr_header, but the engine does not
  * depend on the parser. The httpd glue casts (with a _Static_assert). 
+ * TODO: refactor. include picoparser in the source tree
 */
 typedef struct ph8_http_header {
 
@@ -606,6 +607,10 @@ typedef struct ph8_http_header {
 
 } ph8_http_header;
 
+/* Same as above bu for ph8_request_t
+ * TODO: refactor, get rid of this struct; replace with ph8_request_t. No point to keep these structures opaque
+ * at cost of 2 more structures and extra copy
+ */
 typedef struct ph8_http_request {
 
     const char *method;
@@ -635,7 +640,9 @@ typedef struct ph8_http_request {
   PH7_APIEXPORT int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int iFlags);
   /* Virtual Machine Handling Interfaces */
   PH7_APIEXPORT int ph7_vm_config(ph7_vm *pVm, int iConfigOp, ...);
-  PH7_APIEXPORT int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *rq);
+
+  PH7_APIEXPORT int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *hr, const void *rq, void *rs);
+
   PH7_APIEXPORT int ph8_vm_clear_request(ph7_vm *pVm);
 
   PH7_APIEXPORT int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus);

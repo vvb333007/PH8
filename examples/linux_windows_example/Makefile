@@ -3,32 +3,25 @@
 .RECIPEPREFIX := >
 
 # Compiler
-CC      := gcc
+#CC      := i686-w64-mingw32-gcc
+CC := gcc
 
 # Directories
 OBJDIR  := .
 
 # Flags
-CFLAGS  := -Wall -Wextra -O3 -MMD -MP -DPH7_ENABLE_THREADS=1 -DPH7_ENABLE_MATH_FUNC=1 -I../../src
+# -DFIXEDTYPELOG=1
+# -DEVEL=1
+# -DADDREFLOG=1
+# -FRAMELOG=1
+
+
+CFLAGS  := -Wall -Wextra -O0 -g -MMD -MP  -DDEVEL=1 -DPH7_ENABLE_REGEX=1 -DPH7_ENABLE_THREADS=0 -DADDREFLOG=0 -DPH7_ENABLE_MATH_FUNC=1 -I../../src -I../../src/cygwin
 
 
 # Common sources
-COMMON_SRC := \
-../../src/api.c \
-../../src/builtin.c \
-../../src/compile.c \
-../../src/constant.c \
-../../src/hashmap.c \
-../../src/lex.c \
-../../src/lib.c \
-../../src/memobj.c \
-../../src/oo.c \
-../../src/parse.c \
-../../src/vfs.c \
-../../src/posix_vfs.c \
-../../src/vm.c \
-../../src/esp32/builtins.c \
-../../src/esp32/constants.c
+COMMON_SRC := ../../src/httpd/httpd.c ../../src/httpd/picohttpparser.c ../../src/cygwin/freertos_shim.c ../../src/api.c ../../src/builtin.c ../../src/compile.c ../../src/constant.c ../../src/hashmap.c ../../src/lex.c ../../src/lib.c ../../src/memobj.c ../../src/oo.c ../../src/parse.c ../../src/vfs.c ../../src/vm.c ../../src/regexp.c ../../src/posix_vfs.c ../../src/esp32/builtins.c ../../src/esp32/constants.c  
+#COMMON_SRC := amalgam.c
 
 INTER_SRC := $(COMMON_SRC) ph7_interp.c
 INTER_OBJ := $(patsubst %.c,$(OBJDIR)/%.o,$(INTER_SRC))
@@ -52,7 +45,7 @@ $(OBJDIR):
 >mkdir -p $(OBJDIR)
 
 clean:
->rm -f ../../src/*.[od] ../../src/esp32/*.[od]  *.[od]
+>rm -f ../../src/*.[od] ../../src/esp32/*.[od] ../../src/cygwin/*.[od]  *.[od]
 
 
 

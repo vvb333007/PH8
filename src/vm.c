@@ -323,20 +323,12 @@ PH7_PRIVATE sxi32 PH7_VmRegisterConstant(
   pEntry = SyHashGet(&pVm->hConstant, (const void *)pName->zString, pName->nByte);
 
   if (pEntry) {
-#if 0
-    /* Overwrite the old definition and return immediately */
-    pCons = (ph7_constant *)pEntry->pUserData;
-    pCons->xExpand = xExpand;
-    pCons->pUserData = pUserData;
-    return SXRET_OK;
-#else
     /* NOTE: Message below will not be displayed in runtime, so VM has to print diagnostics messages.
        NOTE: Message below will appear during compilation phase only (the func is called both from
       compiler and runtime / define() language construct )
     */
     PH7_GenCompileError(&pVm->sCodeGen, E_ERROR, 1, "Read-only literal '%.*s' is already defined", pName->nByte, pName->zString);
     return SXERR_EXISTS;
-#endif
   }
   /* Allocate a new constant instance */
   pCons = (ph7_constant *)SyMemBackendPoolAlloc(&pVm->sAllocator, sizeof(ph7_constant));
@@ -776,30 +768,6 @@ static void VmLeaveFrame(ph7_vm *pVm) {
     SyMemBackendPoolFree(&pVm->sAllocator, pFrame);
   }
 }
-#if 0
-/*
- * Compare two functions signature and return the comparison result.
- */
-static int VmOverloadCompare(SyString *pFirst, SyString *pSecond) {
-  const char *zSend = &pSecond->zString[pSecond->nByte];
-  const char *zFend = &pFirst->zString[pFirst->nByte];
-  const char *zSin = pSecond->zString;
-  const char *zFin = pFirst->zString;
-  const char *zPtr = zFin;
-  for (;;) {
-    if (zFin >= zFend || zSin >= zSend) {
-      break;
-    }
-    if (zFin[0] != zSin[0]) {
-      /* mismatch */
-      break;
-    }
-    zFin++;
-    zSin++;
-  }
-  return (int)(zFin - zPtr);
-}
-#else
 /* Rewritten. There were UB's related to mixing typed and nontyped arguments
  * Now it is a score system
 <?php
@@ -836,7 +804,7 @@ static int VmOverloadCompare(SyString *pCall, SyString *pDecl) {
   }
   return score;
 }
-#endif
+
 /*
  * Select the appropriate VM function for the current call context.
  * Returns NULL if there are overloaded functions but nothing matches
@@ -983,15 +951,6 @@ static sxi32 VmMountUserClass(
         return SXERR_MEM;
       }
       if (SySetUsed(&pAttr->aByteCode) > 0) {
-#if 0
-        /* Initialize attribute default value or a constant (any complex expression) */
-        
-        sxi32 rc = VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
-        if (rc == PH7_ABORT || rc == PH7_EXCEPTION) {
-          VmErrorFormat(&(*pVm), PH7_CTX_ERR, "Exception in initialization value of %z::%z", &pClass->sName, &pAttr->sName);
-          return SXRET_OK;
-        }
-#else
         /* Initialize static attribute default value or a constant (any complex expression)
         */
         sxi32 rc = VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
@@ -1003,10 +962,9 @@ static sxi32 VmMountUserClass(
         if (rc == PH7_ABORT || rc == PH7_EXCEPTION)
           pClass->iFlags |= PH7_CLASS_BAD;
 
-#endif
-
-        // TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
-        // TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
+        /* TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
+         * TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
+         */
       } else {
         /* Unitialized static attribute
          * 1. Add a type hint, based on `nType` (upper 16 bits of iFlags)
@@ -1095,10 +1053,8 @@ PH7_PRIVATE sxi32 PH7_VmCreateClassInstanceFrame(
       }
       pVmAttr->nIdx = pMemObj->nIdx;
       if (SySetUsed(&pAttr->aByteCode) > 0) {
-#if 0
+
         /* Initialize attribute default value (any complex expression, exceptions are ignored) */
-        VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
-#else
         sxi32 rc = VmLocalExec(&(*pVm), &pAttr->aByteCode, pMemObj);
 
         /* Failed to eval() the initialization value. This is bad;
@@ -1107,9 +1063,9 @@ PH7_PRIVATE sxi32 PH7_VmCreateClassInstanceFrame(
         if (rc == PH7_ABORT || rc == PH7_EXCEPTION) {
           pClass->iFlags |= PH7_CLASS_BAD;
         }
-#endif
-        // TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
-        // TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
+        /* TODO: convert pMemObj to a required type (pAttr->nType) if it is a fixed-type attribute
+         * TODO: otherwise it is legal to declare 'public int $a = 'hello'' and get an attribute with a 'string' type
+         */
       } else {
         /* 
          * Unitialized attribute (MEMOBJ_NULL).
@@ -1117,8 +1073,6 @@ PH7_PRIVATE sxi32 PH7_VmCreateClassInstanceFrame(
            Propagate nullable property 
          */
         if (pAttr->iFlags & PH7_CLASS_ATTR_FIXEDTYPE) {
-          //pMemObj->iFlags = (MEMOBJ_NULL | PH7_MemObjKeywordToType(pAttr->nType));
-
           pMemObj->iFlags = (MEMOBJ_NULL | MEMOBJ_FIXEDTYPE | PH7_TypeKeywordToHint(pAttr->nType));
         }
 
@@ -2218,7 +2172,7 @@ static sxi32 VmHashmapInsert(
   return rc;
 }
 /* Forward declaration */
-static sxi32 VmHttpProcessRequest(ph7_vm *pVm, const char *zRequest, int nByte);
+//static sxi32 VmHttpProcessRequest(ph7_vm *pVm, const char *zRequest, int nByte);
 /*
  * Configure a working virtual machine instance.
  *
@@ -2393,6 +2347,8 @@ PH7_PRIVATE sxi32 PH7_VmConfigure(
         }
         break;
       }
+    /* These are used when script is executed in HTTP context. Record that
+    */
     case PH7_VM_CONFIG_SERVER_ATTR:
     case PH7_VM_CONFIG_ENV_ATTR:
     case PH7_VM_CONFIG_SESSION_ATTR:
@@ -2400,6 +2356,7 @@ PH7_PRIVATE sxi32 PH7_VmConfigure(
     case PH7_VM_CONFIG_GET_ATTR:
     case PH7_VM_CONFIG_COOKIE_ATTR:
     case PH7_VM_CONFIG_HEADER_ATTR:
+      pVm->bHttp = 1;
       {
         const char *zKey = va_arg(ap, const char *);
         const char *zValue = va_arg(ap, const char *);
@@ -2525,22 +2482,6 @@ PH7_PRIVATE sxi32 PH7_VmConfigure(
         break;
       }
     case PH7_VM_CONFIG_HTTP_REQUEST:
-      {
-        /* Raw HTTP request*/
-        const char *zRequest = va_arg(ap, const char *);
-        int nByte = va_arg(ap, int);
-        if (SX_EMPTY_STR(zRequest)) {
-          rc = SXERR_EMPTY;
-          break;
-        }
-        if (nByte < 0) {
-          /* Compute length automatically */
-          nByte = (int)SyStrlen(zRequest);
-        }
-        /* Process the request */
-        rc = VmHttpProcessRequest(&(*pVm), zRequest, nByte);
-        break;
-      }
     default:
       /* Unknown configuration option */
       rc = SXERR_UNKNOWN;
@@ -10342,15 +10283,6 @@ static int vm_builtin_restore_exception_handler(ph7_context *pCtx, int nArg, ph7
   /* Point to the old and the new handler */
   pOld = &pVm->aExceptionCB[0];
   pNew = &pVm->aExceptionCB[1];
-#if 0
-  if (pOld->iFlags & MEMOBJ_NULL) {
-    SXUNUSED(nArg); /* cc warning */
-    SXUNUSED(apArg);
-    /* No installed handler,return FALSE */
-    ph7_result_bool(pCtx, 0);
-    return PH7_OK;
-  }
-#endif
   /* Copy the old handler */
   PH7_MemObjStore(pOld, pNew);
   PH7_MemObjRelease(pOld);
@@ -10956,188 +10888,7 @@ static sxi32 VmThrowException(
    */
   return SXRET_OK;
 }
-/*
- * Section:
- *  Version,Credits and Copyright related functions.
- * Authors:
- *    Symisc Systems,devel@symisc.net.
- *    Copyright (C) Symisc Systems,http://ph7.symisc.net
- * Status:
- *    Stable.
- */
-/*
- * string ph7version(void)
- *  Returns the running version of the PH7 version.
- * Parameters
- *  None
- * Return
- * Current PH7 version.
- */
-static int vm_builtin_ph7_version(ph7_context *pCtx, int nArg, ph7_value **apArg) {
-  SXUNUSED(nArg);
-  SXUNUSED(apArg); /* cc warning */
-  /* Current engine version */
-  ph7_result_string(pCtx, PH7_VERSION, sizeof(PH7_VERSION) - 1);
-  return PH7_OK;
-}
-/*
- * PH7 release information HTML page used by the ph7info() and ph7credits() functions.
- */
-#define PH7_HTML_PAGE_HEADER "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">" \
-                             "<html><head>" \
-                             "<!-- Copyright (C) 2011-2012 Symisc Systems,http://www.symisc.net contact@symisc.net -->" \
-                             "<meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\"><title>PH7 engine credits</title>" \
-                             "<style type=\"text/css\">" \
-                             "div {" \
-                             "border: 1px solid #cccccc;" \
-                             "-moz-border-radius-topleft: 10px;" \
-                             "-moz-border-radius-bottomright: 10px;" \
-                             "-moz-border-radius-bottomleft: 10px;" \
-                             "-moz-border-radius-topright: 10px;" \
-                             "-webkit-border-radius: 10px;" \
-                             "-o-border-radius: 10px;" \
-                             "border-radius: 10px;" \
-                             "padding-left: 2em;" \
-                             "background-color: white;" \
-                             "margin-left: auto;" \
-                             "font-family: verdana;" \
-                             "padding-right: 2em;" \
-                             "margin-right: auto;" \
-                             "}" \
-                             "body {" \
-                             "padding: 0.2em;" \
-                             "font-style: normal;" \
-                             "font-size: medium;" \
-                             "background-color: #f2f2f2;" \
-                             "}" \
-                             "hr {" \
-                             "border-style: solid none none;" \
-                             "border-width: 1px medium medium;" \
-                             "border-top: 1px solid #cccccc;" \
-                             "height: 1px;" \
-                             "}" \
-                             "a {" \
-                             "color: #3366cc;" \
-                             "text-decoration: none;" \
-                             "}" \
-                             "a:hover {" \
-                             "color: #999999;" \
-                             "}" \
-                             "a:active {" \
-                             "color: #663399;" \
-                             "}" \
-                             "h1 {" \
-                             "margin: 0;" \
-                             "padding: 0;" \
-                             "font-family: Verdana;" \
-                             "font-weight: bold;" \
-                             "font-style: normal;" \
-                             "font-size: medium;" \
-                             "text-transform: capitalize;" \
-                             "color: #0a328c;" \
-                             "}" \
-                             "p {" \
-                             "margin: 0 auto;" \
-                             "font-size: medium;" \
-                             "font-style: normal;" \
-                             "font-family: verdana;" \
-                             "}" \
-                             "</style></head><body>" \
-                             "<div style=\"background-color: white; width: 699px;\">" \
-                             "<h1 style=\"font-family: Verdana; text-align: right;\"><small><small>PH7 Engine Credits</small></small></h1>" \
-                             "<hr style=\"margin-left: auto; margin-right: auto;\">" \
-                             "<p><small><a href=\"http://ph7.symisc.net/\"><small><span style=\"font-weight: bold;\">" \
-                             "Symisc PH7</span></small></a><small>&nbsp;</small></small></p>" \
-                             "<p style=\"text-align: left;\"><small><small>" \
-                             "A highly efficient embeddable bytecode compiler and a Virtual Machine for the PHP(5) Programming Language.</small></small></p>" \
-                             "<p style=\"text-align: left;\"><small><small>Copyright (C) Symisc Systems.<br></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small><small>Engine Version:</small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold; margin-left: 40px;\">"
 
-#define PH7_HTML_PAGE_FORMAT "<small><small><span style=\"font-weight: normal;\">%s</span></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small><small>Engine ID:</small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold; margin-left: 40px;\"><small><small><span style=\"font-weight: normal;\">%s %s</span></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small><small>Underlying VFS:</small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold; margin-left: 40px;\"><small><small><span style=\"font-weight: normal;\">%s</span></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small><small>Total Built-in Functions:</small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold; margin-left: 40px;\"><small><small><span style=\"font-weight: normal;\">%d</span></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small><small>Total Built-in Classes:</small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold; margin-left: 40px;\"><small><small><span style=\"font-weight: normal;\">%d</span></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small><small>Host Operating System:</small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold; margin-left: 40px;\"><small><small><span style=\"font-weight: normal;\">%s</span></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small style=\"font-weight: bold;\"><small><small></small></small></small></p>" \
-                             "<p style=\"text-align: left; font-weight: bold;\"><small><small>Licensed To: &lt;Public Release Under The <a href=\"http://www.symisc.net/spl.txt\">" \
-                             "Symisc Public License (SPL)</a>&gt;</small></small></p>"
-
-#define PH7_HTML_PAGE_FOOTER "<p style=\"text-align: left; font-weight: bold; margin-left: 40px;\"><small><small><span style=\"font-weight: normal;\">/*<br>" \
-                             "&nbsp;* Copyright (C) 2011, 2012 Symisc Systems. All rights reserved.<br>" \
-                             "&nbsp;*<br>" \
-                             "&nbsp;* Redistribution and use in source and binary forms, with or without<br>" \
-                             "&nbsp;* modification, are permitted provided that the following conditions<br>" \
-                             "&nbsp;* are met:<br>" \
-                             "&nbsp;* 1. Redistributions of source code must retain the above copyright<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; notice, this list of conditions and the following disclaimer.<br>" \
-                             "&nbsp;* 2. Redistributions in binary form must reproduce the above copyright<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; notice, this list of conditions and the following disclaimer in the<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; documentation and/or other materials provided with the distribution.<br>" \
-                             "&nbsp;* 3. Redistributions in any form must be accompanied by information on<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; how to obtain complete source code for the PH7 engine and any <br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; accompanying software that uses the PH7 engine software.<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; The source code must either be included in the distribution<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; or be available for no more than the cost of distribution plus<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; a nominal fee, and must be freely redistributable under reasonable<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; conditions. For an executable file, complete source code means<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; the source code for all modules it contains.It does not include<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; source code for modules or files that typically accompany the major<br>" \
-                             "&nbsp;*&nbsp;&nbsp;&nbsp; components of the operating system on which the executable file runs.<br>" \
-                             "&nbsp;*<br>" \
-                             "&nbsp;* THIS SOFTWARE IS PROVIDED BY SYMISC SYSTEMS ``AS IS'' AND ANY EXPRESS<br>" \
-                             "&nbsp;* OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED<br>" \
-                             "&nbsp;* WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR<br>" \
-                             "&nbsp;* NON-INFRINGEMENT, ARE DISCLAIMED.&nbsp; IN NO EVENT SHALL SYMISC SYSTEMS<br>" \
-                             "&nbsp;* BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR<br>" \
-                             "&nbsp;* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF<br>" \
-                             "&nbsp;* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR<br>" \
-                             "&nbsp;* BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,<br>" \
-                             "&nbsp;* WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE<br>" \
-                             "&nbsp;* OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN<br>" \
-                             "&nbsp;* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.<br>" \
-                             "&nbsp;*/<br>" \
-                             "</span></small></small></p>" \
-                             "<p style=\"text-align: right;\"><small><small>Copyright (C) <a href=\"http://www.symisc.net/\">Symisc Systems</a></small></small><big>" \
-                             "</big></p></div></body></html>"
-/*
- * bool ph7credits(void)
- * bool ph7info(void)
- * bool ph7copyright(void)
- *  Prints out the credits for PH7 engine
- * Parameters
- *  None
- * Return
- *  Always TRUE
- */
-static int vm_builtin_ph7_credits(ph7_context *pCtx, int nArg, ph7_value **apArg) {
-  ph7_vm *pVm = pCtx->pVm; /* Point to the underlying VM */
-  /* Expand the HTML page above*/
-  ph7_context_output(pCtx, PH7_HTML_PAGE_HEADER, (int)sizeof(PH7_HTML_PAGE_HEADER) - 1);
-  ph7_context_output_format(
-    pCtx,
-    PH7_HTML_PAGE_FORMAT,
-    ph7_lib_version(),   /* Engine version */
-    ph7_lib_signature(), /* Engine signature */
-    ph7_lib_ident(),     /* Engine ID */
-    pVm->pEngine->pVfs ? pVm->pEngine->pVfs->zName : "null_vfs",
-    SyHashTotalEntry(&pVm->hFunction) + SyHashTotalEntry(&pVm->hHostFunction), /* # built-in functions */
-    SyHashTotalEntry(&pVm->hClass),
-    "UNIX-Like"
-  );
-  ph7_context_output(pCtx, PH7_HTML_PAGE_FOOTER, (int)sizeof(PH7_HTML_PAGE_FOOTER) - 1);
-  SXUNUSED(nArg); /* cc warning */
-  SXUNUSED(apArg);
-  /* Return TRUE */
-  //ph7_result_bool(pCtx,1);
-  return PH7_OK;
-}
 /*
  * Section:
  *    URL related routines.
@@ -14928,13 +14679,7 @@ static const ph7_builtin_func aVmFunc[] = {
   { "error_get_last", vm_builtin_debug_backtrace },
   { "debug_print_backtrace", vm_builtin_debug_print_backtrace },
   { "debug_string_backtrace", vm_builtin_debug_string_backtrace },
-  /* Release info */
-  { "ph7version", vm_builtin_ph7_version },
-  { "ph7credits", vm_builtin_ph7_credits },
-  { "ph7info", vm_builtin_ph7_credits },
-  { "ph7_info", vm_builtin_ph7_credits },
-  { "phpinfo", vm_builtin_ph7_credits },
-  { "ph7copyright", vm_builtin_ph7_credits },
+//  { "phpinfo", vm_builtin_ph7_credits },
   /* hashmap */
   { "compact", vm_builtin_compact },
   { "extract", vm_builtin_extract },
@@ -15537,204 +15282,7 @@ PathSplit:
   }
   return SXRET_OK;
 }
-/*
- * Extract a single line from a raw HTTP request.
- * Return SXRET_OK on success,SXERR_EOF when end of input
- * and SXERR_MORE when more input is needed.
- *
- * TODO: BUG
- *
- */
-static sxi32 VmGetNextLine(SyString *pCursor, SyString *pCurrent) {
-  const char *zIn;
-  sxu32 nPos;
-  /* Jump leading white spaces */
-  SyStringLeftTrim(pCursor);  // BUG: affects how ExtractHeaders processes the rest. 
-  if (pCursor->nByte < 1) {
-    SyStringInitFromBuf(pCurrent, 0, 0);
-    return SXERR_EOF; /* End of input */
-  }
-  zIn = SyStringData(pCursor);
-  if (SXRET_OK != SyByteListFind(pCursor->zString, pCursor->nByte, "\r\n", &nPos)) {
-    /* Line not found,tell the caller to read more input from source */
-    SyStringDupPtr(pCurrent, pCursor);
-    return SXERR_MORE;
-  }
-  pCurrent->zString = zIn;
-  pCurrent->nByte = nPos;
-  /* advance the cursor so we can call this routine again */
-  pCursor->zString = &zIn[nPos];
-  pCursor->nByte -= nPos;
-  return SXRET_OK;
-}
-/*
-  * Split a single MIME header into a name value pair. 
-  * This function return SXRET_OK,SXERR_CONTINUE on success.
-  * Otherwise SXERR_NEXT is returned when a malformed header
-  * is encountered.
-  * Note: This function handle also mult-line headers.
-  */
-static sxi32 VmHttpProcessOneHeader(SyhttpHeader *pHdr, SyhttpHeader *pLast, const char *zLine, sxu32 nLen) {
-  SyString *pName;
-  sxu32 nPos;
-  sxi32 rc;
-  if (nLen < 1) {
-    return SXERR_NEXT;
-  }
-  /* Check for multi-line header */
-  if (pLast && (zLine[-1] == ' ' || zLine[-1] == '\t')) {
-    SyString *pTmp = &pLast->sValue;
-    SyStringFullTrim(pTmp);
-    if (pTmp->nByte == 0) {
-      SyStringInitFromBuf(pTmp, zLine, nLen);
-    } else {
-      /* Update header value length */
-      pTmp->nByte = (sxu32)(&zLine[nLen] - pTmp->zString);
-    }
-    /* Simply tell the caller to reset its states and get another line */
-    return SXERR_CONTINUE;
-  }
-  /* Split the header */
-  pName = &pHdr->sName;
-  rc = SyByteFind(zLine, nLen, ':', &nPos);
-  if (rc != SXRET_OK) {
-    return SXERR_NEXT; /* Malformed header;Check the next entry */
-  }
-  SyStringInitFromBuf(pName, zLine, nPos);
-  SyStringFullTrim(pName);
-  /* Extract a header value */
-  SyStringInitFromBuf(&pHdr->sValue, &zLine[nPos + 1], nLen - nPos - 1);
-  /* Remove leading and trailing whitespaces */
-  SyStringFullTrim(&pHdr->sValue);
-  return SXRET_OK;
-}
-/*
-  * Extract all MIME headers associated with a HTTP request.
-  * After processing the first line of a HTTP request,the following
-  * routine is called in order to extract MIME headers.
-  * This function return SXRET_OK on success,SXERR_MORE when it needs
-  * more inputs.
-  * Note: Any malformed header is simply discarded.
-  */
-static sxi32 VmHttpExtractHeaders(SyString *pRequest, SySet *pOut) {
-  SyhttpHeader *pLast = 0;
-  SyString sCurrent;
-  SyhttpHeader sHdr;
-  sxu8 bEol;
-  sxi32 rc;
-  if (SySetUsed(pOut) > 0) {
-    pLast = (SyhttpHeader *)SySetAt(pOut, SySetUsed(pOut) - 1);
-  }
-  bEol = FALSE;
-  for (;;) {
-    SyZero(&sHdr, sizeof(SyhttpHeader));
-    /* Extract a single line from the raw HTTP request */
-    rc = VmGetNextLine(pRequest, &sCurrent);
-    if (rc != SXRET_OK) {
-      if (sCurrent.nByte < 1) {
-        break;
-      }
-      bEol = TRUE;
-    }
-    /* Process the header */
-    if (SXRET_OK == VmHttpProcessOneHeader(&sHdr, pLast, sCurrent.zString, sCurrent.nByte)) {
-      if (SXRET_OK != SySetPut(pOut, (const void *)&sHdr)) {
-        break;
-      }
-      /* Retrieve the last parsed header so we can handle multi-line header
-        * in case we face one of them.
-        */
-      pLast = (SyhttpHeader *)SySetPeek(pOut);
-    }
-    if (bEol) {
-      break;
-    }
-  } /* for(;;) */
-  return SXRET_OK;
-}
-/*
-  * Process the first line of a HTTP request.
-  * This routine perform the following operations
-  *  1) Extract the HTTP method.
-  *  2) Split the request URI to it's fields [ie: host,path,query,...].
-  *  3) Extract the HTTP protocol version.
-  */
-static sxi32 VmHttpProcessFirstLine(
-  SyString *pRequest, /* Raw HTTP request */
-  sxi32 *pMethod,     /* OUT: HTTP method */
-  SyhttpUri *pUri,    /* OUT: Parse of the URI */
-  sxi32 *pProto       /* OUT: HTTP protocol */
-) {
-  static const char *azMethods[] = { "get", "post", "head", "put" };
-  static const sxi32 aMethods[] = { HTTP_METHOD_GET, HTTP_METHOD_POST, HTTP_METHOD_HEAD, HTTP_METHOD_PUT };
-  const char *zIn, *zEnd, *zPtr;
-  SyString sLine;
-  sxu32 nLen;
-  sxi32 rc;
-  /* Extract the first line and update the pointer */
-  rc = VmGetNextLine(pRequest, &sLine);
-  if (rc != SXRET_OK) {
-    return rc;
-  }
-  if (sLine.nByte < 1) {
-    /* Empty HTTP request */
-    return SXERR_EMPTY;
-  }
-  /* Delimit the line and ignore trailing and leading white spaces */
-  zIn = sLine.zString;
-  zEnd = &zIn[sLine.nByte];
-  while (zIn < zEnd && (unsigned char)zIn[0] < 0xc0 && SyisSpace(zIn[0])) {
-    zIn++;
-  }
-  /* Extract the HTTP method */
-  zPtr = zIn;
-  while (zIn < zEnd && !SyisSpace(zIn[0])) {
-    zIn++;
-  }
-  *pMethod = HTTP_METHOD_OTHR;
-  if (zIn > zPtr) {
-    sxu32 i;
-    nLen = (sxu32)(zIn - zPtr);
-    for (i = 0; i < SX_ARRAYSIZE(azMethods); ++i) {
-      if (SyStrnicmp(azMethods[i], zPtr, nLen) == 0) {
-        *pMethod = aMethods[i];
-        break;
-      }
-    }
-  }
-  /* Jump trailing white spaces */
-  while (zIn < zEnd && (unsigned char)zIn[0] < 0xc0 && SyisSpace(zIn[0])) {
-    zIn++;
-  }
-  /* Extract the request URI */
-  zPtr = zIn;
-  while (zIn < zEnd && !SyisSpace(zIn[0])) {
-    zIn++;
-  }
-  if (zIn > zPtr) {
-    nLen = (sxu32)(zIn - zPtr);
-    /* Split raw URI to it's fields */
-    VmHttpSplitURI(pUri, zPtr, nLen);
-  }
-  /* Jump trailing white spaces */
-  while (zIn < zEnd && (unsigned char)zIn[0] < 0xc0 && SyisSpace(zIn[0])) {
-    zIn++;
-  }
-  /* Extract the HTTP version */
-  zPtr = zIn;
-  while (zIn < zEnd && !SyisSpace(zIn[0])) {
-    zIn++;
-  }
-  *pProto = HTTP_PROTO_11; /* HTTP/1.1 */
-  rc = 1;
-  if (zIn > zPtr) {
-    rc = SyStrnicmp(zPtr, "http/1.0", (sxu32)(zIn - zPtr));
-  }
-  if (!rc) {
-    *pProto = HTTP_PROTO_10; /* HTTP/1.0 */
-  }
-  return SXRET_OK;
-}
+
 /*
   * Tokenize,decode and split a raw query encoded as: "x-www-form-urlencoded" 
   * into a name value pair.
@@ -15819,28 +15367,7 @@ static sxi32 VmHttpSplitEncodedQuery(
   /* All done*/
   return SXRET_OK;
 }
-/*
-  * Extract MIME header value from the given set.
-  * Return header value on success. NULL otherwise.
-  */
-static SyString *VmHttpExtractHeaderValue(SySet *pSet, const char *zMime, sxu32 nByte) {
-  SyhttpHeader *aMime, *pMime;
-  SyString sMime;
-  sxu32 n;
-  SyStringInitFromBuf(&sMime, zMime, nByte);
-  /* Point to the MIME entries */
-  aMime = (SyhttpHeader *)SySetBasePtr(pSet);
-  /* Perform the lookup */
-  for (n = 0; n < SySetUsed(pSet); ++n) {
-    pMime = &aMime[n];
-    if (SyStringCmp(&sMime, &pMime->sName, SyStrnicmp) == 0) {
-      /* Header found,return it's associated value */
-      return &pMime->sValue;
-    }
-  }
-  /* No such MIME header */
-  return 0;
-}
+
 /*
   * Tokenize and decode a raw "Cookie:" MIME header into a name value pair
   * and insert it's fields [i.e name,value] in the $_COOKIE superglobal.
@@ -15897,233 +15424,6 @@ static sxi32 VmHttpPorcessCookie(ph7_vm *pVm, SyBlob *pWorker, const char *zIn, 
   }
   return SXRET_OK;
 }
-/*
-  * Process a full HTTP request and populate the appropriate arrays
-  * such as $_SERVER,$_GET,$_POST,$_COOKIE,$_REQUEST,... with the information
-  * extracted from the raw HTTP request. As an extension Symisc introduced 
-  * the $_HEADER array which hold a copy of the processed HTTP MIME headers
-  * and their associated values. [i.e: $_HEADER['Server'],$_HEADER['User-Agent'],...].
-  * This function return SXRET_OK on success. Any other return value indicates
-  * a malformed HTTP request.
-  */
-static sxi32 VmHttpProcessRequest(ph7_vm *pVm, const char *zRequest, int nByte) {
-  SyString *pName, *pValue, sRequest; /* Raw HTTP request */
-  ph7_value *pHeaderArray;            /* $_HEADER superglobal (Symisc eXtension to the PHP specification)*/
-  SyhttpHeader *pHeader;              /* MIME header */
-  SyhttpUri sUri;                     /* Parse of the raw URI*/
-  SyBlob sWorker;                     /* General purpose working buffer */
-  SySet sHeader;                      /* MIME headers set */
-  sxi32 iMethod;                      /* HTTP method [i.e: GET,POST,HEAD...]*/
-  sxi32 iVer;                         /* HTTP protocol version */
-  sxi32 rc;
-  SyStringInitFromBuf(&sRequest, zRequest, nByte);
-  SySetInit(&sHeader, &pVm->sAllocator, sizeof(SyhttpHeader));
-  SyBlobInit(&sWorker, &pVm->sAllocator);
-  /* Ignore leading and trailing white spaces*/
-  SyStringFullTrim(&sRequest);
-  /* Process the first line */
-  rc = VmHttpProcessFirstLine(&sRequest, &iMethod, &sUri, &iVer);
-  if (rc != SXRET_OK) {
-    return rc;
-  }
-  /* Process MIME headers */
-  VmHttpExtractHeaders(&sRequest, &sHeader);
-  /*
-    * Setup $_SERVER environments 
-    */
-  /* 'SERVER_PROTOCOL': Name and revision of the information protocol via which the page was requested */
-  ph7_vm_config(pVm,
-                PH7_VM_CONFIG_SERVER_ATTR,
-                "SERVER_PROTOCOL",
-                iVer == HTTP_PROTO_10 ? "HTTP/1.0" : "HTTP/1.1",
-                sizeof("HTTP/1.1") - 1);
-  /* 'REQUEST_METHOD':  Which request method was used to access the page */
-  ph7_vm_config(pVm,
-                PH7_VM_CONFIG_SERVER_ATTR,
-                "REQUEST_METHOD",
-                iMethod == HTTP_METHOD_GET ? "GET" : (iMethod == HTTP_METHOD_POST ? "POST" : (iMethod == HTTP_METHOD_PUT ? "PUT" : (iMethod == HTTP_METHOD_HEAD ? "HEAD" : "OTHER"))),
-                -1 /* Compute attribute length automatically */
-  );
-  if (SyStringLength(&sUri.sQuery) > 0 && iMethod == HTTP_METHOD_GET) {
-    pValue = &sUri.sQuery;
-    /* 'QUERY_STRING': The query string, if any, via which the page was accessed */
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "QUERY_STRING",
-                  pValue->zString,
-                  pValue->nByte);
-    /* Decoded the raw query */
-    VmHttpSplitEncodedQuery(&(*pVm), pValue, &sWorker, FALSE);
-  }
-  /* REQUEST_URI: The URI which was given in order to access this page; for instance, '/index.html' */
-  pValue = &sUri.sRaw;
-  ph7_vm_config(pVm,
-                PH7_VM_CONFIG_SERVER_ATTR,
-                "REQUEST_URI",
-                pValue->zString,
-                pValue->nByte);
-  /*
-    * 'PATH_INFO'
-    * 'ORIG_PATH_INFO' 
-      * Contains any client-provided pathname information trailing the actual script filename but preceding
-    * the query string, if available. For instance, if the current script was accessed via the URL
-    * http://www.example.com/php/path_info.php/some/stuff?foo=bar, then $_SERVER['PATH_INFO'] would contain
-    * /some/stuff. 
-    */
-  pValue = &sUri.sPath;
-  ph7_vm_config(pVm,
-                PH7_VM_CONFIG_SERVER_ATTR,
-                "PATH_INFO",
-                pValue->zString,
-                pValue->nByte);
-  ph7_vm_config(pVm,
-                PH7_VM_CONFIG_SERVER_ATTR,
-                "ORIG_PATH_INFO",
-                pValue->zString,
-                pValue->nByte);
-  /* 'HTTP_ACCEPT': Contents of the Accept: header from the current request, if there is one */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Accept", sizeof("Accept") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_ACCEPT",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'HTTP_ACCEPT_CHARSET': Contents of the Accept-Charset: header from the current request, if there is one. */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Accept-Charset", sizeof("Accept-Charset") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_ACCEPT_CHARSET",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'HTTP_ACCEPT_ENCODING': Contents of the Accept-Encoding: header from the current request, if there is one. */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Accept-Encoding", sizeof("Accept-Encoding") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_ACCEPT_ENCODING",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'HTTP_ACCEPT_LANGUAGE': Contents of the Accept-Language: header from the current request, if there is one */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Accept-Language", sizeof("Accept-Language") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_ACCEPT_LANGUAGE",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'HTTP_CONNECTION': Contents of the Connection: header from the current request, if there is one. */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Connection", sizeof("Connection") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_CONNECTION",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'HTTP_HOST': Contents of the Host: header from the current request, if there is one. */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Host", sizeof("Host") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_HOST",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'HTTP_REFERER': Contents of the Referer: header from the current request, if there is one. */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Referer", sizeof("Referer") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_REFERER",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'HTTP_USER_AGENT': Contents of the Referer: header from the current request, if there is one. */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "User-Agent", sizeof("User-Agent") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "HTTP_USER_AGENT",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* 'PHP_AUTH_DIGEST': When doing Digest HTTP authentication this variable is set to the 'Authorization'
-     * header sent by the client (which you should then use to make the appropriate validation).
-     */
-  pValue = VmHttpExtractHeaderValue(&sHeader, "Authorization", sizeof("Authorization") - 1);
-  if (pValue) {
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "PHP_AUTH_DIGEST",
-                  pValue->zString,
-                  pValue->nByte);
-    ph7_vm_config(pVm,
-                  PH7_VM_CONFIG_SERVER_ATTR,
-                  "PHP_AUTH",
-                  pValue->zString,
-                  pValue->nByte);
-  }
-  /* Install all clients HTTP headers in the $_HEADER superglobal */
-  pHeaderArray = VmExtractSuper(&(*pVm), "_HEADER", sizeof("_HEADER") - 1);
-  /* Iterate throw the available MIME headers*/
-  SySetResetCursor(&sHeader);
-  pHeader = 0; /* stupid cc warning */
-  while (SXRET_OK == SySetGetNextEntry(&sHeader, (void **)&pHeader)) {
-    pName = &pHeader->sName;
-    pValue = &pHeader->sValue;
-    if (pHeaderArray && (pHeaderArray->iFlags & MEMOBJ_HASHMAP)) {
-      /* Insert the MIME header and it's associated value */
-      VmHashmapInsert((ph7_hashmap *)pHeaderArray->x.pOther,
-                      pName->zString, (int)pName->nByte,
-                      pValue->zString, (int)pValue->nByte);
-    }
-    if (pName->nByte == sizeof("Cookie") - 1 && SyStrnicmp(pName->zString, "Cookie", sizeof("Cookie") - 1) == 0
-        && pValue->nByte > 0) {
-      /* Process the name=value pair and insert them in the $_COOKIE superglobal array */
-      VmHttpPorcessCookie(&(*pVm), &sWorker, pValue->zString, pValue->nByte);
-    }
-  }
-  if (iMethod == HTTP_METHOD_POST) {
-    /* Extract raw POST data */
-    pValue = VmHttpExtractHeaderValue(&sHeader, "Content-Type", sizeof("Content-Type") - 1);
-    if (pValue && pValue->nByte >= sizeof("application/x-www-form-urlencoded") - 1 && SyMemcmp("application/x-www-form-urlencoded", pValue->zString, pValue->nByte) == 0) {
-      /* Extract POST data length */
-      pValue = VmHttpExtractHeaderValue(&sHeader, "Content-Length", sizeof("Content-Length") - 1);
-      if (pValue) {
-        sxi32 iLen = 0; /* POST data length */
-        SyStrToInt32(pValue->zString, pValue->nByte, (void *)&iLen, 0);
-        if (iLen > 0) {
-          /* Remove leading and trailing white spaces */
-          SyStringFullTrim(&sRequest);
-          if ((int)sRequest.nByte > iLen) {
-            sRequest.nByte = (sxu32)iLen;
-          }
-          /* Decode POST data now */
-          VmHttpSplitEncodedQuery(&(*pVm), &sRequest, &sWorker, TRUE);
-        }
-      }
-    }
-  }
-  /* All done,clean-up the mess left behind */
-  SySetRelease(&sHeader);
-  SyBlobRelease(&sWorker);
-  return SXRET_OK;
-}
-
-#if 1
-/*
- * ph8_vm_set_request(): fill HTTP superglobals from an already parsed request.
- *
- *   no raw body access (php://input)
- *   no array syntax in field names (a[]=1, a[b]=2) for urlencoded and multipart
- */
-
 
 
 /* Multipart limits: small forms with small files. */
@@ -16133,6 +15433,208 @@ static sxi32 VmHttpProcessRequest(ph7_vm *pVm, const char *zRequest, int nByte) 
 #define MP_MAX_FILE   (1024 * 1024)   /* per file; bigger -> $_FILES[..]["error"] = 1, no content */
 
 #define SUPER_MAP(vm_, lit_)  VmSuperMap((vm_), (lit_), sizeof(lit_) - 1)
+#define MP_BOUNDARY_MAX 70          /* RFC 2046 */
+
+/* lowercase */
+inline static char lc(char c) {
+
+    return (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
+}
+
+/* is whitespace ?*/
+inline static int is_ws(char c) {
+    return c == ' ' || c == '\t';
+}
+
+/* a[0..n) equals lit, ASCII case-insensitive */
+static int ieq_n(const char *a, size_t n, const char *lit) {
+
+    size_t i;
+    if (strlen(lit) != n) {
+        return 0;
+    }
+    for (i = 0; i < n; i++) {
+        if (lc(a[i]) != lc(lit[i])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int iprefix(const char *a, size_t n, const char *lit) {
+
+    size_t i, m = strlen(lit);
+    if (n < m) {
+        return 0;
+    }
+    for (i = 0; i < m; i++) {
+        if (lc(a[i]) != lc(lit[i])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/*
+ * Finds parameter `key` in a header value like:  form-data; name="a"; filename="b"
+ * Matching is by whole parameter name, so "name" does not match "filename" or
+ * "filename*". Quoted values may contain ';' and \" or \\ escapes (returned raw).
+ */
+static int mp_param(const char *v, size_t n, const char *key, const char **out, size_t *out_n) {
+
+    const char *end = v + n;
+    const char *p;
+
+    if (n == 0 || (p = memchr(v, ';', n)) == NULL) {
+        return 0;
+    }
+    p++;
+    while (p < end) {
+        const char *k0, *k1, *v0, *v1;
+
+        while (p < end && is_ws(*p)) {
+            p++;
+        }
+        k0 = p;
+        while (p < end && *p != '=' && *p != ';') {
+            p++;
+        }
+        k1 = p;
+        while (k1 > k0 && is_ws(k1[-1])) {
+            k1--;
+        }
+        if (p >= end || *p == ';') {            /* parameter without a value */
+            if (p < end) {
+                p++;
+            }
+            continue;
+        }
+        p++;                                    /* '=' */
+        while (p < end && is_ws(*p)) {
+            p++;
+        }
+        if (p < end && *p == '"') {
+            p++;
+            v0 = p;
+            while (p < end && *p != '"') {
+                if (*p == '\\' && p + 1 < end && (p[1] == '"' || p[1] == '\\')) {
+                    p++;
+                }
+                p++;
+            }
+            v1 = p;
+            if (p < end) {
+                p++;                            /* closing quote */
+            }
+        } else {
+            v0 = p;
+            while (p < end && *p != ';') {
+                p++;
+            }
+            v1 = p;
+            while (v1 > v0 && is_ws(v1[-1])) {
+                v1--;
+            }
+        }
+        if (ieq_n(k0, (size_t)(k1 - k0), key)) {
+            *out = v0;
+            *out_n = (size_t)(v1 - v0);
+            return 1;
+        }
+        while (p < end && *p != ';') {
+            p++;
+        }
+        if (p < end) {
+            p++;
+        }
+    }
+    return 0;
+}
+
+
+/* First occurrence of delim (which starts with '\r') in s[0..n), or NULL. */
+static const uint8_t *find_delim(const uint8_t *s, size_t n, const char *delim, size_t dn)
+{
+    const uint8_t *p = s, *end = s + n;
+
+    while ((size_t)(end - p) >= dn) {
+        p = memchr(p, '\r', (size_t)(end - p) - dn + 1);
+        if (p == NULL) {
+            return NULL;
+        }
+        if (memcmp(p, delim, dn) == 0) {
+            return p;
+        }
+        p++;
+    }
+    return NULL;
+}
+
+typedef struct {
+    const char *disp;
+    size_t      disp_n;
+    const char *ctype;
+    size_t      ctype_n;
+} mp_hdrs_t;
+
+/* Header block of one part (without the final CRLF CRLF). Strict: CRLF line
+ * ends only, no obs-fold. Returns 0 or PH8_MP_BAD. */
+static int parse_headers_mp(const char *h, size_t n, mp_hdrs_t *out)
+{
+    const char *end = h + n;
+
+    memset(out, 0, sizeof(*out));
+    while (h < end) {
+        size_t rem = (size_t)(end - h), i = 0, line_n;
+        const char *line = h, *colon, *name, *val;
+        size_t name_n, val_n;
+
+        while (i + 1 < rem && !(h[i] == '\r' && h[i + 1] == '\n')) {
+            i++;
+        }
+        if (i + 1 < rem) {
+            line_n = i;
+            h += i + 2;
+        } else {
+            line_n = rem;
+            h = end;
+        }
+        if (line_n == 0 || is_ws(line[0]) || memchr(line, '\r', line_n) || memchr(line, '\n', line_n)) {
+            return PH8_MP_BAD;
+        }
+        colon = memchr(line, ':', line_n);
+        if (colon == NULL) {
+            return PH8_MP_BAD;
+        }
+        name = line;
+        name_n = (size_t)(colon - line);
+        while (name_n > 0 && is_ws(name[name_n - 1])) {
+            name_n--;
+        }
+        if (name_n == 0) {
+            return PH8_MP_BAD;
+        }
+        val = colon + 1;                        /* value = (colon+1 .. end of line), trimmed */
+        val_n = (size_t)((line + line_n) - val);
+        while (val_n > 0 && is_ws(*val)) {
+            val++;
+            val_n--;
+        }
+        while (val_n > 0 && is_ws(val[val_n - 1])) {
+            val_n--;
+        }
+        if (ieq_n(name, name_n, "content-disposition")) {
+            out->disp = val;
+            out->disp_n = val_n;
+        } else if (ieq_n(name, name_n, "content-type")) {
+            out->ctype = val;
+            out->ctype_n = val_n;
+        }
+    }
+    return 0;
+}
+
+
 static ph7_hashmap *VmSuperMap(ph7_vm *pVm, const char *zName, sxu32 nByte) {
   ph7_value *pValue = VmExtractSuper(pVm, zName, nByte);
   if (pValue == 0 || (pValue->iFlags & MEMOBJ_HASHMAP) == 0) {
@@ -16153,7 +15655,8 @@ static int ReqHdrIs(const ph8_http_header *h, const char *zName, size_t nName) {
 }
 
 /* "User-Agent" -> "HTTP_USER_AGENT". The fixed prefix guarantees that a client
- * header can never overwrite REQUEST_METHOD, QUERY_STRING and friends. */
+ * header can never overwrite REQUEST_METHOD, QUERY_STRING and friends. 
+ */
 static int ReqServerKey(char *zOut, size_t nOut, const char *zName, size_t nName) {
   static const char zPrefix[] = "HTTP_";
   size_t i, n = sizeof(zPrefix) - 1;
@@ -16195,10 +15698,11 @@ static int ReqIsMultipart(const ph8_http_header *h) {
   return h->value_len == n || h->value[n] == ';' || h->value[n] == ' ' || h->value[n] == '\t';
 }
 
-/* ---- $_FILES support. Reviewed against hashmap.c / api.c: PH7_NewHashmap() returns a map with
- *      iRef == 1 that belongs to its creator, PH7_HashmapInsert() stores a COPY of a value
- *      (a hashmap value gets +1 iRef), so releasing our temporary afterwards leaves exactly one
- *      owner. $_FILES always exists (PH7_HashmapCreateSuper). Not run against the engine yet. ---- */
+/* $_FILES support. Reviewed against hashmap.c / api.c: PH7_NewHashmap() returns a map with
+ * iRef == 1 that belongs to its creator, PH7_HashmapInsert() stores a COPY of a value
+ * (a hashmap value gets +1 iRef), so releasing our temporary afterwards leaves exactly one
+ * owner. $_FILES always exists (PH7_HashmapCreateSuper)
+ */
 
 static void ReqInt(ph7_hashmap *pMap, const char *zKey, sxu32 nKey, sxi64 iVal) {
   ph7_value sKey, sVal;
@@ -16273,7 +15777,7 @@ static int ReqParseMultipart(ph7_vm *pVm, const ph8_http_header *pCType, const u
   ReqMp m;
   int rc;
 
-  if (ph8_mp_boundary(pCType->value, pCType->value_len, zBoundary, sizeof(zBoundary)) != 0) {
+  if (PH8_BoundaryMP(pCType->value, pCType->value_len, zBoundary, sizeof(zBoundary)) != 0) {
     return SXERR_SYNTAX;
   }
   lim.max_parts = MP_MAX_PARTS;
@@ -16283,20 +15787,175 @@ static int ReqParseMultipart(ph7_vm *pVm, const ph8_http_header *pCType, const u
   m.pPost = SUPER_MAP(pVm, "_POST");
   m.pRequest = SUPER_MAP(pVm, "_REQUEST");
   m.pFiles = 0;
-  rc = ph8_mp_parse(body, n, zBoundary, &lim, ReqMpPart, &m);
+  rc = PH8_VmParseMP(body, n, zBoundary, &lim, ReqMpPart, &m);
   if (rc >= 0) {
     return SXRET_OK;
   }
   return rc == PH8_MP_LIMIT ? SXERR_LIMIT : (rc == PH8_MP_ABORT ? SXERR_MEM : SXERR_SYNTAX);
 }
 
+
+
+/* PUBLIC API
+ *
+ */
+int PH8_BoundaryMP(const char *ct, size_t n, char *out, size_t out_n) {
+    static const char type[] = "multipart/form-data";
+    const size_t tl = sizeof(type) - 1;
+    const char *b;
+    size_t bn, i;
+
+    if (ct == NULL || out == NULL || out_n == 0 || !iprefix(ct, n, type)) {
+        return PH8_MP_BAD;
+    }
+    if (n > tl && ct[tl] != ';' && !is_ws(ct[tl])) {
+        return PH8_MP_BAD;                      /* e.g. "multipart/form-datax" */
+    }
+    if (!mp_param(ct, n, "boundary", &b, &bn)) {
+        return PH8_MP_BAD;
+    }
+    if (bn == 0 || bn > MP_BOUNDARY_MAX || bn >= out_n) {
+        return PH8_MP_BAD;
+    }
+    for (i = 0; i < bn; i++) {
+        unsigned char c = (unsigned char)b[i];
+        /* printable ASCII only; no quotes or backslashes (keeps escaping out of the picture) */
+        if (c < 0x20 || c > 0x7e || c == '"' || c == '\\') {
+            return PH8_MP_BAD;
+        }
+    }
+    if (b[bn - 1] == ' ') {
+        return PH8_MP_BAD;
+    }
+    memcpy(out, b, bn);
+    out[bn] = '\0';
+    return 0;
+}
+
+/* Parse multipart/ request, calling cb() for parts found
+ *
+ */
+int PH8_VmParseMP(const uint8_t *body, size_t len, const char *boundary, const ph8_mp_limits_t *lim, ph8_mp_cb cb, void *user) {
+
+    char delim[4 + MP_BOUNDARY_MAX + 1];        /* "\r\n--" + boundary */
+    size_t bl, dl, pos;
+    size_t max_parts = 32, max_hdr = 1024, max_name = 256;
+    size_t nparts = 0;
+    int delivered = 0;
+
+    if (body == NULL || boundary == NULL || cb == NULL) {
+        return PH8_MP_BAD;
+    }
+    if (lim != NULL) {
+        max_parts = lim->max_parts ? lim->max_parts : max_parts;
+        max_hdr   = lim->max_header_len ? lim->max_header_len : max_hdr;
+        max_name  = lim->max_name_len ? lim->max_name_len : max_name;
+    }
+    bl = strlen(boundary);
+    if (bl == 0 || bl > MP_BOUNDARY_MAX) {
+        return PH8_MP_BAD;
+    }
+    memcpy(delim, "\r\n--", 4);
+    memcpy(delim + 4, boundary, bl);
+    dl = 4 + bl;
+
+    /* First delimiter: at the very start (no CRLF before it) or after a preamble. */
+    if (len >= dl - 2 && memcmp(body, delim + 2, dl - 2) == 0) {
+        pos = dl - 2;
+    } else {
+        const uint8_t *m = find_delim(body, len, delim, dl);
+        if (m == NULL) {
+            return PH8_MP_BAD;
+        }
+        pos = (size_t)(m - body) + dl;
+    }
+
+    for (;;) {
+        const uint8_t *hs, *he, *data, *next;
+        size_t hlen, data_start;
+        mp_hdrs_t H;
+        const char *nm = NULL, *fn = NULL;
+        size_t nn = 0, fnn = 0;
+        int has_fn;
+
+        /* After a delimiter: "--" ends the body; else transport padding, then CRLF. */
+        if (len - pos >= 2 && body[pos] == '-' && body[pos + 1] == '-') {
+            return delivered;                   /* epilogue is ignored */
+        }
+        while (pos < len && is_ws((char)body[pos])) {
+            pos++;
+        }
+        if (len - pos < 2 || body[pos] != '\r' || body[pos + 1] != '\n') {
+            return PH8_MP_BAD;
+        }
+        pos += 2;
+
+        if (++nparts > max_parts) {
+            return PH8_MP_LIMIT;
+        }
+
+        /* Header block: empty (CRLF right away) or up to CRLF CRLF. */
+        hs = body + pos;
+        if (len - pos >= 2 && hs[0] == '\r' && hs[1] == '\n') {
+            hlen = 0;
+            data_start = pos + 2;
+        } else {
+            size_t scan = len - pos;
+            if (scan > max_hdr + 4) {
+                scan = max_hdr + 4;
+            }
+            he = find_delim(hs, scan, "\r\n\r\n", 4);
+            if (he == NULL) {
+                return (len - pos > max_hdr + 4) ? PH8_MP_LIMIT : PH8_MP_BAD;
+            }
+            hlen = (size_t)(he - hs);
+            data_start = pos + hlen + 4;
+        }
+        if (parse_headers_mp((const char *)hs, hlen, &H) != 0) {
+            return PH8_MP_BAD;
+        }
+
+        data = body + data_start;
+        next = find_delim(data, len - data_start, delim, dl);
+        if (next == NULL) {
+            return PH8_MP_BAD;                  /* truncated body */
+        }
+
+        if (H.disp != NULL && iprefix(H.disp, H.disp_n, "form-data")
+            && mp_param(H.disp, H.disp_n, "name", &nm, &nn)) {
+            ph8_mp_part_t part;
+
+            has_fn = mp_param(H.disp, H.disp_n, "filename", &fn, &fnn);
+            if (nn > max_name || (has_fn && fnn > max_name)) {
+                return PH8_MP_LIMIT;
+            }
+            part.name = nm;
+            part.name_len = nn;
+            part.filename = has_fn ? fn : NULL;
+            part.filename_len = has_fn ? fnn : 0;
+            part.ctype = H.ctype;
+            part.ctype_len = H.ctype_n;
+            part.data = data;
+            part.data_len = (size_t)(next - data);
+            if (cb(&part, user) != 0) {
+                return PH8_MP_ABORT;
+            }
+            delivered++;
+        }
+        pos = (size_t)(next - body) + dl;
+    }
+}
+
+
+
 /*
  * Empties the request superglobals so the same VM can serve another request.
  * Uses PH7_HashmapRelease(map, FALSE): the same primitive as array_erase().
  * $_SERVER["SCRIPT_FILENAME"] is set once by PH7_HashmapCreateSuper and is kept.
  *
- * NOTE: this is only part of reusing a VM. PH7_VmReset() keeps global variables,
- * constants, static members and the include_once list, so prefer a fresh VM per request.
+ * TODO: this is only part of reusing a VM. PH7_VmReset() keeps global variables,
+ * TODO: constants, static members and the include_once list, so prefer a fresh VM per request.
+ * TODO: or, carefully manage variables on restarts
  */
 int ph8_vm_clear_request(ph7_vm *pVm) {
   static const char *const aNames[] = { "_SERVER", "_HEADER", "_COOKIE", "_GET", "_POST", "_FILES", "_REQUEST" };
@@ -16335,7 +15994,13 @@ int ph8_vm_clear_request(ph7_vm *pVm) {
   return SXRET_OK;
 }
 
-int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *rq) {
+
+/* Attach a HTTP request received by server
+ * Request is parsed and assemblled (multipart)
+ * `rq` is a parsed HTTP request to set variables
+ * `req` and `resp` are internal HTTP server structures
+ */
+int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *rq, const void *req, void *resp) {
   const ph8_http_header *pCType = 0;
   ph7_hashmap *pServer, *pHeader;
   const char *zQuery;
@@ -16358,6 +16023,9 @@ int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *rq) {
   }
 
   /* A fresh VM is assumed. To serve another request with the same VM call ph8_vm_clear_request() first. */
+  pVm->bHttp = 1;
+  pVm->pHttpResp = resp;
+  pVm->pHttpReq = req;
 
   /* Split "/path?query". No decoding and no normalization here: the router is
    * responsible for percent-decoding and rejecting ".." before touching files. */
@@ -16434,5 +16102,3 @@ int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *rq) {
  *
  *  3 Duplicate headers: the last one wins. RFC 9110 says join with ", " (except Cookie).
  */
-
-#endif

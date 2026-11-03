@@ -46,7 +46,7 @@ static char s_INF[] = { 'I','N','F', 0 };
 
 
 #include <stdlib.h>
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
 /* SyRunTimeApi: sxmutex.c */
 
 #include <pthread.h>
@@ -121,14 +121,18 @@ PH7_PRIVATE const SyMutexMethods *SyMutexExportMethods(void) {
 
 #endif /* PH7_ENABLE_THREADS */
 
+static bool g_hasExtMem = true;
 
 static void *SyOSHeapAlloc(sxu32 nByte) {
 
   void *pNew = NULL;
 #ifdef ESP32
   /* anything larger than 1KB goes to SPIRAM */
-  if (nByte > 1023)  /* TODO: no magic numbers! */
+  if ((nByte > 1023) && g_hasExtMem) {  /* TODO: no magic numbers! */
     pNew = heap_caps_malloc(nByte, MALLOC_CAP_SPIRAM);
+    if (pNew == NULL)
+      g_hasExtMem = false;
+  }
 
   /* fallback to the default allocator */
   if (pNew == NULL)
@@ -140,17 +144,38 @@ static void *SyOSHeapAlloc(sxu32 nByte) {
 
   return pNew;
 }
+#if 0
 static void *SyOSHeapRealloc(void *pOld, sxu32 nByte) {
   void *pNew;
 #ifdef ESP32
   /* Espressif docs says that realloc() is exactly this: */
-  pNew = heap_caps_realloc(pOld, (size_t)nByte, MALLOC_CAP_8BIT);
+  pNew = heap_caps_realloc(pOld, (size_t)nByte, MALLOC_CAP_8BIT | (g_hasExtRam ? MALLOC_CAP_SPIRAM : 0));
 #else
   pNew = realloc(pOld, (size_t)nByte);
 #endif
   //printf("ReAlloc: %u --- %p --> %p\r\n", (unsigned int )nByte, pOld, pNew);
   return pNew;
 }
+#else
+#define SPIRAM_MIN_BYTES 1023
+
+static void *SyOSHeapRealloc(void *pOld, sxu32 nByte) {
+  void *pNew = NULL;
+#ifdef ESP32
+  if ((nByte > SPIRAM_MIN_BYTES) && g_hasExtMem)
+    pNew = heap_caps_realloc(pOld, (size_t)nByte, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
+  /* small size, or SPIRAM failed: pOld is still valid after a failed realloc */
+  if (pNew == NULL)
+    pNew = heap_caps_realloc(pOld, (size_t)nByte, MALLOC_CAP_8BIT);
+#else
+  pNew = realloc(pOld, (size_t)nByte);
+#endif
+  return pNew;
+}
+#endif
+
+
 static void SyOSHeapFree(void *pPtr) {
   //printf("Free: %p\r\n", pPtr);
 #ifdef ESP32
@@ -159,8 +184,6 @@ static void SyOSHeapFree(void *pPtr) {
   free(pPtr);
 #endif
 }
-
-
 
 
 
@@ -254,50 +277,7 @@ PH7_PRIVATE sxi32 SyByteFind2(const char *zStr, sxu32 nLen, sxi32 c, sxu32 *pPos
   }
   return SXERR_NOTFOUND;
 }
-#endif /* PH7_DISABLE_BUILTIN_FUNC */
-PH7_PRIVATE sxi32 SyByteListFind(const char *zSrc, sxu32 nLen, const char *zList, sxu32 *pFirstPos) {
-  const char *zIn = zSrc;
-  const char *zPtr;
-  const char *zEnd;
-  sxi32 c;
-  zEnd = &zSrc[nLen];
-  for (;;) {
-    if (zIn >= zEnd) { break; }
-    for (zPtr = zList; (c = zPtr[0]) != 0; zPtr++) {
-      if (zIn[0] == c) {
-        if (pFirstPos) { *pFirstPos = (sxu32)(zIn - zSrc); }
-        return SXRET_OK;
-      }
-    }
-    zIn++;
-    if (zIn >= zEnd) { break; }
-    for (zPtr = zList; (c = zPtr[0]) != 0; zPtr++) {
-      if (zIn[0] == c) {
-        if (pFirstPos) { *pFirstPos = (sxu32)(zIn - zSrc); }
-        return SXRET_OK;
-      }
-    }
-    zIn++;
-    if (zIn >= zEnd) { break; }
-    for (zPtr = zList; (c = zPtr[0]) != 0; zPtr++) {
-      if (zIn[0] == c) {
-        if (pFirstPos) { *pFirstPos = (sxu32)(zIn - zSrc); }
-        return SXRET_OK;
-      }
-    }
-    zIn++;
-    if (zIn >= zEnd) { break; }
-    for (zPtr = zList; (c = zPtr[0]) != 0; zPtr++) {
-      if (zIn[0] == c) {
-        if (pFirstPos) { *pFirstPos = (sxu32)(zIn - zSrc); }
-        return SXRET_OK;
-      }
-    }
-    zIn++;
-  }
-  return SXERR_NOTFOUND;
-}
-#ifndef PH7_DISABLE_BUILTIN_FUNC
+
 PH7_PRIVATE sxi32 SyStrncmp(const char *zLeft, const char *zRight, sxu32 nLen) {
   const unsigned char *zP = (const unsigned char *)zLeft;
   const unsigned char *zQ = (const unsigned char *)zRight;
@@ -643,7 +623,7 @@ PH7_PRIVATE sxi32 SyMemBackendFree(SyMemBackend *pBackend, void *pChunk) {
   }
   return rc;
 }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
 PH7_PRIVATE sxi32 SyMemBackendMakeThreadSafe(SyMemBackend *pBackend, const SyMutexMethods *pMethods) {
   SyMutex *pMutex;
 #if defined(UNTRUST)

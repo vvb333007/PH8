@@ -985,7 +985,7 @@ struct ph7 {
   SyMemBackend sAllocator; /* Low level memory allocation subsystem */
   const ph7_vfs *pVfs;     /* Underlying Virtual File System */
   ph7_conf xConf;          /* Configuration */
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   const SyMutexMethods *pMethods; /* Mutex methods */
   SyMutex *pMutex;                /* Per-engine mutex */
 #endif
@@ -1407,7 +1407,7 @@ typedef void (*ProcErrLog)(const char *, int, const char *, const char *);
  */
 struct ph7_vm {
   SyMemBackend sAllocator; /* Memory backend */
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   SyMutex *pMutex; /* Recursive mutex associated with VM. */
 #endif
   const char *pCwd;                /* TODO: use SyString. Current working directory; Set by chdir(), read by getcwd(), free()d by the VM destructor */
@@ -1446,6 +1446,17 @@ struct ph7_vm {
   void *pStderr;                   /* STDERR IO stream */
   int bErrReport:1;                /* TRUE to report all runtime Error/Warning/Notice */
   int bListing:1;                  /* TRUE generate disasembly */
+  int bHttp:1;                     /* VM is created by HTTP/HTTPS server. pHttpResp contains a pointer 
+                                      to the response being formed and sent. Used, in particular, by 
+                                      `header()` and friends 
+                                    */
+  void *pHttpResp;                 /* Response to send, struct ph8_response_t for HTTPD. This pointer is alive during 
+                                    * script execution until script execution finished. This pointer points to a local variable so it can be used ONLY in http mode
+                                    */
+  void const *pHttpReq;             /* Original HTTP request, fully parsed. Lifetime and ownership is the same as with pHttpResp
+                                    */
+
+
   int nRecursionDepth;             /* Current recursion depth */
   char aFailedMethod[64];          /* Used by __call() and __callStatic() magic methods to obtain the name of the failed method (no, first arg to _call() is not method name in PH8) */
 
@@ -2173,7 +2184,7 @@ PH7_PRIVATE void *SyMemBackendPoolAlloc(SyMemBackend *pBackend, sxu32 nByte);
 PH7_PRIVATE sxi32 SyMemBackendFree(SyMemBackend *pBackend, void *pChunk);
 PH7_PRIVATE void *SyMemBackendRealloc(SyMemBackend *pBackend, void *pOld, sxu32 nByte);
 PH7_PRIVATE void *SyMemBackendAlloc(SyMemBackend *pBackend, sxu32 nByte);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
 PH7_PRIVATE sxi32 SyMemBackendMakeThreadSafe(SyMemBackend *pBackend, const SyMutexMethods *pMethods);
 PH7_PRIVATE sxi32 SyMemBackendDisbaleMutexing(SyMemBackend *pBackend);
 #endif
@@ -2185,20 +2196,56 @@ PH7_PRIVATE sxi32 SyStrnicmp(const char *zLeft, const char *zRight, sxu32 SLen);
 PH7_PRIVATE sxi32 SyStrnmicmp(const void *pLeft, const void *pRight, sxu32 SLen);
 #ifndef PH7_DISABLE_BUILTIN_FUNC
 PH7_PRIVATE sxi32 SyStrncmp(const char *zLeft, const char *zRight, sxu32 nLen);
-#endif
-PH7_PRIVATE sxi32 SyByteListFind(const char *zSrc, sxu32 nLen, const char *zList, sxu32 *pFirstPos);
-#ifndef PH7_DISABLE_BUILTIN_FUNC
 PH7_PRIVATE sxi32 SyByteFind2(const char *zStr, sxu32 nLen, sxi32 c, sxu32 *pPos);
 #endif
 PH7_PRIVATE sxi32 SyByteFind(const char *zStr, sxu32 nLen, sxi32 c, sxu32 *pPos);
 PH7_PRIVATE sxu32 SyStrlen(const char *zSrc);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
 PH7_PRIVATE const SyMutexMethods *SyMutexExportMethods(void);
 PH7_PRIVATE sxi32 SyMemBackendMakeThreadSafe(SyMemBackend *pBackend, const SyMutexMethods *pMethods);
 PH7_PRIVATE sxi32 SyMemBackendDisbaleMutexing(SyMemBackend *pBackend);
 #endif
 
-#include "multipart.h"
+
+/*
+ * multipart/form-data parser, in-memory and zero-copy: the whole body is already
+ * in RAM (the server enforces max_body_size), parts are delivered as pointers
+ * into it. No allocation, no globals, safe to call from many tasks at once.
+ */
+
+#include <stddef.h>
+#include <stdint.h>
+
+#define PH8_MP_OK      0
+#define PH8_MP_BAD    (-1)   /* malformed body or boundary */
+#define PH8_MP_LIMIT  (-2)   /* a limit from ph8_mp_limits_t was exceeded */
+#define PH8_MP_ABORT  (-3)   /* the callback returned non-zero */
+
+typedef struct {
+    const char    *name;     size_t name_len;      /* raw bytes between the quotes, NOT unescaped */
+    const char    *filename; size_t filename_len;  /* NULL: ordinary field; len 0: empty file input */
+    const char    *ctype;    size_t ctype_len;     /* the part's Content-Type, or NULL */
+    const uint8_t *data;     size_t data_len;
+} ph8_mp_part_t;
+
+/* Return non-zero to stop parsing (-> PH8_MP_ABORT). All pointers are valid
+ * only during the call (they point into the request body). */
+typedef int (*ph8_mp_cb)(const ph8_mp_part_t *part, void *user);
+
+typedef struct {
+    size_t max_parts;        /* parts in one body            (0 = 32)   */
+    size_t max_header_len;   /* header block of ONE part     (0 = 1024) */
+    size_t max_name_len;     /* field name and filename      (0 = 256)  */
+} ph8_mp_limits_t;
+
+/* Extracts the boundary from a "multipart/form-data; boundary=..." value
+ * (quoted or not) into `out` (NUL-terminated). 0 on success, PH8_MP_BAD otherwise. */
+int PH8_BoundaryMP(const char *content_type, size_t len, char *out, size_t out_n);
+
+/* Returns the number of parts delivered to `cb` (>= 0) or a negative PH8_MP_* code.
+ * `lim` may be NULL (defaults). Parts without a Content-Disposition "name" are skipped. */
+int PH8_VmParseMP(const uint8_t *body, size_t len, const char *boundary, const ph8_mp_limits_t *lim, ph8_mp_cb cb, void *user);
+
 
 /* ESP32 additions and overrides
  *

@@ -5,20 +5,64 @@
 
 #include "../../src/ph7.h"
 #include "../../src/ph7int.h"
+
+#ifdef __CYGWIN__
+/* thin layer emulating FreeRTOS calls on CYGWIN */
+#include "../../src/cygwin/freertos_shim.c"
+#endif
+
+/* HTTP server */
+#include "../../src/httpd/httpd.h"
+#include "../../src/httpd/httpd.c"
+
+/* Pico HTTP Parser, as is, unmodified */
+#include "../../src/httpd/picohttpparser.h"
+#include "../../src/httpd/picohttpparser.c"
+
+/* PH8 bytecode machine */
 #include "../../src/vm.c"
-#include "../../src/multipart.c"
+
+/* FileSystem abstraction */
 #include "../../src/vfs.c"
+
+/* POSIX-compatibe File System support */
 #include "../../src/posix_vfs.c"
+
+/* Parse. Combines lexems into tokens */
 #include "../../src/parse.c"
+
+/* Object model support (classes, methods and so on) */
 #include "../../src/oo.c"
+
+/* PHP value object. zval in zend, ph7_value in PH8 */
 #include "../../src/memobj.c"
+
+/* Library. Common routines. */
 #include "../../src/lib.c"
+
+/* Lexer. Splits file to be compiled to lexems */
 #include "../../src/lex.c"
+
+/* PHP arrays */
 #include "../../src/hashmap.c"
+
+/* Built-in PHP constants */
 #include "../../src/constant.c"
+
+/* ESP32/Arduino/ESP-IDF specific constants (emulated in CYGWIN )*/
 #include "../../src/esp32/constants.c"
+
+/* Compiler */
 #include "../../src/compile.c"
+
+/* Built-in PHP functions */
 #include "../../src/builtin.c"
+
+/* ESP32/Arduino/ESP-IDF specific builtins (emulated in CYGWIN )*/
 #include "../../src/esp32/builtins.c"
+
+/* Public PH8 API */
 #include "../../src/api.c"
+
+/* Regexp engine */
 #include "../../src/regexp.c"

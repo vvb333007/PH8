@@ -176,7 +176,7 @@ int main(int argc,char **argv)
     pEngine, /* PH7 Engine */
     argv[n], /* Path to the PHP file to compile */
     &pVm,    /* OUT: Compiled PHP program */
-    0        /* IN: Compile flags */
+    dump_vm ? PH7_PHP_DISASSEMBLE : 0        /* IN: Compile flags */
     );
 
   

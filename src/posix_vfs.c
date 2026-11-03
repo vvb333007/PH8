@@ -33,8 +33,9 @@
 #endif
 #include <sys/stat.h>
 #ifdef ESP32
-/* TARFS is the only FS on ESP32 which supports mmap(), so TARFS is used for scripts.
- * TARFS is READ-ONLY, so for generic file IO there must be SECOND FS mounted (e.g. LittleFS)  
+/* TARFS is the only FS on ESP32 which supports mmap(); tarfs implements `mmap()` system call
+ * which does actual memory mapping on TARFS but returns MAP_FAILED for FATFS, LittleFS and SPIFFS.
+ * If `mmap()` fails, there are `malloc/read()` fallback
  */
 # include "tarfs.h"
 #else

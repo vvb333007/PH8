@@ -34,7 +34,7 @@
  */
 static struct Global_Data {
   SyMemBackend sAllocator; /* Global low level memory allocator */
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   const SyMutexMethods *pMutexMethods; /* Mutex methods */
   SyMutex *pMutex;                     /* Global mutex */
   sxu32 nThreadingLevel;               /* Threading level: 0 == Single threaded/1 == Multi-Threaded 
@@ -50,7 +50,7 @@ static struct Global_Data {
   sxu32 nMagic;        /* Sanity check against library misuse */
 } sMPGlobal = {
   { 0, 0, 0, 0, 0, 0, 0, 0, { 0 } },
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   0,
   0,
   0,
@@ -230,7 +230,7 @@ static sxi32 PH7CoreConfigure(sxi32 nOp, va_list ap) {
       }
     case PH7_LIB_CONFIG_USER_MUTEX:
       {
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
         /* Use an alternative low-level mutex subsystem */
         const SyMutexMethods *pMethods = va_arg(ap, const SyMutexMethods *);
 #if defined(UNTRUST)
@@ -281,13 +281,13 @@ static sxi32 PH7CoreConfigure(sxi32 nOp, va_list ap) {
         break;
       }
     case PH7_LIB_CONFIG_THREAD_LEVEL_SINGLE:
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
       /* Single thread mode(Only one thread is allowed to play with the library) */
       sMPGlobal.nThreadingLevel = PH7_THREAD_LEVEL_SINGLE;
 #endif
       break;
     case PH7_LIB_CONFIG_THREAD_LEVEL_MULTI:
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
       /* Multi-threading mode (library is thread safe and PH7 engines and virtual machines
        * may be shared between multiple threads).
        */
@@ -330,7 +330,7 @@ int ph7_lib_config(int nConfigOp, ...) {
  */
 static sxi32 PH7CoreInitialize(void) {
   const ph7_vfs *pVfs; /* Built-in vfs */
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   const SyMutexMethods *pMutexMethods = 0;
   SyMutex *pMaster = 0;
 #endif
@@ -346,7 +346,7 @@ static sxi32 PH7CoreInitialize(void) {
   pVfs = PH7_ExportBuiltinVfs();
   /* Install it */
   ph7_lib_config(PH7_LIB_CONFIG_VFS, pVfs);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   if (sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_SINGLE) {
     pMutexMethods = sMPGlobal.pMutexMethods;
     if (pMutexMethods == 0) {
@@ -380,7 +380,7 @@ static sxi32 PH7CoreInitialize(void) {
         goto End;
       }
     }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
     if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE) {
       /* Protect the memory allocation subsystem */
       rc = SyMemBackendMakeThreadSafe(&sMPGlobal.sAllocator, sMPGlobal.pMutexMethods);
@@ -392,11 +392,11 @@ static sxi32 PH7CoreInitialize(void) {
     /* Our library is initialized,set the magic number */
     sMPGlobal.nMagic = PH7_LIB_MAGIC;
     rc = PH7_OK;
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   } /* sMPGlobal.nMagic != PH7_LIB_MAGIC */
 #endif
 End:
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Unlock the master mutex */
   SyMutexLeave(pMutexMethods, pMaster); /* NO-OP if sMPGlobal.nThreadingLevel == PH7_THREAD_LEVEL_SINGLE */
 #endif
@@ -453,7 +453,7 @@ static void PH7CoreShutdown(void) {
     pEngine = pNext;
     sMPGlobal.nEngine--;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Release the mutex subsystem */
   if (sMPGlobal.pMutexMethods) {
     if (sMPGlobal.pMutex) {
@@ -493,7 +493,7 @@ int ph7_lib_is_threadsafe(void) {
   if (sMPGlobal.nMagic != PH7_LIB_MAGIC) {
     return 0;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE) {
     /* Muli-threading support is enabled */
     return 1;
@@ -543,7 +543,7 @@ int ph7_config(ph7 *pEngine, int nConfigOp, ...) {
   if (PH7_ENGINE_MISUSE(pEngine)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire engine mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_ENGINE_RELEASE(pEngine)) {
@@ -553,7 +553,7 @@ int ph7_config(ph7 *pEngine, int nConfigOp, ...) {
   va_start(ap, nConfigOp);
   rc = EngineConfig(&(*pEngine), nConfigOp, ap);
   va_end(ap);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave engine mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -590,7 +590,7 @@ int ph7_init(ph7 **ppEngine) {
   if (rc != PH7_OK) {
     goto Release;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   SyMemBackendDisbaleMutexing(&pEngine->sAllocator);
 #endif
   /* Default configuration */
@@ -600,7 +600,7 @@ int ph7_init(ph7 **ppEngine) {
   ph7_config(pEngine, PH7_CONFIG_ERR_OUTPUT, PH7_VmBlobConsumer, &pEngine->xConf.sErrConsumer);
   /* Built-in vfs */
   pEngine->pVfs = sMPGlobal.pVfs;
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE) {
     /* Associate a recursive mutex with this instance */
     pEngine->pMutex = SyMutexNew(sMPGlobal.pMutexMethods, SXMUTEX_TYPE_RECURSIVE);
@@ -611,13 +611,13 @@ int ph7_init(ph7 **ppEngine) {
   }
 #endif
   /* Link to the list of active engines */
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Enter the global mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, sMPGlobal.pMutex); /* NO-OP if sMPGlobal.nThreadingLevel == PH7_THREAD_LEVEL_SINGLE */
 #endif
   MACRO_LD_PUSH(sMPGlobal.pEngines, pEngine);
   sMPGlobal.nEngine++;
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave the global mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, sMPGlobal.pMutex); /* NO-OP if sMPGlobal.nThreadingLevel == PH7_THREAD_LEVEL_SINGLE */
 #endif
@@ -638,7 +638,7 @@ int ph7_release(ph7 *pEngine) {
   if (PH7_ENGINE_MISUSE(pEngine)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire engine mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_ENGINE_RELEASE(pEngine)) {
@@ -647,20 +647,20 @@ int ph7_release(ph7 *pEngine) {
 #endif
   /* Release the engine */
   rc = EngineRelease(&(*pEngine));
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave engine mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   /* Release engine mutex */
   SyMutexRelease(sMPGlobal.pMutexMethods, pEngine->pMutex) /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
     /* Enter the global mutex */
     SyMutexEnter(sMPGlobal.pMutexMethods, sMPGlobal.pMutex); /* NO-OP if sMPGlobal.nThreadingLevel == PH7_THREAD_LEVEL_SINGLE */
 #endif
   /* Unlink from the list of active engines */
   MACRO_LD_REMOVE(sMPGlobal.pEngines, pEngine);
   sMPGlobal.nEngine--;
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave the global mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, sMPGlobal.pMutex); /* NO-OP if sMPGlobal.nThreadingLevel == PH7_THREAD_LEVEL_SINGLE */
 #endif
@@ -735,7 +735,7 @@ static sxi32 ProcessScript(
   }
   /* Install local import path which is the current directory */
   ph7_vm_config(pVm, PH7_VM_CONFIG_IMPORT_PATH, "./");
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE) {
     /* Associate a recursive mutex with this instance */
     pVm->pMutex = SyMutexNew(sMPGlobal.pMutexMethods, SXMUTEX_TYPE_RECURSIVE);
@@ -772,7 +772,7 @@ int ph7_compile(ph7 *pEngine, const char *zSource, int nLen, ph7_vm **ppOutVm) {
     nLen = (int)SyStrlen(zSource);
   }
   SyStringInitFromBuf(&sScript, zSource, nLen);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire engine mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_ENGINE_RELEASE(pEngine)) {
@@ -781,7 +781,7 @@ int ph7_compile(ph7 *pEngine, const char *zSource, int nLen, ph7_vm **ppOutVm) {
 #endif
   /* Compile the script */
   rc = ProcessScript(&(*pEngine), ppOutVm, &sScript, 0, 0);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave engine mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -803,7 +803,7 @@ int ph7_compile_v2(ph7 *pEngine, const char *zSource, int nLen, ph7_vm **ppOutVm
     nLen = (int)SyStrlen(zSource);
   }
   SyStringInitFromBuf(&sScript, zSource, nLen);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire engine mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_ENGINE_RELEASE(pEngine)) {
@@ -812,7 +812,7 @@ int ph7_compile_v2(ph7 *pEngine, const char *zSource, int nLen, ph7_vm **ppOutVm
 #endif
   /* Compile the script */
   rc = ProcessScript(&(*pEngine), ppOutVm, &sScript, iFlags, 0);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave engine mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -833,7 +833,7 @@ int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int 
   if (PH7_ENGINE_MISUSE(pEngine) || SX_EMPTY_STR(zFilePath)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire engine mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_ENGINE_RELEASE(pEngine)) {
@@ -884,7 +884,7 @@ int ph7_compile_file(ph7 *pEngine, const char *zFilePath, ph7_vm **ppOutVm, int 
       }
     }
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave engine mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -921,7 +921,7 @@ int ph7_vm_config(ph7_vm *pVm, int iConfigOp, ...) {
   if (PH7_VM_MISUSE(pVm)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -932,7 +932,7 @@ int ph7_vm_config(ph7_vm *pVm, int iConfigOp, ...) {
   va_start(ap, iConfigOp);
   rc = PH7_VmConfigure(&(*pVm), iConfigOp, ap);
   va_end(ap);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
     //BUG:3 TODO: review
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
@@ -950,7 +950,7 @@ int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus) {
   if (PH7_VM_MISUSE(pVm)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -967,7 +967,7 @@ int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus) {
   /* If there are class instances still left after GC, force removal and destructor calling */
   PH7_VmPurgeClassInstances(pVm);
 
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -1025,7 +1025,7 @@ int ph7_vm_reset(ph7_vm *pVm) {
   if (PH7_VM_MISUSE(pVm)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -1033,7 +1033,7 @@ int ph7_vm_reset(ph7_vm *pVm) {
   }
 #endif
   rc = PH7_VmReset(&(*pVm));
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -1050,7 +1050,7 @@ int ph7_vm_release(ph7_vm *pVm) {
   if (PH7_VM_MISUSE(pVm)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -1068,13 +1068,13 @@ int ph7_vm_release(ph7_vm *pVm) {
 
   pEngine = pVm->pEngine;
   rc = PH7_VmRelease(&(*pVm));
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
   if (rc == PH7_OK) {
     /* Unlink from the list of active VM */
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
     /* Acquire engine mutex */
     SyMutexEnter(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
     if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_ENGINE_RELEASE(pEngine)) {
@@ -1085,7 +1085,7 @@ int ph7_vm_release(ph7_vm *pVm) {
     pEngine->iVm--;
     /* Release the memory chunk allocated to this VM */
     SyMemBackendPoolFree(&pEngine->sAllocator, pVm);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
     /* Leave engine mutex */
     SyMutexLeave(sMPGlobal.pMutexMethods, pEngine->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -1110,7 +1110,7 @@ int ph7_create_function(ph7_vm *pVm, const char *zName, int (*xFunc)(ph7_context
   if (sName.nByte < 1 || xFunc == 0) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -1119,7 +1119,7 @@ int ph7_create_function(ph7_vm *pVm, const char *zName, int (*xFunc)(ph7_context
 #endif
   /* Install the foreign function */
   rc = PH7_VmInstallForeignFunction(&(*pVm), &sName, xFunc, pUserData);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -1136,7 +1136,7 @@ int ph7_delete_function(ph7_vm *pVm, const char *zName) {
   if (PH7_VM_MISUSE(pVm)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -1151,7 +1151,7 @@ int ph7_delete_function(ph7_vm *pVm, const char *zName) {
     SyMemBackendFree(&pVm->sAllocator, (void *)SyStringData(&pFunc->sName));
     SyMemBackendPoolFree(&pVm->sAllocator, pFunc);
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -1179,7 +1179,7 @@ int ph7_create_constant(ph7_vm *pVm, const char *zName, void (*xExpand)(ph7_valu
   if (xExpand == 0) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -1188,7 +1188,7 @@ int ph7_create_constant(ph7_vm *pVm, const char *zName, void (*xExpand)(ph7_valu
 #endif
   /* Perform the registration */
   rc = PH7_VmRegisterConstant(&(*pVm), &sName, xExpand, pUserData);
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -1205,7 +1205,7 @@ int ph7_delete_constant(ph7_vm *pVm, const char *zName) {
   if (PH7_VM_MISUSE(pVm)) {
     return PH7_CORRUPT;
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Acquire VM mutex */
   SyMutexEnter(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
   if (sMPGlobal.nThreadingLevel > PH7_THREAD_LEVEL_SINGLE && PH7_THRD_VM_RELEASE(pVm)) {
@@ -1219,7 +1219,7 @@ int ph7_delete_constant(ph7_vm *pVm, const char *zName) {
     SyMemBackendFree(&pVm->sAllocator, (void *)SyStringData(&pCons->sName));
     SyMemBackendPoolFree(&pVm->sAllocator, pCons);
   }
-#if defined(PH7_ENABLE_THREADS)
+#if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
 #endif
@@ -2129,5 +2129,4 @@ int ph7_value_is_empty(ph7_value *pVal) {
   rc = PH7_MemObjIsEmpty(pVal);
   return rc;
 }
-
 
