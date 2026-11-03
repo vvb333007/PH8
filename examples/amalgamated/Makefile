@@ -5,7 +5,7 @@
 CC      := gcc
 OBJDIR  := .
 
-CFLAGS  := -Wall -Wextra -O2  -MMD -MP -DPH7_ENABLE_THREADS=0 -DPH7_ENABLE_MATH_FUNC=1 -I../../src -I../../src/cygwin -I../../src/httpd
+CFLAGS  := -Wall -Wextra -O2  -MMD -MP -DPH7_ENABLE_THREADS=0 -DPH7_ENABLE_MATH_FUNC=1 -I../../src -I../../src/cygwin -I../../src/httpd -I../../src/sqlite3
 COMMON_SRC := amalgam.c
 
 INTER_SRC := $(COMMON_SRC) ph7_interp.c
