@@ -64,5 +64,12 @@
 /* Public PH8 API */
 #include "../../src/api.c"
 
+#if PH7_ENABLE_REGEX
 /* Regexp engine */
 #include "../../src/regexp.c"
+#endif
+
+#if PH7_ENABLE_SQLITE3
+/* SQLite3 engine */
+#include "../../src/sqlite3.c"
+#endif
