@@ -22,6 +22,10 @@
 **
 **    
 */
+#define NDEBUG 1
+#undef SQLITE_DEBUG
+
+
 #ifndef SQLITE_AMALGAMATION
 #define SQLITE_CORE 1
 #define SQLITE_AMALGAMATION 1
@@ -15263,6 +15267,10 @@ struct fts5_api {
 ** logic is partially replicated in ctime.c. If it is updated here, it should
 ** also be updated there.
 */
+//XXX
+#define SQLITE_THREADSAFE 0
+
+
 #if !defined(SQLITE_THREADSAFE)
 # if defined(THREADSAFE)
 #   define SQLITE_THREADSAFE THREADSAFE
@@ -15314,6 +15322,7 @@ struct fts5_api {
  SQLITE_SYSTEM_MALLOC, SQLITE_WIN32_MALLOC, SQLITE_MEMDEBUG,\
  SQLITE_ZERO_MALLOC"
 #endif
+
 #if defined(SQLITE_SYSTEM_MALLOC) \
   + defined(SQLITE_WIN32_MALLOC) \
   + defined(SQLITE_ZERO_MALLOC) \
@@ -15832,7 +15841,9 @@ SQLITE_PRIVATE void sqlite3HashClear(Hash*);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
+//#include <assert.h>
+#undef assert
+#define assert( EXPR )
 #include <stddef.h>
 #include <ctype.h>
 
@@ -16740,6 +16751,10 @@ typedef int VList;
 #  define SQLITE_OS_OTHER 0
 #  undef SQLITE_OS_WIN
 #  define SQLITE_OS_WIN 0
+#  define SQLITE_OMIT_WAL 1
+#  define SQLITE_OMIT_LOAD_EXTENSION 1
+#  define SQLITE_MUTEX_OMIT 0
+#  define SQLITE_MUTEX_PTHREADS 1
 #endif
 #if SQLITE_OS_WIN+1>1
 #  undef SQLITE_OS_KV
@@ -31004,6 +31019,7 @@ SQLITE_PRIVATE sqlite3_mutex_methods const *sqlite3DefaultMutex(void){
 ** home-grown mutexes.  Encapsulate these conditions into a single #define.
 */
 #if defined(SQLITE_DEBUG) || defined(SQLITE_HOMEGROWN_RECURSIVE_MUTEX)
+#error "Here";
 # define SQLITE_MUTEX_NREF 1
 #else
 # define SQLITE_MUTEX_NREF 0
@@ -31064,6 +31080,7 @@ static int pthreadMutexNotheld(sqlite3_mutex *p){
 }
 #endif
 
+#ifndef sqlite3MemoryBarrier
 /*
 ** Try to provide a memory barrier operation, needed for initialization
 ** and also for the implementation of xShmBarrier in the VFS in cases
@@ -31076,6 +31093,7 @@ SQLITE_PRIVATE void sqlite3MemoryBarrier(void){
   __sync_synchronize();
 #endif
 }
+#endif
 
 /*
 ** Initialize and deinitialize the mutex subsystem.
@@ -40744,13 +40762,16 @@ SQLITE_PRIVATE int sqlite3KvvfsInit(void){
 #include <sys/types.h>   /* amalgamator: keep */
 #include <sys/stat.h>    /* amalgamator: keep */
 #include <fcntl.h>
+#if __has_include(<sys/ioctl.h>)
 #include <sys/ioctl.h>
+#else
+extern int ioctl(int fd, int request, ...);
+#endif
 #include <unistd.h>      /* amalgamator: keep */
 /* #include <time.h> */
 #include <sys/time.h>    /* amalgamator: keep */
 #include <errno.h>
-#if (!defined(SQLITE_OMIT_WAL) || SQLITE_MAX_MMAP_SIZE>0) \
-  && !defined(SQLITE_WASI)
+#if (!defined(SQLITE_OMIT_WAL) || SQLITE_MAX_MMAP_SIZE>0) && !defined(SQLITE_WASI)
 # include <sys/mman.h>
 #endif
 
@@ -41228,7 +41249,7 @@ static struct unix_syscall {
 #endif
 #define osReadlink ((ssize_t(*)(const char*,char*,size_t))aSyscall[26].pCurrent)
 
-#if defined(HAVE_LSTAT)
+#if 0 // defined(HAVE_LSTAT)
   { "lstat",         (sqlite3_syscall_ptr)lstat,          0 },
 #else
   { "lstat",         (sqlite3_syscall_ptr)0,              0 },
@@ -42126,7 +42147,9 @@ static void closePendingFds(unixFile *pFile){
   unixInodeInfo *pInode = pFile->pInode;
   UnixUnusedFd *p;
   UnixUnusedFd *pNext;
+#ifdef SQLITE_DEBUG
   assert( unixFileMutexHeld(pFile) );
+#endif
   for(p=pInode->pUnused; p; p=pNext){
     pNext = p->pNext;
     robust_close(pFile, p->fd, __LINE__);
@@ -42143,8 +42166,10 @@ static void closePendingFds(unixFile *pFile){
 */
 static void releaseInodeInfo(unixFile *pFile){
   unixInodeInfo *pInode = pFile->pInode;
+#ifdef SQLITE_DEBUG
   assert( unixMutexHeld() );
   assert( unixFileMutexNotheld(pFile) );
+#endif
   if( ALWAYS(pInode) ){
     pInode->nRef--;
     if( pInode->nRef==0 ){
@@ -42187,9 +42212,9 @@ static int findInodeInfo(
   struct unixFileId fileId;      /* Lookup key for the unixInodeInfo */
   struct stat statbuf;           /* Low-level file information */
   unixInodeInfo *pInode = 0;     /* Candidate unixInodeInfo object */
-
+#ifdef SQLITE_DEBUG
   assert( unixMutexHeld() );
-
+#endif
   /* Get low-level information about the file that we can used to
   ** create a unique name for the file.
   */
@@ -42239,7 +42264,9 @@ static int findInodeInfo(
 #else
   fileId.ino = (u64)statbuf.st_ino;
 #endif
+#ifdef SQLITE_DEBUG
   assert( unixMutexHeld() );
+#endif
   pInode = inodeList;
   while( pInode && memcmp(&fileId, &pInode->fileId, sizeof(fileId)) ){
     pInode = pInode->pNext;
@@ -42259,7 +42286,9 @@ static int findInodeInfo(
       }
     }
     pInode->nRef = 1;
+#ifdef SQLITE_DEBUG
     assert( unixMutexHeld() );
+#endif
     pInode->pNext = inodeList;
     pInode->pPrev = 0;
     if( inodeList ) inodeList->pPrev = pInode;
@@ -43000,7 +43029,9 @@ static int unixClose(sqlite3_file *id){
   assert( pInode!=0 );
   verifyDbFile(pFile);
   unixUnlock(id, NO_LOCK);
+#ifdef SQLITE_DEBUG
   assert( unixFileMutexNotheld(pFile) );
+#endif
   unixEnterMutex();
 
   /* unixFile.pInode is always valid here. Otherwise, a different close
@@ -43590,7 +43621,9 @@ static int semXClose(sqlite3_file *id) {
     unixFile *pFile = (unixFile*)id;
     semXUnlock(id, NO_LOCK);
     assert( pFile );
+#ifdef SQLITE_DEBUG
     assert( unixFileMutexNotheld(pFile) );
+#endif
     unixEnterMutex();
     releaseInodeInfo(pFile);
     unixLeaveMutex();
@@ -44041,7 +44074,9 @@ static int afpClose(sqlite3_file *id) {
   unixFile *pFile = (unixFile*)id;
   assert( id!=0 );
   afpUnlock(id, NO_LOCK);
+#ifdef SQLITE_DEBUG
   assert( unixFileMutexNotheld(pFile) );
+#endif
   unixEnterMutex();
   if( pFile->pInode ){
     unixInodeInfo *pInode = pFile->pInode;
@@ -45264,7 +45299,9 @@ static void unixDescribeShm(sqlite3_str *pStr, unixShm *pShm){
   unixShmNode *pNode = pShm->pShmNode;
   char aLck[16];
   sqlite3_str_appendf(pStr, "{\"h\":%d", pNode->hShm);
+#ifdef SQLITE_DEBUG
   assert( unixMutexHeld() );
+#endif
   sqlite3_str_appendf(pStr, ",\"nRef\":%d", pNode->nRef);
   sqlite3_str_appendf(pStr, ",\"id\":%d", pShm->id);
   sqlite3_str_appendf(pStr, ",\"sharedMask\":%d", pShm->sharedMask);
@@ -45373,7 +45410,9 @@ static int unixShmSystemLock(
        || (ofst>=UNIX_SHM_BASE && ofst+n<=(UNIX_SHM_BASE+SQLITE_SHM_NLOCK))
   );
   if( ofst==UNIX_SHM_DMS ){
+#ifdef SQLITE_DEBUG
     assert( pShmNode->nRef>0 || unixMutexHeld() );
+#endif
     assert( pShmNode->nRef==0 || sqlite3_mutex_held(pShmNode->pShmMutex) );
   }else{
 #ifdef SQLITE_ENABLE_SETLK_TIMEOUT
@@ -45464,7 +45503,9 @@ static int unixShmRegionPerMap(void){
 */
 static void unixShmPurge(unixFile *pFd){
   unixShmNode *p = pFd->pInode->pShmNode;
+#ifdef SQLITE_DEBUG
   assert( unixMutexHeld() );
+#endif
   if( p && ALWAYS(p->nRef==0) ){
     int nShmPerMap = unixShmRegionPerMap();
     int i;
@@ -45620,7 +45661,9 @@ static int unixOpenSharedMemory(unixFile *pDbFd){
   /* Check to see if a unixShmNode object already exists. Reuse an existing
   ** one if present. Create a new one if necessary.
   */
+#ifdef SQLITE_DEBUG
   assert( unixFileMutexNotheld(pDbFd) );
+#endif
   unixEnterMutex();
   pInode = pDbFd->pInode;
   pShmNode = pInode->pShmNode;
@@ -46140,8 +46183,10 @@ static void unixShmBarrier(
 ){
   UNUSED_PARAMETER(fd);
   sqlite3MemoryBarrier();         /* compiler-defined memory barrier */
+#ifdef SQLITE_DEBUG
   assert( fd->pMethods->xLock==nolockLock
        || unixFileMutexNotheld((unixFile*)fd)
+#endif
   );
   unixEnterMutex();               /* Also mutex, for redundancy */
   unixLeaveMutex();
@@ -46184,7 +46229,9 @@ static int unixShmUnmap(
 
   /* If pShmNode->nRef has reached 0, then close the underlying
   ** shared-memory file, too */
+#ifdef SQLITE_DEBUG
   assert( unixFileMutexNotheld(pDbFd) );
+#endif
   unixEnterMutex();
   assert( pShmNode->nRef>0 );
   pShmNode->nRef--;
@@ -56597,7 +56644,9 @@ SQLITE_PRIVATE PgHdr *sqlite3PcacheFetchFinish(
   }
   pCache->nRefSum++;
   pPgHdr->nRef++;
+#ifdef SQLITE_DEBUG
   assert( sqlite3PcachePageSanity(pPgHdr) );
+#endif
   return pPgHdr;
 }
 
@@ -56613,7 +56662,9 @@ SQLITE_PRIVATE void SQLITE_NOINLINE sqlite3PcacheRelease(PgHdr *p){
       pcacheUnpin(p);
     }else{
       pcacheManageDirtyList(p, PCACHE_DIRTYLIST_FRONT);
+#ifdef SQLITE_DEBUG
       assert( sqlite3PcachePageSanity(p) );
+#endif
     }
   }
 }
@@ -56623,7 +56674,9 @@ SQLITE_PRIVATE void SQLITE_NOINLINE sqlite3PcacheRelease(PgHdr *p){
 */
 SQLITE_PRIVATE void sqlite3PcacheRef(PgHdr *p){
   assert(p->nRef>0);
+#ifdef SQLITE_DEBUG
   assert( sqlite3PcachePageSanity(p) );
+#endif
   p->nRef++;
   p->pCache->nRefSum++;
 }
@@ -56635,7 +56688,9 @@ SQLITE_PRIVATE void sqlite3PcacheRef(PgHdr *p){
 */
 SQLITE_PRIVATE void sqlite3PcacheDrop(PgHdr *p){
   assert( p->nRef==1 );
+#ifdef SQLITE_DEBUG
   assert( sqlite3PcachePageSanity(p) );
+#endif
   if( p->flags&PGHDR_DIRTY ){
     pcacheManageDirtyList(p, PCACHE_DIRTYLIST_REMOVE);
   }
@@ -56649,7 +56704,9 @@ SQLITE_PRIVATE void sqlite3PcacheDrop(PgHdr *p){
 */
 SQLITE_PRIVATE void sqlite3PcacheMakeDirty(PgHdr *p){
   assert( p->nRef>0 );
+#ifdef SQLITE_DEBUG
   assert( sqlite3PcachePageSanity(p) );
+#endif
   if( p->flags & (PGHDR_CLEAN|PGHDR_DONT_WRITE) ){    /*OPTIMIZATION-IF-FALSE*/
     p->flags &= ~PGHDR_DONT_WRITE;
     if( p->flags & PGHDR_CLEAN ){
@@ -56657,9 +56714,13 @@ SQLITE_PRIVATE void sqlite3PcacheMakeDirty(PgHdr *p){
       pcacheTrace(("%p.DIRTY %d\n",p->pCache,p->pgno));
       assert( (p->flags & (PGHDR_DIRTY|PGHDR_CLEAN))==PGHDR_DIRTY );
       pcacheManageDirtyList(p, PCACHE_DIRTYLIST_ADD);
+#ifdef SQLITE_DEBUG
       assert( sqlite3PcachePageSanity(p) );
+#endif
     }
+#ifdef SQLITE_DEBUG
     assert( sqlite3PcachePageSanity(p) );
+#endif
   }
 }
 
@@ -56668,14 +56729,18 @@ SQLITE_PRIVATE void sqlite3PcacheMakeDirty(PgHdr *p){
 ** make it so.
 */
 SQLITE_PRIVATE void sqlite3PcacheMakeClean(PgHdr *p){
+#ifdef SQLITE_DEBUG
   assert( sqlite3PcachePageSanity(p) );
+#endif
   assert( (p->flags & PGHDR_DIRTY)!=0 );
   assert( (p->flags & PGHDR_CLEAN)==0 );
   pcacheManageDirtyList(p, PCACHE_DIRTYLIST_REMOVE);
   p->flags &= ~(PGHDR_DIRTY|PGHDR_NEED_SYNC|PGHDR_WRITEABLE);
   p->flags |= PGHDR_CLEAN;
   pcacheTrace(("%p.CLEAN %d\n",p->pCache,p->pgno));
+#ifdef SQLITE_DEBUG
   assert( sqlite3PcachePageSanity(p) );
+#endif
   if( p->nRef==0 ){
     pcacheUnpin(p);
   }
@@ -56723,7 +56788,9 @@ SQLITE_PRIVATE void sqlite3PcacheMove(PgHdr *p, Pgno newPgno){
   sqlite3_pcache_page *pOther;
   assert( p->nRef>0 );
   assert( newPgno>0 );
+#ifdef SQLITE_DEBUG
   assert( sqlite3PcachePageSanity(p) );
+#endif
   pcacheTrace(("%p.MOVE %d -> %d\n",pCache,p->pgno,newPgno));
   pOther = sqlite3GlobalConfig.pcache2.xFetch(pCache->pCache, newPgno, 0);
   if( pOther ){
@@ -56737,7 +56804,9 @@ SQLITE_PRIVATE void sqlite3PcacheMove(PgHdr *p, Pgno newPgno){
   p->pgno = newPgno;
   if( (p->flags&PGHDR_DIRTY) && (p->flags&PGHDR_NEED_SYNC) ){
     pcacheManageDirtyList(p, PCACHE_DIRTYLIST_FRONT);
-    assert( sqlite3PcachePageSanity(p) );
+#ifdef SQLITE_DEBUG
+  assert( sqlite3PcachePageSanity(p) );
+#endif
   }
 }
 
@@ -57683,7 +57752,9 @@ static void pcache1TruncateUnsafe(
     if( h==iStop ) break;
     h = (h+1) & (pCache->nHash-1);
   }
+#if SQLITE_DEBUG
   assert( nPage<0 || pCache->nPage==(unsigned)nPage );
+#endif
 }
 
 /******************************************************************************/
