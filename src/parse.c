@@ -633,6 +633,32 @@ static void ExprAssembleLiteral(SyToken **ppCur, SyToken *pEnd) {
   *ppCur = pIn;
 }
 /*
+ * Delimit the body of an arrow function [i.e: fn($x) => $x * 2].
+ * The body is a single expression. It ends at the first ',' ')' ']' '}' or ';'
+ * found at nesting level zero, or at the end of the input.
+ * The terminator itself does not belong to the body.
+ * Return a pointer to the terminator (or to pEnd).
+ */
+static SyToken *ExprDelimitArrowBody(SyToken *pIn, SyToken *pEnd) {
+  SyToken *pCur = pIn;
+  sxi32 iNest = 0;
+
+  while (pCur < pEnd) {
+    if (pCur->nType & (PH7_TK_LPAREN | PH7_TK_OSB | PH7_TK_OCB)) {
+      iNest++;
+    } else if (pCur->nType & (PH7_TK_RPAREN | PH7_TK_CSB | PH7_TK_CCB)) {
+      if (iNest == 0) {
+        break; /* closes a bracket opened before the arrow function */
+      }
+      iNest--;
+    } else if (iNest == 0 && (pCur->nType & (PH7_TK_COMMA | PH7_TK_SEMI))) {
+      break;
+    }
+    pCur++;
+  }
+  return pCur;
+}
+/*
  * Collect and assemble tokens holding annonymous functions/closure body.
  * When errors,PH7 take care of generating the appropriate error message.
  * Note on annonymous functions.
@@ -748,7 +774,7 @@ static sxi32 ExprAssembleAnnon(ph7_gen_state *pGen, SyToken **ppCur, SyToken *pE
     /* arrow functions: if we see => instead of { */
 
     pIn++; /* Jump the leading arrow '=>' */
-    PH7_DelimitNestedTokens(pIn, pEnd, PH7_TK_OCB /*'{'*/, PH7_TK_SEMI /*';'*/, &pIn);
+    pIn = ExprDelimitArrowBody(pIn, pEnd);
 
   } else {
     /* Syntax error */

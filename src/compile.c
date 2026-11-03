@@ -1225,6 +1225,12 @@ PH7_PRIVATE sxi32 PH7_CompileArray(ph7_gen_state *pGen, sxi32 iCompileFlag) {
       if ((pCur->nType & PH7_TK_ARRAY_OP) && iNest <= 0) {
         break;
       }
+      if (iNest <= 0 && (pCur->nType & PH7_TK_KEYWORD)
+          && SX_PTR_TO_INT(pCur->pUserData) == PH7_TKWRD_FUNCTION) {
+        /* Arrow function [i.e: fn() => 1] starts here: its '=>' is not a key separator */
+        pCur = pGen->pIn;
+        break;
+      }
 #if 1
         if (pCur->nType & (PH7_TK_LPAREN | PH7_TK_OSB | PH7_TK_OCB)) {
 #else
@@ -7277,10 +7283,14 @@ static sxi32 GenStateCompileChunk(
            */
           xCons = PH7_ErrorRecover;
         }
-      } else if ((pGen->pIn->nType & PH7_TK_ID) && &pGen->pIn[1] < pGen->pEnd
-                 && (pGen->pIn[1].nType & (PH7_TK_SSTR | PH7_TK_DSTR))
-                 && GenStateIsCTInclude(&pGen->pIn->sData)) {
-        /* A compile-time include keyword found */
+      } else if ((pGen->pIn->nType & PH7_TK_ID) && &pGen->pIn[1] < pGen->pEnd  /*TK_ID ?*/
+                 && (pGen->pIn[1].nType & (PH7_TK_SSTR | PH7_TK_DSTR))         /* 'string' or "string" is immediately follow TK_ID ? */
+                 && GenStateIsCTInclude(&pGen->pIn->sData)) {                  /* TK_IS is "compile" or "compile_once" ? */
+        /* A compile-time include keyword found.
+         * Parser treats "compile" and "compile_once" as TK_ID, since there is no such keywords added
+         * to khash.h
+         * TODO: should we make new keywords for the parser to make it unified or leave like it is?
+         */
         xCons = PH7_CompileCTInclude;
 
       } else if ((pGen->pIn->nType & PH7_TK_ID) && (&pGen->pIn[1] < pGen->pEnd)
@@ -7298,7 +7308,7 @@ static sxi32 GenStateCompileChunk(
           PH7_VmEmitInstr(pGen->pVm, PH7_OP_POP, 1, 0, 0, 0, pGen);
         }
       } else {
-        /* Go compile the sucker */
+        /* Go compile */
         rc = xCons(&(*pGen));
       }
       if (rc == SXERR_ABORT) {
