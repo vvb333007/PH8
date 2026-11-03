@@ -35,7 +35,7 @@
  */
 
 #include "ph7int.h"  /* needed for the VM allocator: pVm->sAllocator */
-#include "sqlite3.h" /* SQLite3 library header */
+#include "sqlite3/sqlite3.h" /* SQLite3 library header */
 
 /* PH8's MemObj of 'resource' type carries no type of what it is under the hood */
 enum {
