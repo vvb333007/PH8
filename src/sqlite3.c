@@ -1,31 +1,14 @@
 /*
- * SQLite wrapper for PH8: skeleton.
+ * SQLite wrapper
  *
- * The wrapper is a set of PHP-visible functions which mirror the SQLite C API
- * (sqlite3_open, sqlite3_prepare, sqlite3_bind_value, ...). A database and a
- * statement are passed to the script as resources. The SQLite3 / SQLite3Stmt /
- * SQLite3Result classes of PHP can later be put on top of these functions,
- * every method of the class maps to exactly one function here.
- *
- * ASSUMPTIONS, check them against your ph7.h:
- *   - function registration:    ph7_create_function(), ph7_create_constant()
- *   - resources:                ph7_result_resource(), ph7_value_to_resource(),
- *                               ph7_value_is_resource()
- *   - the user data given to ph7_create_function() is returned by
- *     ph7_context_user_data()
- *   - arrays and scalars:       ph7_context_new_array(), ph7_context_new_scalar(),
- *                               ph7_array_add_strkey_elem(), ph7_array_add_intkey_elem(),
- *                               ph7_value_reset_string_cursor(), ph7_result_value()
- *
- * Design notes:
- *   - Resources carry no type, so every structure starts with a magic number.
- *   - A VM is created for every HTTP request, so all handles opened by a script
+ *   1 Resources carry no type, so every structure starts with a magic number.
+ *   2 A VM is created for every HTTP request, so all handles opened by a script
  *     are registered in a per-VM structure (PhSqliteVm). It MUST be released
  *     when the VM is released: PH8_sqlite_release() closes everything the script
  *     forgot to close.
- *   - A closed handle is not freed (the script still holds the pointer). It is
+ *   3 A closed handle is not freed (the script still holds the pointer). It is
  *     only marked as closed and freed in PH8_sqlite_release().
- *   - Result rows are read with one row look-ahead: execute() makes the first
+ *   4 Result rows are read with one row look-ahead: execute() makes the first
  *     sqlite3_step(), every fetch_array() returns the pending row and steps once
  *     more. This way execute() also works for INSERT/UPDATE statements.
  */
@@ -36,7 +19,7 @@
 #include "ph7.h"
 #include "sqlite3.h"
 
-/* Change these two if the wrapper must allocate from PSRAM or the engine heap */
+/* Change these two for pVm->sAllocator mechanism */
 #define PH8_SQLITE_MALLOC(nBytes) malloc(nBytes)
 #define PH8_SQLITE_FREE(pMem)     free(pMem)
 
@@ -72,10 +55,7 @@ struct PhSqliteVm {
   PhSqliteDb *pFirstDb;
 };
 
-/* ------------------------------------------------------------------------ */
 /* Handle management                                                        */
-/* ------------------------------------------------------------------------ */
-
 /* Finalize all statements of a connection and close it. The structures stay allocated. */
 static void PhSqliteCloseDb(PhSqliteDb *pDb) {
   PhSqliteStmt *pStmt;
@@ -173,10 +153,7 @@ static int PhSqliteCheckArgs(ph7_context *pCtx, int nArg, int nMinimum, const ch
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
 /* Value conversion                                                         */
-/* ------------------------------------------------------------------------ */
-
 /* Store column iCol of the current row into a PH8 value, preserving the SQLite type */
 static void PhSqliteColumnToValue(ph7_value *pValue, sqlite3_stmt *pStmt, int iCol) {
   const char *zData;
@@ -243,10 +220,7 @@ static int PhSqliteBindValue(sqlite3_stmt *pStmt, int iParam, ph7_value *pValue,
   }
 }
 
-/* ------------------------------------------------------------------------ */
 /* Script-visible functions                                                 */
-/* ------------------------------------------------------------------------ */
-
 /* resource|false sqlite3_open(string $zPath) */
 static int PH8_sqlite3_open(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   PhSqliteVm *pVm = (PhSqliteVm *)ph7_context_user_data(pCtx);
@@ -654,10 +628,7 @@ static int PH8_sqlite3_last_error_code(ph7_context *pCtx, int nArg, ph7_value **
   return PH7_OK;
 }
 
-/* ------------------------------------------------------------------------ */
 /* Registration                                                             */
-/* ------------------------------------------------------------------------ */
-
 typedef struct {
   const char *zName;
   int (*xFunc)(ph7_context *, int, ph7_value **);
