@@ -32,6 +32,11 @@
 #  define PH7_ENABLE_REGEX 1
 #endif
 
+/* If user didn't specify ENABLE_SQLITE3 - set them to default (DISABLE)*/
+#ifndef PH7_ENABLE_SQLITE3
+#  define PH7_ENABLE_SQLITE3 0
+#endif
+
 
 /* Internal interface definitions for PH7. */
 #ifdef AMALGAM
