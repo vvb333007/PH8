@@ -51,6 +51,8 @@
 /* FreeRTOS/ESP32 has mmap() provided by TARFS library */
 #if defined( __CYGWIN__) || defined(__linux__)
 #include <sys/mman.h>
+#else 
+#include "tarfs.h"
 #endif
 #include <sys/stat.h>
 #include <unistd.h>

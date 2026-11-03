@@ -2280,6 +2280,6 @@ struct utsname {
 int uname(struct utsname *out);
 #endif /* #ifdef ESP32 */
 
-_Static_assert((VM_FUNC_RET_MASK & 0xffffff00) == VM_FUNC_RET_MASK);
-_Static_assert(VM_MAX_NESTING_DEPTH > VM_THROW_RESERVE_NESTING);
-_Static_assert((0xfffffe00 & VM_FUNC_RET_MASK) == (0xffffffff & VM_FUNC_RET_MASK));
+_Static_assert((VM_FUNC_RET_MASK & 0xffffff00) == VM_FUNC_RET_MASK, "VM_FUNC_RET_MASK is bad");
+_Static_assert(VM_MAX_NESTING_DEPTH > VM_THROW_RESERVE_NESTING, "VM_THROW_RESERVE_NESTING is bad");
+_Static_assert((0xfffffe00 & VM_FUNC_RET_MASK) == (0xffffffff & VM_FUNC_RET_MASK), "VM_FUNC_RET_MASK is bad");
