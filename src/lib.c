@@ -20,6 +20,7 @@
  */
 
 #include "ph7int.h"
+#include <stdbool.h>
 #ifndef PH7_DISABLE_BUILTIN_FUNC
 #ifdef PH7_ENABLE_MATH_FUNC
 #include <math.h>

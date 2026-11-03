@@ -1674,13 +1674,18 @@ esp_err_t ph8_httpd_start(const ph8_httpd_cfg_t *cfg) {
     
 
   int j = 0;                  /* Number of worker tasks actually started */
+  int clamped_max_workers;
   n = g_srv.cfg.max_workers;  /* Number of worker tasks we want to start */
 
   if (n > 127) /* just to limit array size below */
     n = 127;
-  TaskHandle_t tasks[n];
+
+  clamped_max_workers = n;
+
+  TaskHandle_t tasks[n + 1];   // +1 acceptor task
 
   memset(tasks,0,sizeof(tasks));
+  g_srv.listen_fd = -1;
 
   if (NULL != (g_srv.queue = xQueueCreate(n, sizeof(int)))) {
     if (NULL != (g_srv.free_slots = xSemaphoreCreateCounting(n, n))) {
@@ -1724,7 +1729,7 @@ esp_err_t ph8_httpd_start(const ph8_httpd_cfg_t *cfg) {
                 }
 
                 if (w->reqbuf) free(w->reqbuf);
-                if (w->reqbuf) free(w->outbuf);
+                if (w->outbuf) free(w->outbuf);
                 free(w);
               }
             }
@@ -1767,7 +1772,7 @@ esp_err_t ph8_httpd_start(const ph8_httpd_cfg_t *cfg) {
   }
 
   /* Kill tasks */
-  for (n = 0; n < g_srv.cfg.max_workers; n++)
+  for (n = 0; n < clamped_max_workers + 1; n++)
     if (tasks[n] != NULL)
       vTaskDelete(tasks[n]);
 
