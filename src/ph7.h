@@ -111,6 +111,7 @@
 extern "C" {
 #endif
   /* Forward declaration to public objects */
+  typedef struct ph7_sqlite ph7_sqlite;  // TODO: rename tp ph7_sqlite
   typedef struct ph7_io_stream ph7_io_stream;
   typedef struct ph7_context ph7_context;
   typedef struct ph7_value ph7_value;
@@ -642,7 +643,6 @@ typedef struct ph8_http_request {
   PH7_APIEXPORT int ph7_vm_config(ph7_vm *pVm, int iConfigOp, ...);
 
   PH7_APIEXPORT int ph8_vm_set_request(ph7_vm *pVm, const ph8_http_request *hr, const void *rq, void *rs);
-
   PH7_APIEXPORT int ph8_vm_clear_request(ph7_vm *pVm);
 
   PH7_APIEXPORT int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus);
@@ -740,6 +740,11 @@ typedef struct ph8_http_request {
   PH7_APIEXPORT const char *ph7_lib_signature(void);
   PH7_APIEXPORT const char *ph7_lib_ident(void);
   PH7_APIEXPORT const char *ph7_lib_copyright(void);
+
+#if PH7_ENABLE_SQLITE3
+  PH7_APIEXPORT int ph7_sqlite_init(ph7_vm *pVm, ph7_sqlite **ppState);
+  PH7_APIEXPORT void ph7_sqlite_reset(ph7_sqlite *pState);
+#endif
 
 #ifdef __cplusplus
 }
