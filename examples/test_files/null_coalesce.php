@@ -15,4 +15,7 @@ var_dump($z);
 // Executed from left to right: $bb ?? $a yields $a which is then ORed with TRUE
 $z = $aa || ($bb ?? $a);   
 var_dump($z);
+
+
+var_dump(5 ?? 0 || 0);
 ?>
