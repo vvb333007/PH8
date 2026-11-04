@@ -44,6 +44,8 @@ WiFi bindings, both native and hosted.
 An analogue of the Arduino Core `.cpp` library, implemented in PHP wherever possible.
 Standard Arduino Core classes: HardwareSerial, SPI, Wire, FS, Print, String and so on
 
+~~Implement class SQLite3~~
+
 ### 5. Exceptions
 
 ~~Rename `Exception` to `Throwable`, and add `Exception`, `Error`, `TypeError`, `ArgumentCountError`, `ArithmeticError`, `DivisionByZeroError`~~
@@ -74,6 +76,32 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 
 ~~Objects with a cyclic references never reach zero refcount, need a list of all live objects~~
 
+
+## 7. RegEx engine
+
+~~Implement `preg_..` style API~~
+
+## 8. SQL
+
+~~Import SQLite3 into PH8 codebase, make ESP32 port~~
+
+~~Implement procedural sqlite API for PH8. It will then be used to implement SQLite3 class~~
+
+Replace native SQLite3 memory backand with VM's memory backend
+
+Review Trilogy source code and decide how it can be ported to mbedTLS API
+
+
+## 9. HTTP(S) server
+
+~~Implement HTTP server for static and dynamic content. Support `100-Continue`, multipart/form-data, PHP variables, query parsing~~
+
+Implement HTTPS using mbedTLS
+
+Implement WebSockets
+
+Implement SSE
+
 ---
 
 ## Smaller tasks
@@ -102,7 +130,7 @@ Refactor `(object)` cast of arrays: instead of wrapping up arrays to stdClass we
 
 ### Magic methods
 
-~__invoke() does not receive any arguements right now. __call and __callStatic do not receive method name~~
+~~__invoke() does not receive any arguements right now. __call and __callStatic do not receive method name~~
 
 implement __terminate() magic method
 implement __oom() magic method
