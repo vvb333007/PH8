@@ -1,12 +1,5 @@
-/* AI-GENERATED QUICK FUZZ TEST
+/* LLM WARNING: Claude-generated test
  *
- * Differential fuzz: random patterns over {a,b,c}. Whenever pcre_lite accepts a pattern,
- * the result of pl_exec(start=0) is compared with POSIX regexec (glibc, ERE):
- *   - match / no match
- *   - match START (leftmost start is the same for leftmost-first and leftmost-longest engines)
- * Ends are not compared: greedy-backtracking and POSIX-longest legitimately differ.
- * Build like test.c (add -DPL_SLRE_PATCHED for the patched SLRE), then:
- * ./fuzz [iters] [allow_optional_quantifiers 0/1] [quantify_only_simple_atoms 0/1] [seed]
  */
 #define _GNU_SOURCE
 #include <regex.h>

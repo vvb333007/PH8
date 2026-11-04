@@ -1,15 +1,14 @@
-/*
- * linear test of the preg_* layer.
+/* LLM WARNING: Claude-generated test
  *
- * Build:  gcc -std=c99 -Wall -Wextra  retest.c
+ * Build:  gcc -std=c99 -Wall -Wextra  preg_test.c
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-#include "../src/regexp.h"
-#include "../src/regexp.c"
+#include "regexp.h"
+#include "regexp.c"
 
 
 static int g_total, g_fail;
@@ -299,8 +298,12 @@ int main(void) {
   /* ---------------------------------------------------------------- *
    * preg_split
    * ---------------------------------------------------------------- */
+  CHECK_STR(split_str(buf, sizeof buf, "/[\\s:]/", "aa bb cc dddd", -1, 0, &n), "aa|bb|cc|dddd");
+  CHECK(n == 4);
+
   CHECK_STR(split_str(buf, sizeof buf, "/,/", "a,b,,c", -1, 0, &n), "a|b||c");
   CHECK(n == 4);
+
   CHECK_STR(split_str(buf, sizeof buf, "/,/", "a,b,,c", -1, PREG_SPLIT_NO_EMPTY, &n), "a|b|c");
   CHECK(n == 3);
   CHECK_STR(split_str(buf, sizeof buf, "/,/", "a,b,,c", 0, 0, &n), "a|b||c");   /* 0 = no limit */
