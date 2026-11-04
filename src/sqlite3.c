@@ -1,35 +1,22 @@
 /*
- * SQLite wrapper for PH8: skeleton.
+ * SQLite wrapper for PH8
  *
- * The wrapper is a set of PHP-visible functions which mirror the SQLite C API
- * (sqlite3_open, sqlite3_prepare, sqlite3_bind_value, ...). A database and a
- * statement are passed to the script as resources. The SQLite3 / SQLite3Stmt /
- * SQLite3Result classes of PHP can later be put on top of these functions,
+
+ * A database and  statement are passed to the script as resources. The SQLite3 / SQLite3Stmt /
+ * SQLite3Result classes will be built on top of these functions
  * every method of the class maps to exactly one function here.
  *
- * ASSUMPTIONS, check them against your ph7.h:
- *   - function registration:    ph7_create_function(), ph7_create_constant()
- *   - resources:                ph7_result_resource(), ph7_value_to_resource(),
- *                               ph7_value_is_resource()
- *   - the user data given to ph7_create_function() is returned by
- *     ph7_context_user_data()
- *   - arrays and scalars:       ph7_context_new_array(), ph7_context_new_scalar(),
- *                               ph7_array_add_strkey_elem(), ph7_array_add_intkey_elem(),
- *                               ph7_value_reset_string_cursor(), ph7_result_value()
- *
- * Design notes:
- *   - Resources carry no type, so every structure starts with a magic number.
- *   - All wrapper structures are allocated from the VM allocator (pVm->sAllocator),
- *     so the VM arena owns their memory. The memory of SQLite itself is NOT
- *     covered by it: SQLite has its own global allocator (sqlite3_config()).
- *   - Because of that every connection a script opened must be closed before
+ *   1 Resources carry no type, so every structure starts with a magic number.
+ *   2 All wrapper structures are allocated from the VM allocator (pVm->sAllocator),
+ *     so the VM arena owns their memory.
+     3 Memory of SQLite  has its own global allocator (sqlite3_config()).
+ *     Because of this every connection script opens must be closed before
  *     the script run ends. All handles are registered in a per-VM structure
- *     (ph7_sqlite) and PH8_sqlite_reset() closes everything the script forgot
- *     to close. Call it when a script run finishes (also when the same VM is
- *     going to run a script again) and before the VM is released.
- *   - A closed handle is not freed at once (the script still holds the pointer).
- *     It is only marked as closed and freed in PH8_sqlite_reset().
- *   - Result rows are read with one row look-ahead: execute() makes the first
+ *     (ph7_sqlite) and ph7_sqlite_reset() closes everything script forgot
+ *     to close.
+ *   4 A closed handle is not freed at once (the script still holds the pointer).
+ *     It is only marked as closed and freed in ph7_sqlite_reset().
+ *   5 Result rows are read with one row look-ahead: execute() makes the first
  *     sqlite3_step(), every fetch_array() returns the pending row and steps once
  *     more. This way execute() also works for INSERT/UPDATE statements.
  */
@@ -459,6 +446,8 @@ static int PH8_sqlite3_prepare(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   return PH7_OK;
 }
 
+/* NOTE: the statement must be reset before binding; SQLite3Stmt::bindValue() does it, direct callers must call sqlite3_reset() first */
+
 /* bool sqlite3_bind_value(resource $oStmt, int|string $mParam, mixed $mValue [, int $iType]) */
 static int PH8_sqlite3_bind_value(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   PhSqliteStmt *pStmt;
@@ -684,6 +673,169 @@ static int PH8_sqlite3_last_error_code(ph7_context *pCtx, int nArg, ph7_value **
 }
 
 
+/* int sqlite3_num_columns(resource $oStmt) */
+static int PH8_sqlite3_num_columns(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  PhSqliteStmt *pStmt;
+
+  if (!PhSqliteCheckArgs(pCtx, nArg, 1, "sqlite3_num_columns")) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  pStmt = PhSqliteGetStmt(pCtx, apArg[0]);
+  if (pStmt == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  ph7_result_int(pCtx, sqlite3_column_count(pStmt->pStmt));
+  return PH7_OK;
+}
+
+/* string|false sqlite3_column_name(resource $oStmt, int $iColumn) */
+static int PH8_sqlite3_column_name(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  PhSqliteStmt *pStmt;
+  const char *zName;
+  int iColumn;
+
+  if (!PhSqliteCheckArgs(pCtx, nArg, 2, "sqlite3_column_name")) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  pStmt = PhSqliteGetStmt(pCtx, apArg[0]);
+  if (pStmt == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+
+  iColumn = ph7_value_to_int(apArg[1]);
+  if (iColumn < 0 || iColumn >= sqlite3_column_count(pStmt->pStmt)) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+
+  zName = sqlite3_column_name(pStmt->pStmt, iColumn);
+  if (zName == NULL) {
+    /* SQLite returns NULL only when it runs out of memory */
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  ph7_result_string(pCtx, zName, -1);
+  return PH7_OK;
+}
+
+/*
+ * int|false sqlite3_column_type(resource $oStmt, int $iColumn)
+ *
+ * Because of the one row look-ahead (see the header of this file), the "current"
+ * row here is the pending one: the row the next sqlite3_fetch_array() will return.
+ * When no row is pending, the result is false.
+ */
+static int PH8_sqlite3_column_type(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  PhSqliteStmt *pStmt;
+  int iColumn;
+
+  if (!PhSqliteCheckArgs(pCtx, nArg, 2, "sqlite3_column_type")) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  pStmt = PhSqliteGetStmt(pCtx, apArg[0]);
+  if (pStmt == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+
+  /* sqlite3_column_type() is valid only while sqlite3_step() has returned SQLITE_ROW */
+  if (pStmt->iStepRc != SQLITE_ROW) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+
+  iColumn = ph7_value_to_int(apArg[1]);
+  if (iColumn < 0 || iColumn >= sqlite3_column_count(pStmt->pStmt)) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  ph7_result_int(pCtx, sqlite3_column_type(pStmt->pStmt, iColumn));
+  return PH7_OK;
+}
+
+/* int sqlite3_bind_parameter_count(resource $oStmt) */
+static int PH8_sqlite3_bind_parameter_count(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  PhSqliteStmt *pStmt;
+
+  if (!PhSqliteCheckArgs(pCtx, nArg, 1, "sqlite3_bind_parameter_count")) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  pStmt = PhSqliteGetStmt(pCtx, apArg[0]);
+  if (pStmt == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  ph7_result_int(pCtx, sqlite3_bind_parameter_count(pStmt->pStmt));
+  return PH7_OK;
+}
+
+/* bool sqlite3_clear_bindings(resource $oStmt) */
+static int PH8_sqlite3_clear_bindings(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  PhSqliteStmt *pStmt;
+  int iRc;
+
+  if (!PhSqliteCheckArgs(pCtx, nArg, 1, "sqlite3_clear_bindings")) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  pStmt = PhSqliteGetStmt(pCtx, apArg[0]);
+  if (pStmt == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  iRc = sqlite3_clear_bindings(pStmt->pStmt);
+  ph7_result_bool(pCtx, iRc == SQLITE_OK);
+  return PH7_OK;
+}
+
+/* string|false sqlite3_sql(resource $oStmt) */
+static int PH8_sqlite3_sql(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  PhSqliteStmt *pStmt;
+  const char *zSql;
+
+  if (!PhSqliteCheckArgs(pCtx, nArg, 1, "sqlite3_sql")) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  pStmt = PhSqliteGetStmt(pCtx, apArg[0]);
+  if (pStmt == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+
+  zSql = sqlite3_sql(pStmt->pStmt);
+  if (zSql == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  ph7_result_string(pCtx, zSql, -1);
+  return PH7_OK;
+}
+
+/* bool sqlite3_stmt_readonly(resource $oStmt) */
+static int PH8_sqlite3_stmt_readonly(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  PhSqliteStmt *pStmt;
+
+  if (!PhSqliteCheckArgs(pCtx, nArg, 1, "sqlite3_stmt_readonly")) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  pStmt = PhSqliteGetStmt(pCtx, apArg[0]);
+  if (pStmt == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+  ph7_result_bool(pCtx, sqlite3_stmt_readonly(pStmt->pStmt) != 0);
+  return PH7_OK;
+}
+
+
 /* Registration                                                             */
 
 
@@ -710,6 +862,13 @@ static const struct {
   { "sqlite3_changes",          PH8_sqlite3_changes },
   { "sqlite3_last_error_msg",   PH8_sqlite3_last_error_msg },
   { "sqlite3_last_error_code",  PH8_sqlite3_last_error_code },
+  { "sqlite3_num_columns",         PH8_sqlite3_num_columns },
+  { "sqlite3_column_name",         PH8_sqlite3_column_name },
+  { "sqlite3_column_type",         PH8_sqlite3_column_type },
+  { "sqlite3_bind_parameter_count", PH8_sqlite3_bind_parameter_count },
+  { "sqlite3_clear_bindings",      PH8_sqlite3_clear_bindings },
+  { "sqlite3_sql",                 PH8_sqlite3_sql },
+  { "sqlite3_stmt_readonly",       PH8_sqlite3_stmt_readonly },
 
 };
 
@@ -747,6 +906,8 @@ int ph7_sqlite_init(ph7_vm *pVm, ph7_sqlite **ppState) {
   ph7_sqlite *pState;
   int nIndex;
   int iRc;
+
+  /* TODO: configure sqlite3 to use our own memory allocator, which uses VM's arena */
 
   pState = PhSqliteVmCreate(pVm);
   if (pState == NULL) {
