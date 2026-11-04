@@ -27,6 +27,7 @@
 
 
 #ifndef SQLITE_AMALGAMATION
+
 #define SQLITE_CORE 1
 #define SQLITE_AMALGAMATION 1
 #ifndef SQLITE_PRIVATE
@@ -15268,7 +15269,7 @@ struct fts5_api {
 ** also be updated there.
 */
 //XXX
-#define SQLITE_THREADSAFE 0
+//#define SQLITE_THREADSAFE 0
 
 
 #if !defined(SQLITE_THREADSAFE)
@@ -16745,17 +16746,25 @@ typedef int VList;
 #  define SQLITE_OMIT_AUTOINIT 1
 #endif
 #if SQLITE_OS_UNIX+1>1
+
 #  undef SQLITE_OS_KV
 #  define SQLITE_OS_KV 0
+
 #  undef SQLITE_OS_OTHER
 #  define SQLITE_OS_OTHER 0
+
 #  undef SQLITE_OS_WIN
 #  define SQLITE_OS_WIN 0
+
 #  define SQLITE_OMIT_WAL 1
 #  define SQLITE_OMIT_LOAD_EXTENSION 1
-#  define SQLITE_MUTEX_OMIT 0
 #  define SQLITE_MUTEX_PTHREADS 1
+
+#if defined(ESP_PLATFORM) || defined(ESP32)
+#  define __freertos__ 1
 #endif
+#endif /* SQLITE_OS_UNIX+1>1 */
+
 #if SQLITE_OS_WIN+1>1
 #  undef SQLITE_OS_KV
 #  define SQLITE_OS_KV 0
