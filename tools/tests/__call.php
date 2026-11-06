@@ -1,5 +1,4 @@
 <?php
-
 class Proxy {
     public function __call($arg1, $arg2, $arg3):string {
       return 'Works from __call: '.__CALL__;

@@ -2048,7 +2048,6 @@ PH7_PRIVATE ph7_class_instance *PH7_CloneClassInstance(ph7_class_instance *pSrc)
 PH7_PRIVATE sxi32 PH7_ClassInstanceCmp(ph7_class_instance *pLeft, ph7_class_instance *pRight, int bStrict, int iNest);
 PH7_PRIVATE void PH7_ClassInstanceUnref(ph7_class_instance *pThis);
 PH7_PRIVATE sxi32 PH7_ClassInstanceDump(SyBlob *pOut, ph7_class_instance *pThis, int ShowType, int nTab, int nDepth);
-PH7_PRIVATE sxi32 PH7_ClassInstanceCallMagicMethod(ph7_vm *pVm, ph7_class *pClass, ph7_class_instance *pThis, const char *zMethod, sxu32 nByte, const SyString *pAttrName);
 PH7_PRIVATE sxi32 PH7_CallMagicMethod(ph7_vm *pVm, ph7_class *pClass, ph7_class_instance *pThis, const char *zMethod, sxu32 nByte, const SyString *pAttrName, ph7_value *pValue);
 PH7_PRIVATE ph7_value *PH7_ClassInstanceExtractAttrValue(ph7_class_instance *pThis, VmClassAttr *pAttr);
 PH7_PRIVATE sxi32 PH7_ClassInstanceToHashmap(ph7_class_instance *pThis, ph7_hashmap *pMap);

@@ -1739,9 +1739,6 @@ static sxi32 GenStateLoadLiteral(ph7_gen_state *pGen) {
 }
 /*
  * Resolve a namespace path or simply load a literal:
- * As of this version namespace support is disabled. If you need
- * a working version that implement namespace,please contact
- * symisc systems via contact@symisc.net
  */
 static sxi32 GenStateResolveNamespaceLiteral(ph7_gen_state *pGen) {
   int emit = 0;

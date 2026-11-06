@@ -39,7 +39,8 @@
   int esp32_builtin_ ## Name_ (ph7_context *pCtx_, int nArg_, ph7_value **apArg_)
 
 /* Two numeric arguments like digitalWrite(pin, value).
- * CODE must call ph7_result_* to set the return value.
+ * Implementation code (i.e. `...`) must call ph7_result_* to set the
+ * return value.
  * if it doesnt the return value is whatever was in the accumulator. 
  */
 #define IMPLEMENT_N_N(name, T0, T1, ...)                    \
@@ -95,21 +96,30 @@
 
 /* Actual implemetation.
  * IMPLEMENT_N_N(functionName, arg1 type, arg2 type, CODE...) will create a function
- * int ep32_builtin_functionName(...) which will be called each time PHP codes calls functionName($arg1, $arg2)
+ * int ep32_builtin_functionName(...) which will be called each time PHP codes calls 
+ * functionName($arg1, $arg2)
  *
- * The CODE.. part is the actual code to be executed; Arguments are available as a0, a1, a2, and so on
+ * The `...` part is the actual code to be executed;
+ * Arguments are available as a0, a1, a2, and so on
+ */
+
+
+
+/* function pinMode(int $pin, int $mode): void
+ *
  */
 IMPLEMENT_N_N(pinMode, int, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"pinMode(%d, %x)\r\n",a0,a1);
 #else
   pinMode(a0, a1);
+  /* No return value */
 #endif
 )
 
 IMPLEMENT_N_N(digitalWrite, int, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalWrite(%d, %d)\r\n",a0, a1);
 #else
   digitalWrite(a0, a1 ? 1 : 0);
 #endif
@@ -117,7 +127,7 @@ IMPLEMENT_N_N(digitalWrite, int, int,
 
 IMPLEMENT_N(delay, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"delay(%d)\r\n",a0);
 #else
   delay(a0);
 #endif
@@ -125,7 +135,7 @@ IMPLEMENT_N(delay, int,
 
 IMPLEMENT_N(delayMicroseconds, long long,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"delayMicroseconds(%d)\r\n",a0);
 #else
   delayMicroseconds(a0);
 #endif
@@ -133,7 +143,7 @@ IMPLEMENT_N(delayMicroseconds, long long,
 
 IMPLEMENT_N(digitalRead, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalRead(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalRead(a0));
 #endif
@@ -141,7 +151,7 @@ IMPLEMENT_N(digitalRead, int,
 
 IMPLEMENT(millis,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"millis()\r\n");
 #else
   ph7_result_int64(pCtx, (sxi64)millis());
 #endif
@@ -149,7 +159,7 @@ IMPLEMENT(millis,
 
 IMPLEMENT(micros,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"micros()\r\n");
 #else
   ph7_result_int64(pCtx, (sxi64)micros());
 #endif
@@ -159,7 +169,7 @@ IMPLEMENT(micros,
 //
 IMPLEMENT_N(digitalPinIsValid, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalPinIsValid(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinIsValid(a0));
 #endif
@@ -169,7 +179,7 @@ IMPLEMENT_N(digitalPinIsValid, int,
 //
 IMPLEMENT_N(digitalPinCanOutput, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalPinCanOutput(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinCanOutput(a0));
 #endif
@@ -180,7 +190,7 @@ IMPLEMENT_N(digitalPinCanOutput, int,
 //
 IMPLEMENT_N(digitalPinToRtcPin, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalPinToRtcPin(%d)\r\n",a0);
 #else
 #ifdef RTC_GPIO_IS_VALID_GPIO
   ph7_result_int(pCtx, digitalPinToRtcPin(a0));
@@ -195,7 +205,7 @@ IMPLEMENT_N(digitalPinToRtcPin, int,
 //
 IMPLEMENT_N(digitalPinToDacChannel, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalPinToDacChannel(%d)\r\n",a0);
 #else
 #ifdef DAC_CHANNEL_1_GPIO_NUM
   ph7_result_int(pCtx, digitalPinToDacChannel(a0));
@@ -208,7 +218,7 @@ IMPLEMENT_N(digitalPinToDacChannel, int,
 //
 IMPLEMENT_N(digitalPinToTouchChannel, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalPinToTouchChannel(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinToTouchChannel(a0));
 #endif
@@ -218,7 +228,7 @@ IMPLEMENT_N(digitalPinToTouchChannel, int,
 //
 IMPLEMENT_N(digitalPinToAnalogChannel, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"digitalPinToAnalogChannel(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinToAnalogChannel(a0));
 #endif
@@ -228,7 +238,7 @@ IMPLEMENT_N(digitalPinToAnalogChannel, int,
 //
 IMPLEMENT_N(analogChannelToDigitalPin, int,
 #ifdef __CYGWIN__
-  puts("pinMode()");
+  fprintf(stderr,"analogChannelToDigitalPin(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, analogChannelToDigitalPin(a0));
 #endif
@@ -345,7 +355,7 @@ Impl(random, pCtx, nArg, apArg) {
     ph7_result_int(pCtx, min);
   } else {
 #ifdef __CYGWIN__
-    puts("random() called");
+    fprintf(stderr,"random() called");
 #else
     ph7_result_int(pCtx, min + (long)(esp_random() % (unsigned long)(max - min)));
 #endif
@@ -353,50 +363,66 @@ Impl(random, pCtx, nArg, apArg) {
 
   return PH7_OK;
 }
+#if 0
+//function i2cInit(int i2c_num, int sda, int scl, int clk_speed): int
+//function i2cGetClock(int i2c_num, int &frequency): int
+//function i2cWrite(int i2c_num, int address, string buff, int size, int timeOutMillis): int
+//function i2cRead(int i2c_num, int address, string buff, int size, int timeOutMillis, int &readCount): int
+
+
+/*function i2cIsInit(int i2c_num): bool
+*/
+IMPLEMENT_N(i2cIsInit, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"i2cIsInit)\r\n");
+#else
+  ph7_result_bool(pCtx, i2cIsInit(a0));
+#endif
+)
+
+/*function i2cDeinit(int i2c_num): int
+*/
+IMPLEMENT_N(i2cDeinit, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"i2cDeinit)\r\n");
+#else
+  ph7_result_int(pCtx, i2cDeinit(a0));
+#endif
+)
+
+/*function i2cSetClock(int i2c_num, int frequency): int
+*/
+IMPLEMENT_N_N(i2cSetClock, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"i2cSetClock)\r\n");
+#else
+  ph7_result_int(pCtx, i2cSetClock(a0, a1));
+#endif
+)
+
+#endif
 
 #endif //#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
 
 #ifndef PH7_DISABLE_ESP32_ESPIDF_FUNC
 #if 0
-/* TODO: should it be a class instance to make the syntax closer to C++ or leave it as a hasmap aka array?
- *
- */
-$config = new gpio_config_t;
 
-$config->fun_sel;                   /*!< Value of IOMUX function selection */
-$config->sig_out;                   /*!< Index of the outputting peripheral signal */
-$config->drv;                       /*!< Value of drive strength */
-$config->pu;                        /*!< Status of pull-up enabled or not */
-$config->pd;                        /*!< Status of pull-down enabled or not */
-$config->ie;                        /*!< Status of input enabled or not */
-$config->oe;                        /*!< Status of output enabled or not */
-$config->oe_ctrl_by_periph;          /*!< True if use output enable signal from peripheral, otherwise False */
-$config->oe_inv;                     /*!< Whether the output enable signal is inversed or not */
-$config->od;                         /*!< Status of open-drain enabled or not */
-$config->slp_sel;                     /*!< Status of pin sleep mode enabled or not */
+$config = [
+  'fun_sel' => 0,                   /*!< Value of IOMUX function selection */
+  'sig_out' => 0,                   /*!< Index of the outputting peripheral signal */ 
+  'drv' => 0,                       /*!< Value of drive strength */
+  'pu' => 0,                        /*!< Status of pull-up enabled or not */
+  'pd' => 0,                        /*!< Status of pull-down enabled or not */
+  'ie' => 0,                        /*!< Status of input enabled or not */
+  'oe' => 0,                        /*!< Status of output enabled or not */
+  'oe_ctrl_by_periph' => 0,          /*!< True if use output enable signal from peripheral, otherwise False */
+  'oe_inv' => 0,                     /*!< Whether the output enable signal is inversed or not */
+  'od' => 0,                         /*!< Status of open-drain enabled or not */
+  'slp_sel' => 0                     /*!< Status of pin sleep mode enabled or not */
+];
 
+function gpio_config($pin, $cfg);
 
-
-// Function that require a structure as an argument are implemented partially in PHP.
-// The reason for this is to simplify binding function code: we defenitely do not want to
-// parse arrays or classes in .c code. Instead we "vectorize" calls where needed
-//
-// function gpio_config($pin, $cfg) {
-//   /* .c foreign function which assembles a structure from arguments and calls ESP-IDF's gpio_config */
-//   gpio_config_edf( $pin,
-//                    $c->fun_sel,
-//                    $c->sig_out,
-//                    $c->drv,
-//                    $c->pu,
-//                    $c->pd,
-//                    $c->ie,
-//                    $c->oe,
-//                    $c->oe_ctrl_by_periph,
-//                    $c->oe_inv,
-//                    $c->od,
-//                    $c->slp_sel);
-//
-// }
 int Impl(gpio_config(ph7_context *ctx, int argc, ph7_value **argv) {  return PH7_OK; }
 
 int Impl(gpio_reset_pin(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }

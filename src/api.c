@@ -1294,8 +1294,33 @@ int ph7_vm_call_function(
 }
 
 /* Obtains a reference to the variable. By reference we mean direct access 
+ * WARNING: the pointer returned can only be used in context of this call.
+ * The reason is simple: this is a pointer into SyHash. SyHash grow by realloc() 
+ * so you can get a dangling pointer when someone adds more elements to the hash;
+ * For long term storage one have to store nIdx instead. Indicies are persistent
+ * across VM's lifecycle
  */
 ph7_value *ph7_value_to_ref(ph7_vm *pVm, ph7_value *pValue) {
+
+  if (PH7_VM_MISUSE(pVm)) {
+    return NULL;
+  }
+
+  /* Memobj_null has no index.
+   * The consequences are serious: for function receiving a _reference_
+   * ```
+   *  some_function($x);  
+   * ```
+   *  (note that $x is undefined) the generated code would be `some_function(null)` without
+   * creating a new variable. This is the engine limitation (undefined variables can not have a reference).
+   *
+   * Proper way is
+   * ```
+      $x = whatever;      // <-- define a variable
+   *  some_function($x);  // <-- now reference is passed, not null
+   * ```
+
+   */
   if (pValue && ((pValue->iFlags & MEMOBJ_NULL) == 0)) {
     if (pValue->nIdx != SXU32_HIGH) {
       pValue = (ph7_value *)SySetAt(&pVm->aMemObj, pValue->nIdx);
@@ -1390,7 +1415,9 @@ const char *ph7_value_to_string(ph7_value *pValue, int *pLen) {
 }
 /*
  * [CAPIREF: ph7_value_to_resource()]
- * Please refer to the official documentation for function purpose and expected parameters.
+ * TODO: we have to keep a resource type somewhere in this memobj.
+ * The SQLite3 code already hit this problem: it uses two different types of resources. It uses extra fields
+ * to distinguish between these two
  */
 void *ph7_value_to_resource(ph7_value *pValue) {
   if ((pValue->iFlags & MEMOBJ_RES) == 0) {

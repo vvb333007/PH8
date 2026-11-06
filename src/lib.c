@@ -122,7 +122,9 @@ PH7_PRIVATE const SyMutexMethods *SyMutexExportMethods(void) {
 
 #endif /* PH7_ENABLE_THREADS */
 
-static bool g_hasExtMem = true;
+#ifdef ESP32
+static bool g_hasExtMem = true; /* TODO: refactor. query PSRAM availability */
+#endif
 
 static void *SyOSHeapAlloc(sxu32 nByte) {
 

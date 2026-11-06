@@ -157,6 +157,7 @@ static void put_hex(sbuf *b, unsigned char c) {
   sb_puts(b, tmp);
 }
 
+#if INCLUDE_UNUSED
 
 static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
   while (*t != '\0') {
@@ -188,7 +189,7 @@ static void expand(sbuf *o, const char *s, const pl_match *m, const char *t) {
     }
   }
 }
-
+#endif //#if INCLUDE_UNUSED
 
 /*
  * Inside [...] SLRE runs every element through match_op(), so a literal '.' becomes a
@@ -744,12 +745,13 @@ PH7_PRIVATE void pl_free(pl_regex *re) {
     free(re);
   }
 }
-
+#if INCLUDE_UNUSED
 /* utility functions (a couple of getters) as pl_regex is opaque struct 
 */
 PH7_PRIVATE const char *pl_slre_pattern(const pl_regex *re) {
   return re->pat;
 }
+#endif
 
 PH7_PRIVATE int pl_ngroups(const pl_regex *re) {
   return re->nuser;
@@ -804,7 +806,7 @@ PH7_PRIVATE int pl_exec(const pl_regex *re, const char *s, int len, int start, p
   }
   return PL_OK;
 }
-
+#if INCLUDE_UNUSED
 PH7_PRIVATE int pl_match_all(const pl_regex *re, const char *s, int len, pl_each_fn fn, void *ud) {
   int pos = 0, count = 0, r;
   pl_match m;
@@ -890,6 +892,7 @@ PH7_PRIVATE int pl_split(const pl_regex *re, const char *s, int len, pl_span *ou
   }
   return n + 1;
 }
+#endif
 
 /* A Patched SLRE
  *
@@ -1807,6 +1810,7 @@ static int get_backref(const char **pp, int *ref) {
   return 1;
 }
 
+
 static void expand2(sbuf *o, const char *s, const pl_match *m, const char *t) {
 
   char last = 0;
@@ -1837,6 +1841,7 @@ static void expand2(sbuf *o, const char *s, const pl_match *m, const char *t) {
     t++;
   }
 }
+
 
 
 /* PREG PUBLIC API
@@ -2125,7 +2130,6 @@ PH7_PRIVATE char *preg_replace_re(const preg_re *re,
 }
 
 
-
 /* preg_split(): unlike pl_split(), empty matches DO split (preg_split('//', 'abc')
  * gives "", "a", "b", "c", "").
  */
@@ -2301,6 +2305,7 @@ PH7_PRIVATE int preg_match_all( const char *pattern,
   return rc;
 }
 
+#if INCLUDE_UNUSED
 /*
  *
  */
@@ -2327,6 +2332,7 @@ PH7_PRIVATE char *preg_replace( const char *pattern,
 
   return r;
 }
+#endif //INCLUDE_UNUSED
 
 /*
  *
@@ -2351,7 +2357,7 @@ PH7_PRIVATE int preg_split( const char *pattern,
   return rc;
 }
 
-
+#if INCLUDE_UNUSED
 /*
  *
  */
@@ -2375,3 +2381,4 @@ PH7_PRIVATE int preg_grep(const char *pattern,
 
   return rc;
 }
+#endif //#if INCLUDE_UNUSED
