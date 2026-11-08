@@ -529,7 +529,7 @@ Thera are many, but most notable these:
 
 `yield` (generators) and `match` are not supported.
 
-Namespaces are not supported. The parser recognizes the syntax but does not implement its semantics (skips it).
+
 
 
 ## 9. Exceptions and Exception Handling
