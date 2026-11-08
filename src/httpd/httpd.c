@@ -1408,7 +1408,7 @@ static int check_request(const char *m, size_t ml, int minor,
     return 0;
 }
 
-/* This is what worker does on new connection.
+/* This is what worker does on a new connection.
  */
 static void handle_connection(worker_t *w, ph8_conn *c) {
 
@@ -1605,10 +1605,10 @@ static void acceptor_task(void *arg) {
     int one = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
 
-    /* Take semaphore with a 0 timeout to check if there are idle workers waiting for a client */
-    if (xSemaphoreTake(g_srv.free_slots, 0) != pdTRUE) {
+    /* Take semaphore with a timeout to check if there are idle workers waiting for a client */
+    if (xSemaphoreTake(g_srv.free_slots, pdMS_TO_TICKS(2000)) != pdTRUE) {
 
-      /* No idle worker. Never block the acceptor here: no lingering.
+      /* No idle worker. 
        * Create a temporary connection just to send the error message and close it
        */
        ph8_conn c;
