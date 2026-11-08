@@ -25,7 +25,7 @@
 typedef struct LangConstruct LangConstruct;
 typedef struct JumpFixup JumpFixup;                         
 typedef struct Label Label;
-/* Block [i.e: set of statements] control flags */
+/* Block [i.e.  set of statements] control flags */
 #define GEN_BLOCK_LOOP 0x001       /* Loop block [i.e: for,while,...] */
 #define GEN_BLOCK_PROTECTED 0x002  /* Protected block */
 #define GEN_BLOCK_COND 0x004       /* Conditional block [i.e: if(condition){} ]*/
@@ -164,7 +164,7 @@ static sxi32 CtReadFile(ph7_vm *pVm, const char *zPath, sxi32 nLen, SyBlob *pOut
   rc = PH7_GetWholeFile(pVm->pEngine, aTmp, &pMapView, &nSize);
 
   if (rc != SXRET_OK) {
-    puts("Can not read file");
+//    puts("Can not read file");
     puts(aTmp);
     return rc;
   }
@@ -1660,9 +1660,9 @@ PH7_PRIVATE sxi32 PH7_CompileVariable(ph7_gen_state *pGen, sxi32 iCompileFlag) {
  *
  * Namespaces are resolved by the compiler. The 'namespace' statement sets
  * a prefix which is glued to the name of every declaration (function, class,
- * interface, enum, constant) and the 'use' statement fills a table of synonyms.
+ * interface, enum, constant) and the 'use' statement fills table of synonyms.
  * Every name found in the code is then expanded to a complete name
- * [i.e: "A\B\Name"], so the rest of the engine never sees a namespace and
+ * (i.e. "A\B\Name"), so the rest of the engine never sees a namespace and
  * the function, class and constant tables stay flat.
  *
  * A name is resolved like this:
@@ -1678,9 +1678,10 @@ PH7_PRIVATE sxi32 PH7_CompileVariable(ph7_gen_state *pGen, sxi32 iCompileFlag) {
  * TODO: Check for built-in const/classes/functions and generate global call?
  */
 
-/* Maximum length of a name including its namespace [i.e: A\B\Name] */
+/* Maximum length of a name including its namespace (i.e. A\B\Name) */
 #define GEN_NAME_MAX 256
-
+/* TODO: These helpers can be probably constructed from lib.c primitives; have to dig it deeper
+*/
 /* A name is assembled in an instance of the following structure */
 typedef struct GenNameBuf GenNameBuf;
 struct GenNameBuf {
@@ -1709,7 +1710,7 @@ static void GenNameBufAppend(GenNameBuf *pBuf, const char *zText, sxu32 nText) {
   pBuf->nUsed += nText;
 }
 
-/* Append the text of a range of tokens [i.e: A \ B]. Namespace separators are appended as '\' */
+/* Append the text of a range of tokens, i.e A \ B. Namespace separators are appended as '\' */
 static void GenNameBufAppendTokens(GenNameBuf *pBuf, SyToken *pIn, SyToken *pEnd) {
   while (pIn < pEnd) {
     if (pIn->nType & PH7_TK_NSSEP) {
@@ -1733,7 +1734,7 @@ static void GenNameBufAppendNamespace(ph7_gen_state *pGen, GenNameBuf *pBuf) {
 /*
  * Return a pointer to the token which follows a name path.
  * A path is an optional leading separator followed by names separated by
- * separators [i.e: Name, \Name, A\B\Name]. The first token must be a name or a separator.
+ * separators (e.g. Name, \Name, A\B\Name). The first token must be a name or a separator.
  */
 static SyToken *GenStateScanName(SyToken *pIn, SyToken *pEnd) {
   if (pIn < pEnd && (pIn->nType & PH7_TK_NSSEP)) {
@@ -1800,7 +1801,7 @@ static void GenStateResetNamespace(ph7_gen_state *pGen) {
 
 /*
  * Start a new file: the namespace state of the file being compiled is saved
- * and replaced by an empty one [global namespace, nothing imported].
+ * and replaced by an empty one; global namespace, nothing imported
  */
 static void GenStateEnterNamespaceScope(ph7_gen_state *pGen, ph7_ns_state *pSaved) {
   *pSaved = pGen->sNs;
@@ -1836,8 +1837,8 @@ static sxi32 GenStateSetNamespace(ph7_gen_state *pGen, SyToken *pFirst, SyToken 
 }
 
 /*
- * Record an imported name [i.e: 'use A\B as C;'].
- * Return SXRET_OK or SXERR_ABORT.
+ * Record an imported name, i.e. 'use A\B as C;'
+ * Return SXRET_OK or SXERR_ABORT
  */
 static sxi32 GenStateInstallUse(ph7_gen_state *pGen, sxi32 iKind, const SyString *pAlias, const SyString *pTarget, sxu32 nLine) {
   ph7_ns_use sUse;
@@ -1866,8 +1867,8 @@ static sxi32 GenStateInstallUse(ph7_gen_state *pGen, sxi32 iKind, const SyString
 }
 
 /*
- * A name does not fit in the name buffer: report it.
- * Return SXERR_ABORT if the compilation must stop, SXRET_OK otherwise.
+ * A name does not fit in the name buffer: report it
+ * Return SXERR_ABORT if the compilation must stop, SXRET_OK otherwise
  */
 static sxi32 GenStateNameTooLong(ph7_gen_state *pGen, sxu32 nLine) {
   sxi32 rc;
@@ -1878,9 +1879,9 @@ static sxi32 GenStateNameTooLong(ph7_gen_state *pGen, sxu32 nLine) {
 /*
  * Resolve the name path made of the tokens [pFirst,pLast) as described at the
  * top of this section. iKind tells if the name is a class, a function or a constant:
- * it selects the table of imported names used for a name without separator.
- * The complete name is built in zBuf, which must be nBufSize bytes long.
- * Return SXRET_OK or SXERR_ABORT.
+ * it selects the table of imported names used for a name without separator
+ * The complete name is built in zBuf, which must be nBufSize bytes long
+ * Return SXRET_OK or SXERR_ABORT
  */
 static sxi32 GenStateResolveName(
   ph7_gen_state *pGen,
@@ -1951,7 +1952,9 @@ static sxi32 GenStateMangleDeclName(ph7_gen_state *pGen, const SyString *pName, 
   return SXRET_OK;
 }
 
-/* Return TRUE for the magic constants [i.e: __LINE__,__FILE__]: they are never put in a namespace */
+/* Return TRUE for the magic constants [i.e: __LINE__,__FILE__]: they are never put in a namespace 
+ * TODO: check __CALL__ and __CLASS__ constants;
+*/
 static int GenStateIsMagicConstant(const SyString *pName) {
   if (pName->nByte > 4 && pName->zString[0] == '_' && pName->zString[1] == '_'
       && pName->zString[pName->nByte - 1] == '_' && pName->zString[pName->nByte - 2] == '_') {
@@ -2066,6 +2069,7 @@ static sxi32 GenStateLoadLiteral(ph7_gen_state *pGen) {
 /*
  * Return TRUE when a literal is compiled as it is: it is not resolved.
  * pLast is the last token of the literal.
+ * TODO: check if it is a built-in function, like strlen() or alike; if it is - do not apply namespace machinery to this literal
  */
 static int GenStateIsLiteralUnchanged(ph7_gen_state *pGen, SyToken *pFirst, SyToken *pLast, sxi32 iCompileFlag) {
   if (iCompileFlag & EXPR_FLAG_NAME_MEMBER) {
