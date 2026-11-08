@@ -1057,6 +1057,32 @@ struct GenBlock {
   SySet aPostContFix; /* Post-continue jump fix */
 };
 /*
+ * Kinds of names resolved by the compiler (see the namespace section of compile.c).
+ */
+#define GEN_NAME_CLASS 1 /* Class, interface or enum name */
+#define GEN_NAME_FUNC 2  /* Function name */
+#define GEN_NAME_CONST 3 /* Constant name */
+/*
+ * Each imported name [i.e: 'use A\B as C;'] is recorded in an instance of the
+ * following structure. The text of both names is stored in a single heap chunk
+ * which starts at sAlias.zString.
+ */
+typedef struct ph7_ns_use ph7_ns_use;
+struct ph7_ns_use {
+  SyString sAlias;  /* Local name [i.e: C] */
+  SyString sTarget; /* Fully qualified name [i.e: A\B] */
+  sxi32 iKind;      /* What is imported: GEN_NAME_CLASS, GEN_NAME_FUNC or GEN_NAME_CONST */
+};
+/*
+ * Namespace state of the file being compiled: the current namespace and
+ * the names imported with the 'use' statement.
+ */
+typedef struct ph7_ns_state ph7_ns_state;
+struct ph7_ns_state {
+  SyBlob sName; /* Current namespace [i.e: A\B] without leading and trailing separator. Empty in the global namespace */
+  SySet aUse;   /* Imported names (ph7_ns_use instances) */
+};
+/*
  * Code generator state is remembered in an instance of the following
  * structure. We put the information in this structure and pass around
  * a pointer to this structure, rather than pass around  all of the 
@@ -1088,6 +1114,7 @@ struct ph7_gen_state {
   sxu32 bReserved:31; /* Reserved/Unused */
   sxu8   nCtDepth;    /* compile_time / compile_time_once nesting depth */
   SyHash hCtOnce;     /* paths already included at compile time */
+  ph7_ns_state sNs;   /* Namespace state of the file being compiled */
 
 };
 /* Forward references */
@@ -1332,7 +1359,9 @@ typedef struct VmInstr VmInstr;
 struct VmInstr {
   sxu8 iOp;  /* Operation to preform */
   sxi32 iP1; /* First operand */
-  //sxu32 iP2; /* Second operand (Often the jump destination) */
+//sxi16 iP1; /* TODO: First operand: Arg/pop count or a flag. */
+//sxu16 nIdx; /* TODO: A corresponding source file name index ( in aMemObj hash )*/
+
   sxu16 iP2; /* Second operand (16 bit is pretty enough for a jump destination and object indices) */
   sxu16 nLine; /* Corresponding source file line number. The file name must be extracted from pVm */
   void *p3;  /* Third operand (Often Upper layer private data) */
@@ -1460,7 +1489,9 @@ struct ph7_vm {
                                     */
   void const *pHttpReq;             /* Original HTTP request, fully parsed. Lifetime and ownership is the same as with pHttpResp
                                     */
-
+#if PH7_ENABLE_SQLITE3
+  ph7_sqlite *pSQLite;             /* SQLite3 library state. Must be reset via ph7_sqlite_reset() on VM shutdown, if it is not NULL*/
+#endif
 
   int nRecursionDepth;             /* Current recursion depth */
   char aFailedMethod[64];          /* Used by __call() and __callStatic() magic methods to obtain the name of the failed method (no, first arg to _call() is not method name in PH8) */

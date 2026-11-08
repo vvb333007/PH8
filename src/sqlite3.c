@@ -901,6 +901,7 @@ static void PH8_sqlite_const(ph7_value *pValue, void *pUserData) {
  * Register the wrapper in a VM. Call it right after the VM is created.
  * On success *ppState receives the state which must be passed to
  * PH8_sqlite_reset() when a script run finishes and before the VM is released.
+ * (done in ph7_vm_release())
  */
 int ph7_sqlite_init(ph7_vm *pVm, ph7_sqlite **ppState) {
   ph7_sqlite *pState;
@@ -908,6 +909,12 @@ int ph7_sqlite_init(ph7_vm *pVm, ph7_sqlite **ppState) {
   int iRc;
 
   /* TODO: configure sqlite3 to use our own memory allocator, which uses VM's arena */
+
+  /* Do not reinitialize if was initialized already */
+  if (pVm->pSQLite != NULL) {
+    *ppState = pVm->pSQLite;
+    return PH7_OK;
+  }
 
   pState = PhSqliteVmCreate(pVm);
   if (pState == NULL) {
@@ -930,6 +937,8 @@ int ph7_sqlite_init(ph7_vm *pVm, ph7_sqlite **ppState) {
     }
   }
 
-  *ppState = pState;
+  /* Store SQLite3 state in the VM */
+  pVm->pSQLite = *ppState = pState;
+
   return PH7_OK;
 }

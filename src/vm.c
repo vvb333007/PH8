@@ -6609,12 +6609,14 @@ static sxi32 VmByteCodeExec(
               if (n != SXU32_HIGH) {
                 VmSlot *aSlot = (VmSlot *)SySetBasePtr(&pFrame->sLocal);
                 sxu32 i;
-                /* Make sure the referenced object is not a local variable */
+                /* Make sure the referenced object is not a local variable
+                 * (returning a reference to a local array or a class is ok as they have refcounter )
+                 */
                 for (i = 0; i < SySetUsed(&pFrame->sLocal); ++i) {
                   if (n == aSlot[i].nIdx) {
                     pObj = (ph7_value *)SySetAt(&pVm->aMemObj, n);
                     if (pObj && (pObj->iFlags & (MEMOBJ_NULL | MEMOBJ_OBJ | MEMOBJ_HASHMAP | MEMOBJ_RES)) == 0) {
-                      // In ZendPHP8 it is just a fallback to pass by value, without any notice
+                      /* In ZendPHP8 it is just a fallback to pass by value, without any notice */
                       VM_WARNING_F("in function '%z': returning a reference to a local variable. switched to value.",&pVmFunc->sName);
                     }
                     n = SXU32_HIGH;
@@ -6623,8 +6625,8 @@ static sxi32 VmByteCodeExec(
                 }
               } else {
                 if ((pTos->iFlags & (MEMOBJ_HASHMAP | MEMOBJ_OBJ | MEMOBJ_NULL | MEMOBJ_RES)) == 0) {
-                  // In ZendPHP8 it is just a notice + fallback to pass by value
-                  VM_FATAL_GOTO("in function '%z': returning a reference to a constant expression is not permitted", &pVmFunc->sName);
+                 
+                  VM_WARNING_F("in function '%z': returning a reference to a constant. switched to value.", &pVmFunc->sName);
                 }
               }
 
@@ -6690,7 +6692,7 @@ static sxi32 VmByteCodeExec(
             pEntry = SyHashGet(&pVm->hHostFunction, (const void *)sName.zString, sName.nByte);
             if (pEntry == 0) {
               /* Call to undefined function: not a compiled nor a foreign function */
-              VM_EXCEPTION_GOTO("__unknownfn",11," '%z(...)' call at [PC: %08x]\n",&sName, pc)
+              VM_EXCEPTION_GOTO("__unknownfn",11," Function %z(...) is undefined, line: %d\n",&sName, pInstr->nLine)
 
               /* Pop given arguments */
               if (pInstr->iP1 > 0) {
@@ -8850,7 +8852,7 @@ static int vm_builtin_define(ph7_context *pCtx, int nArg, ph7_value **apArg) {
  *  Constant value or NULL if not defined.
  */
 static int vm_builtin_constant(ph7_context *pCtx, int nArg, ph7_value **apArg) {
-return SXRET_OK;
+
   SyHashEntry *pEntry;
   ph7_constant *pCons;
   const char *zName; /* Constant name */
@@ -8871,11 +8873,19 @@ return SXRET_OK;
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
+
+
   PH7_MemObjInit(pCtx->pVm, &sVal);
   /* Point to the structure that describe the constant */
   pCons = (ph7_constant *)SyHashEntryGetUserData(pEntry);
-  /* Extract constant value by calling it's associated callback */
-  pCons->xExpand(&sVal, pCons->pUserData);
+ 
+  /* Extract constant value by calling it's associated callback 
+   * or use a cached value (user defined constants only; builtins are always expanded)
+   */
+  if (pCons->xExpand != NULL)
+    pCons->xExpand(&sVal, pCons->pUserData);
+  else
+    PH7_MemObjLoad(&pCons->aValue, &sVal);
   /* Return that value */
   ph7_result_value(pCtx, &sVal);
   /* Cleanup */
@@ -11679,6 +11689,7 @@ static sxi32 VmExecIncludedFile(
     }
   }
   /* Pop from the set of included file */
+
   (void)SySetPop(&pVm->aFiles);
   /* Close the handle */
   PH7_StreamCloseHandle(pStream, pHandle);
@@ -14649,7 +14660,7 @@ static const ph7_builtin_func aVmFunc[] = {
   { "print_r", vm_builtin_print_r },
   { "var_export", vm_builtin_var_export },
   /* Ouput control functions */
-  { "flush", vm_builtin_ob_flush },
+  { "flush", vm_builtin_ob_flush }, /* TODO: this is wrong. must flush() transport layer instead. implement in the way output_consumer is implemented, i.e. via callback. requires adding configuration verbs to VM */
   { "ob_clean", vm_builtin_ob_clean },
   { "ob_end_clean", vm_builtin_ob_end_clean },
   { "ob_end_flush", vm_builtin_ob_end_flush },

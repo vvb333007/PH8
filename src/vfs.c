@@ -2771,10 +2771,10 @@ PH7_PRIVATE void *PH7_StreamOpenHandle(ph7_vm *pVm, const ph7_io_stream *pStream
         /* Try to open the file */
         rc = pStream->xOpen((const char *)SyBlobData(&sWorker), iFlags, pResource, &pHandle);
         if (rc == PH7_OK) {
-          if (bPushInclude) {
+          //if (bPushInclude) { // BUG: adding a path two times, results in broken __FILE__ after any include/require
             /* Mark as included */
-            PH7_VmPushFilePath(pVm, (const char *)SyBlobData(&sWorker), SyBlobLength(&sWorker), FALSE, pNew);
-          }
+          //  PH7_VmPushFilePath(pVm, (const char *)SyBlobData(&sWorker), SyBlobLength(&sWorker), FALSE, pNew);
+          //}
           break;
         }
         /* Reset the working buffer */
@@ -2783,12 +2783,7 @@ PH7_PRIVATE void *PH7_StreamOpenHandle(ph7_vm *pVm, const ph7_io_stream *pStream
       }
       SyBlobRelease(&sWorker);
     }
-    if (rc == PH7_OK) {
-      if (bPushInclude) {
-        /* Mark as included */
-        PH7_VmPushFilePath(pVm, sFile.zString, sFile.nByte, FALSE, pNew);
-      }
-    }
+
   } else {
     /* Open the URI direcly */
     rc = pStream->xOpen(zFile, iFlags, pResource, &pHandle);
@@ -2797,6 +2792,12 @@ PH7_PRIVATE void *PH7_StreamOpenHandle(ph7_vm *pVm, const ph7_io_stream *pStream
     /* IO error */
     return 0;
   }
+
+  if (bPushInclude) {
+    /* Mark as included */
+    PH7_VmPushFilePath(pVm, sFile.zString, sFile.nByte, FALSE, pNew);
+  }
+
   /* Return the file handle */
   return pHandle;
 }

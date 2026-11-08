@@ -100,6 +100,11 @@ struct LangConstruct {
 #define EXPR_FLAG_LOAD_IDX_STORE 0x001  /* Set the iP2 flag when dealing with the LOAD_IDX instruction */
 #define EXPR_FLAG_RDONLY_LOAD 0x002     /* Read-only load, refer to the 'PH7_OP_LOAD' VM instruction for more information */
 #define EXPR_FLAG_COMMA_STATEMENT 0x004 /* Treat comma expression as a single statement (used by class attributes) */
+/* Set by the parent node on a literal to tell what kind of name it holds (no flag: constant) */
+#define EXPR_FLAG_NAME_CLASS 0x008  /* Class name [i.e: new Foo,Foo::bar,$a instanceof Foo] */
+#define EXPR_FLAG_NAME_FUNC 0x010   /* Function name [i.e: foo()] */
+#define EXPR_FLAG_NAME_MEMBER 0x020 /* Member name [i.e: $a->foo,Foo::foo]: never resolved */
+#define EXPR_FLAG_NAME_MASK (EXPR_FLAG_NAME_CLASS | EXPR_FLAG_NAME_FUNC | EXPR_FLAG_NAME_MEMBER)
 /* Forward declaration */
 static sxi32 PH7_CompileExpr(ph7_gen_state *pGen, sxi32 iFlags, sxi32 (*xTreeValidator)(ph7_gen_state *, ph7_expr_node *));
 static sxi32 PH7_CompileReturn(ph7_gen_state *pGen);
@@ -574,7 +579,7 @@ PH7_PRIVATE sxi32 PH7_CompileSimpleString(ph7_gen_state *pGen, sxi32 iCompileFla
   }
 #endif /* #if PH7_EMPTY_STRING_IS_NULL */
 
-  if (pStr->nByte >= MAX_LITERAL_SIZE) {
+  if (pStr->nByte >= MAX_LITERAL_SIZE) {   // BUG: in original PH7
 
     pStr->nByte = MAX_LITERAL_SIZE - 1;
     zEnd = &zIn[pStr->nByte];
@@ -831,7 +836,7 @@ static sxi32 GenStateCompileString(ph7_gen_state *pGen) {
       }
       zIn++;
     }
-    if (zIn > zCur) { // BUG: >= ?
+    if (zIn >= zCur) { // BUG:
       if (pObj == 0) {
         pObj = GenStateNewStrObj(&(*pGen), &iCons);
         if (pObj == 0) {
@@ -1651,6 +1656,311 @@ PH7_PRIVATE sxi32 PH7_CompileVariable(ph7_gen_state *pGen, sxi32 iCompileFlag) {
   return SXRET_OK;
 }
 /*
+ * Namespaces
+ *
+ * Namespaces are resolved by the compiler. The 'namespace' statement sets
+ * a prefix which is glued to the name of every declaration (function, class,
+ * interface, enum, constant) and the 'use' statement fills a table of synonyms.
+ * Every name found in the code is then expanded to a complete name
+ * [i.e: "A\B\Name"], so the rest of the engine never sees a namespace and
+ * the function, class and constant tables stay flat.
+ *
+ * A name is resolved like this:
+ *   \A\B          fully qualified: the leading separator is dropped.
+ *   namespace\B   relative to the current namespace.
+ *   A\B           A is replaced if it was imported, else the current
+ *                 namespace is put in front of the name.
+ *   Name          replaced if it was imported, else the current namespace
+ *                 is put in front of the name.
+ *
+ * TODO: Unlike PHP there is no fallback to the global namespace: must be written with the leading
+ * separator [i.e: \strlen(),\PHP_EOL,new \Exception].
+ * TODO: Check for built-in const/classes/functions and generate global call?
+ */
+
+/* Maximum length of a name including its namespace [i.e: A\B\Name] */
+#define GEN_NAME_MAX 256
+
+/* A name is assembled in an instance of the following structure */
+typedef struct GenNameBuf GenNameBuf;
+struct GenNameBuf {
+  char *zBuf;      /* Output buffer */
+  sxu32 nSize;     /* Size of the output buffer */
+  sxu32 nUsed;     /* Number of bytes used so far */
+  sxi32 bOverflow; /* TRUE when the name does not fit in the buffer */
+};
+
+/* Forward declaration */
+static int GenStateIsReservedConstant(SyString *pName);
+
+static void GenNameBufInit(GenNameBuf *pBuf, char *zBuf, sxu32 nSize) {
+  pBuf->zBuf = zBuf;
+  pBuf->nSize = nSize;
+  pBuf->nUsed = 0;
+  pBuf->bOverflow = FALSE;
+}
+
+static void GenNameBufAppend(GenNameBuf *pBuf, const char *zText, sxu32 nText) {
+  if (pBuf->nUsed + nText > pBuf->nSize) {
+    pBuf->bOverflow = TRUE;
+    return;
+  }
+  SyMemcpy(zText, &pBuf->zBuf[pBuf->nUsed], nText);
+  pBuf->nUsed += nText;
+}
+
+/* Append the text of a range of tokens [i.e: A \ B]. Namespace separators are appended as '\' */
+static void GenNameBufAppendTokens(GenNameBuf *pBuf, SyToken *pIn, SyToken *pEnd) {
+  while (pIn < pEnd) {
+    if (pIn->nType & PH7_TK_NSSEP) {
+      GenNameBufAppend(pBuf, "\\", 1);
+    } else {
+      GenNameBufAppend(pBuf, pIn->sData.zString, pIn->sData.nByte);
+    }
+    pIn++;
+  }
+}
+
+/* Append the current namespace followed by a separator. Nothing is appended in the global namespace */
+static void GenNameBufAppendNamespace(ph7_gen_state *pGen, GenNameBuf *pBuf) {
+  sxu32 nNamespace = SyBlobLength(&pGen->sNs.sName);
+  if (nNamespace > 0) {
+    GenNameBufAppend(pBuf, (const char *)SyBlobData(&pGen->sNs.sName), nNamespace);
+    GenNameBufAppend(pBuf, "\\", 1);
+  }
+}
+
+/*
+ * Return a pointer to the token which follows a name path.
+ * A path is an optional leading separator followed by names separated by
+ * separators [i.e: Name, \Name, A\B\Name]. The first token must be a name or a separator.
+ */
+static SyToken *GenStateScanName(SyToken *pIn, SyToken *pEnd) {
+  if (pIn < pEnd && (pIn->nType & PH7_TK_NSSEP)) {
+    pIn++; /* Leading separator */
+  }
+  if (pIn < pEnd && (pIn->nType & (PH7_TK_ID | PH7_TK_KEYWORD))) {
+    pIn++; /* First name of the path */
+  }
+  while (&pIn[1] < pEnd && (pIn->nType & PH7_TK_NSSEP) && (pIn[1].nType & (PH7_TK_ID | PH7_TK_KEYWORD))) {
+    pIn += 2; /* Separator followed by the next name */
+  }
+  return pIn;
+}
+
+/*
+ * Search the table of imported names. Class and function names are
+ * case-insensitive, constant names are case-sensitive.
+ */
+static ph7_ns_use *GenStateFindUse(ph7_gen_state *pGen, sxi32 iKind, const char *zName, sxu32 nName) {
+  ph7_ns_use *aUse;
+  sxu32 nUse;
+  sxu32 n;
+  nUse = SySetUsed(&pGen->sNs.aUse);
+  if (nUse == 0) {
+    return 0;
+  }
+  aUse = (ph7_ns_use *)SySetBasePtr(&pGen->sNs.aUse);
+  for (n = 0; n < nUse; ++n) {
+    if (aUse[n].iKind != iKind || aUse[n].sAlias.nByte != nName) {
+      continue;
+    }
+    if (iKind == GEN_NAME_CONST) {
+      if (SyMemcmp(aUse[n].sAlias.zString, zName, nName) == 0) {
+        return &aUse[n];
+      }
+    } else if (SyStrnicmp(aUse[n].sAlias.zString, zName, nName) == 0) {
+      return &aUse[n];
+    }
+  }
+  return 0;
+}
+
+/* Forget all the imported names */
+static void GenStateClearUse(ph7_gen_state *pGen) {
+  ph7_ns_use *aUse;
+  sxu32 nUse;
+  sxu32 n;
+  nUse = SySetUsed(&pGen->sNs.aUse);
+  if (nUse > 0) {
+    aUse = (ph7_ns_use *)SySetBasePtr(&pGen->sNs.aUse);
+    for (n = 0; n < nUse; ++n) {
+      /* The alias and the target share one chunk which starts with the alias */
+      SyMemBackendFree(&pGen->pVm->sAllocator, (void *)aUse[n].sAlias.zString);
+    }
+  }
+  SySetReset(&pGen->sNs.aUse);
+}
+
+/* Back to the global namespace without imported names */
+static void GenStateResetNamespace(ph7_gen_state *pGen) {
+  GenStateClearUse(pGen);
+  SyBlobReset(&pGen->sNs.sName);
+}
+
+/*
+ * Start a new file: the namespace state of the file being compiled is saved
+ * and replaced by an empty one [global namespace, nothing imported].
+ */
+static void GenStateEnterNamespaceScope(ph7_gen_state *pGen, ph7_ns_state *pSaved) {
+  *pSaved = pGen->sNs;
+  SyBlobInit(&pGen->sNs.sName, &pGen->pVm->sAllocator);
+  SySetInit(&pGen->sNs.aUse, &pGen->pVm->sAllocator, sizeof(ph7_ns_use));
+}
+
+/* The file is compiled: restore the namespace state saved by GenStateEnterNamespaceScope() */
+static void GenStateLeaveNamespaceScope(ph7_gen_state *pGen, ph7_ns_state *pSaved) {
+  GenStateClearUse(pGen);
+  SyBlobRelease(&pGen->sNs.sName);
+  SySetRelease(&pGen->sNs.aUse);
+  pGen->sNs = *pSaved;
+}
+
+/* Set the current namespace from the tokens of its name [i.e: A \ B]. Imported names are forgotten */
+static sxi32 GenStateSetNamespace(ph7_gen_state *pGen, SyToken *pFirst, SyToken *pEnd) {
+  SyToken *pCur;
+  sxi32 rc;
+  GenStateResetNamespace(pGen);
+  for (pCur = pFirst; pCur < pEnd; ++pCur) {
+    if (pCur->nType & PH7_TK_NSSEP) {
+      rc = SyBlobAppend(&pGen->sNs.sName, "\\", 1);
+    } else {
+      rc = SyBlobAppend(&pGen->sNs.sName, pCur->sData.zString, pCur->sData.nByte);
+    }
+    if (rc != SXRET_OK) {
+      PH7_GenCompileOOM(pGen);
+      return SXERR_ABORT;
+    }
+  }
+  return SXRET_OK;
+}
+
+/*
+ * Record an imported name [i.e: 'use A\B as C;'].
+ * Return SXRET_OK or SXERR_ABORT.
+ */
+static sxi32 GenStateInstallUse(ph7_gen_state *pGen, sxi32 iKind, const SyString *pAlias, const SyString *pTarget, sxu32 nLine) {
+  ph7_ns_use sUse;
+  char *zChunk;
+  sxi32 rc;
+  if (GenStateFindUse(pGen, iKind, pAlias->zString, pAlias->nByte) != 0) {
+    rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "use statement: the name '%z' is already in use", pAlias);
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
+  }
+  zChunk = (char *)SyMemBackendAlloc(&pGen->pVm->sAllocator, pAlias->nByte + pTarget->nByte);
+  if (zChunk == 0) {
+    PH7_GenCompileOOM(pGen);
+    return SXERR_ABORT;
+  }
+  SyMemcpy(pAlias->zString, zChunk, pAlias->nByte);
+  SyMemcpy(pTarget->zString, &zChunk[pAlias->nByte], pTarget->nByte);
+  sUse.iKind = iKind;
+  SyStringInitFromBuf(&sUse.sAlias, zChunk, pAlias->nByte);
+  SyStringInitFromBuf(&sUse.sTarget, &zChunk[pAlias->nByte], pTarget->nByte);
+  if (SySetPut(&pGen->sNs.aUse, (const void *)&sUse) != SXRET_OK) {
+    SyMemBackendFree(&pGen->pVm->sAllocator, zChunk);
+    PH7_GenCompileOOM(pGen);
+    return SXERR_ABORT;
+  }
+  return SXRET_OK;
+}
+
+/*
+ * A name does not fit in the name buffer: report it.
+ * Return SXERR_ABORT if the compilation must stop, SXRET_OK otherwise.
+ */
+static sxi32 GenStateNameTooLong(ph7_gen_state *pGen, sxu32 nLine) {
+  sxi32 rc;
+  rc = PH7_GenCompileError(pGen, E_ERROR, nLine, "Namespace: the name is too long");
+  return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
+}
+
+/*
+ * Resolve the name path made of the tokens [pFirst,pLast) as described at the
+ * top of this section. iKind tells if the name is a class, a function or a constant:
+ * it selects the table of imported names used for a name without separator.
+ * The complete name is built in zBuf, which must be nBufSize bytes long.
+ * Return SXRET_OK or SXERR_ABORT.
+ */
+static sxi32 GenStateResolveName(
+  ph7_gen_state *pGen,
+  sxi32 iKind,
+  SyToken *pFirst,
+  SyToken *pLast,
+  char *zBuf,
+  sxu32 nBufSize,
+  SyString *pFullName
+) {
+  GenNameBuf sOut;
+  SyToken *pRest; /* First token which is appended as it is */
+  ph7_ns_use *pUse;
+  sxi32 bQualified;
+  sxi32 iUseKind;
+  GenNameBufInit(&sOut, zBuf, nBufSize);
+  pRest = pFirst;
+  if (pFirst->nType & PH7_TK_NSSEP) {
+    /* \A\B: fully qualified name, drop the leading separator */
+    pRest = &pFirst[1];
+  } else if ((pFirst->nType & PH7_TK_KEYWORD) && SX_PTR_TO_INT(pFirst->pUserData) == PH7_TKWRD_NAMESPACE
+             && &pFirst[1] < pLast && (pFirst[1].nType & PH7_TK_NSSEP)) {
+    /* namespace\B: relative to the current namespace */
+    GenNameBufAppendNamespace(pGen, &sOut);
+    pRest = &pFirst[2];
+  } else {
+    /* A\B or Name: a name with a separator can only start with an imported class or namespace */
+    bQualified = (&pFirst[1] < pLast && (pFirst[1].nType & PH7_TK_NSSEP)) ? TRUE : FALSE;
+    iUseKind = bQualified ? GEN_NAME_CLASS : iKind;
+    pUse = GenStateFindUse(pGen, iUseKind, pFirst->sData.zString, pFirst->sData.nByte);
+    if (pUse != 0) {
+      GenNameBufAppend(&sOut, pUse->sTarget.zString, pUse->sTarget.nByte);
+      pRest = &pFirst[1];
+    } else {
+      GenNameBufAppendNamespace(pGen, &sOut);
+    }
+  }
+  GenNameBufAppendTokens(&sOut, pRest, pLast);
+  if (sOut.bOverflow) {
+    /* Keep going with the last name of the path, the error is reported */
+    *pFullName = pLast[-1].sData;
+    return GenStateNameTooLong(pGen, pFirst->nLine);
+  }
+  SyStringInitFromBuf(pFullName, zBuf, sOut.nUsed);
+  return SXRET_OK;
+}
+
+/*
+ * Put the current namespace in front of the name of a declaration
+ * [i.e: function, class, interface, enum or constant name].
+ * Return SXRET_OK or SXERR_ABORT.
+ */
+static sxi32 GenStateMangleDeclName(ph7_gen_state *pGen, const SyString *pName, char *zBuf, sxu32 nBufSize, SyString *pFullName) {
+  GenNameBuf sOut;
+  if (SyBlobLength(&pGen->sNs.sName) == 0) {
+    /* Global namespace: nothing to do */
+    *pFullName = *pName;
+    return SXRET_OK;
+  }
+  GenNameBufInit(&sOut, zBuf, nBufSize);
+  GenNameBufAppendNamespace(pGen, &sOut);
+  GenNameBufAppend(&sOut, pName->zString, pName->nByte);
+  if (sOut.bOverflow) {
+    *pFullName = *pName;
+    return GenStateNameTooLong(pGen, pGen->pIn < pGen->pEnd ? pGen->pIn->nLine : 0);
+  }
+  SyStringInitFromBuf(pFullName, zBuf, sOut.nUsed);
+  return SXRET_OK;
+}
+
+/* Return TRUE for the magic constants [i.e: __LINE__,__FILE__]: they are never put in a namespace */
+static int GenStateIsMagicConstant(const SyString *pName) {
+  if (pName->nByte > 4 && pName->zString[0] == '_' && pName->zString[1] == '_'
+      && pName->zString[pName->nByte - 1] == '_' && pName->zString[pName->nByte - 2] == '_') {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/*
  * Load a literal.
  */
 static sxi32 GenStateLoadLiteral(ph7_gen_state *pGen) {
@@ -1685,6 +1995,22 @@ static sxi32 GenStateLoadLiteral(ph7_gen_state *pGen) {
     }
     PH7_MemObjInitFromInt(pGen->pVm, pObj, pToken->nLine);
     /* Emit the load constant instruction */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, nIdx, 0, 0, pGen);
+    return SXRET_OK;
+  } else if (pStr->nByte == sizeof("__NAMESPACE__") - 1 && SyMemcmp(pStr->zString, "__NAMESPACE__", sizeof("__NAMESPACE__") - 1) == 0) {
+    SyString sNamespace;
+    /* __NAMESPACE__ is known at compile time */
+    pObj = PH7_ReserveConstObj(pGen->pVm, &nIdx);
+    if (pObj == 0) {
+      PH7_GenCompileOOM(pGen);
+      return SXERR_ABORT;
+    }
+    if (SyBlobLength(&pGen->sNs.sName) > 0) {
+      SyStringInitFromBuf(&sNamespace, SyBlobData(&pGen->sNs.sName), SyBlobLength(&pGen->sNs.sName));
+    } else {
+      SyStringInitFromBuf(&sNamespace, "", 0);
+    }
+    PH7_MemObjInitFromString(pGen->pVm, pObj, &sNamespace);
     PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, nIdx, 0, 0, pGen);
     return SXRET_OK;
   } else if ((pStr->nByte == sizeof("__FUNCTION__") - 1 && SyMemcmp(pStr->zString, "__FUNCTION__", sizeof("__FUNCTION__") - 1) == 0) || (pStr->nByte == sizeof("__METHOD__") - 1 && SyMemcmp(pStr->zString, "__METHOD__", sizeof("__METHOD__") - 1) == 0)) {
@@ -1738,23 +2064,64 @@ static sxi32 GenStateLoadLiteral(ph7_gen_state *pGen) {
   return SXRET_OK;
 }
 /*
- * Resolve a namespace path or simply load a literal:
+ * Return TRUE when a literal is compiled as it is: it is not resolved.
+ * pLast is the last token of the literal.
  */
-static sxi32 GenStateResolveNamespaceLiteral(ph7_gen_state *pGen) {
-  int emit = 0;
-  sxi32 rc;
-  while (pGen->pIn < &pGen->pEnd[-1]) {
-    /* Emit a warning */
-    if (!emit) {
-      PH7_GenCompileError(&(*pGen), E_WARNING, pGen->pIn->nLine,
-                          "Namespace support is disabled in the current release of the PH7(%s) engine",
-                          ph7_lib_version());
-      emit = 1;
-    }
-    pGen->pIn++; /* Ignore the token */
+static int GenStateIsLiteralUnchanged(ph7_gen_state *pGen, SyToken *pFirst, SyToken *pLast, sxi32 iCompileFlag) {
+  if (iCompileFlag & EXPR_FLAG_NAME_MEMBER) {
+    /* Member name [i.e: $a->name,Foo::name] */
+    return TRUE;
   }
-  /* Load literal */
+  if (pFirst == pLast) {
+    if (pFirst->nType & PH7_TK_KEYWORD) {
+      /* self, parent, static... */
+      return TRUE;
+    }
+    if (GenStateIsReservedConstant(&pFirst->sData) || GenStateIsMagicConstant(&pFirst->sData)) {
+      /* null, true, false, __LINE__... */
+      return TRUE;
+    }
+    if (SyBlobLength(&pGen->sNs.sName) == 0 && SySetUsed(&pGen->sNs.aUse) == 0) {
+      /* Global namespace and nothing imported: a plain name is already complete */
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+/*
+ * Resolve a namespace path or simply load a literal.
+ * The parent of the literal node tells in iCompileFlag if the name is a class,
+ * a function, a member or, by default, a constant.
+ */
+static sxi32 GenStateResolveNamespaceLiteral(ph7_gen_state *pGen, sxi32 iCompileFlag) {
+  SyToken *pFirst = pGen->pIn;
+  SyToken *pLast = &pGen->pEnd[-1]; /* Last token of the literal */
+  char zFullName[GEN_NAME_MAX];
+  SyString sFullName;
+  SyToken sResolved;
+  sxi32 iKind;
+  sxi32 rc;
+  if (GenStateIsLiteralUnchanged(pGen, pFirst, pLast, iCompileFlag)) {
+    pGen->pIn = pLast;
+    return GenStateLoadLiteral(&(*pGen));
+  }
+  if (iCompileFlag & EXPR_FLAG_NAME_FUNC) {
+    iKind = GEN_NAME_FUNC;
+  } else if (iCompileFlag & EXPR_FLAG_NAME_CLASS) {
+    iKind = GEN_NAME_CLASS;
+  } else {
+    iKind = GEN_NAME_CONST;
+  }
+  rc = GenStateResolveName(pGen, iKind, pFirst, &pLast[1], zFullName, sizeof(zFullName), &sFullName);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  /* Load the complete name as a literal */
+  sResolved = *pLast;
+  sResolved.sData = sFullName;
+  pGen->pIn = &sResolved;
   rc = GenStateLoadLiteral(&(*pGen));
+  pGen->pIn = pLast;
   return rc;
 }
 /*
@@ -1762,7 +2129,7 @@ static sxi32 GenStateResolveNamespaceLiteral(ph7_gen_state *pGen) {
  */
 PH7_PRIVATE sxi32 PH7_CompileLiteral(ph7_gen_state *pGen, sxi32 iCompileFlag) {
   sxi32 rc;
-  rc = GenStateResolveNamespaceLiteral(&(*pGen));
+  rc = GenStateResolveNamespaceLiteral(&(*pGen), iCompileFlag);
   if (rc != SXRET_OK) {
     SXUNUSED(iCompileFlag); /* cc warning */
     return rc;
@@ -1825,6 +2192,8 @@ static int GenStateIsReservedConstant(SyString *pName) {
  *    Refer to the official documentation for more information on this feature.
  */
 static sxi32 PH7_CompileConstant(ph7_gen_state *pGen) {
+  char zFullName[GEN_NAME_MAX];
+  SyString sFullName;
   SySet *pConsCode, *pInstrContainer;
   sxu32 nLine = pGen->pIn->nLine;
   SyString *pName;
@@ -1851,6 +2220,12 @@ static sxi32 PH7_CompileConstant(ph7_gen_state *pGen) {
     }
     goto Synchronize;
   }
+  /* Constants are declared inside the current namespace */
+  rc = GenStateMangleDeclName(pGen, pName, zFullName, sizeof(zFullName), &sFullName);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  pName = &sFullName;
   pGen->pIn++;
   if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_EQUAL /* '=' */) == 0) {
     /* Invalid statement*/
@@ -3568,42 +3943,76 @@ static sxi32 PH7_CompileVar(ph7_gen_state *pGen) {
  *       $d = namespace\MYCONST;
  *       $d = __NAMESPACE__ . '\MYCONST';
  *       echo constant($d);
- * NOTE
- *  AS OF THIS VERSION NAMESPACE SUPPORT IS DISABLED. IF YOU NEED A WORKING VERSION THAT IMPLEMENT 
- *  NAMESPACE,PLEASE CONTACT SYMISC SYSTEMS VIA contact@symisc.net.
  */
 static sxi32 PH7_CompileNamespace(ph7_gen_state *pGen) {
   sxu32 nLine = pGen->pIn->nLine;
+  SyToken *pFirst, *pPathEnd, *pBodyEnd, *pSaveEnd;
   sxi32 rc;
+  if (&pGen->pIn[1] < pGen->pEnd && (pGen->pIn[1].nType & PH7_TK_NSSEP)) {
+    /* namespace\name is a name relative to the current namespace, not a declaration */
+    rc = PH7_CompileExpr(&(*pGen), 0, 0);
+    if (rc != SXERR_EMPTY) {
+      /* Pop l-value */
+      PH7_VmEmitInstr(pGen->pVm, PH7_OP_POP, 1, 0, 0, 0, pGen);
+    }
+    return rc;
+  }
   pGen->pIn++; /* Jump the 'namespace' keyword */
-  if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (PH7_TK_NSSEP | PH7_TK_ID | PH7_TK_KEYWORD | PH7_TK_SEMI /*';'*/ | PH7_TK_OCB /*'{'*/)) == 0) {
-    SyToken *pTok = pGen->pIn;
+  pFirst = pGen->pIn;
+  /* Delimit the name. It is empty for the global namespace [i.e: namespace { ... }] */
+  pPathEnd = pFirst;
+  while (pPathEnd < pGen->pEnd && (pPathEnd->nType & (PH7_TK_NSSEP | PH7_TK_ID | PH7_TK_KEYWORD))) {
+    pPathEnd++;
+  }
+  if (pPathEnd >= pGen->pEnd || (pPathEnd->nType & (PH7_TK_SEMI | PH7_TK_OCB)) == 0
+      || (pPathEnd == pFirst && (pPathEnd->nType & PH7_TK_SEMI))
+      || (pFirst < pPathEnd && ((pFirst->nType & PH7_TK_NSSEP) || (pPathEnd[-1].nType & PH7_TK_NSSEP)))) {
+    SyToken *pTok = pPathEnd;
     if (pTok >= pGen->pEnd) {
       pTok--;
     }
     /* Unexpected token */
-    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "Namespace: Unexpected token '%z'", &pTok->sData);
-    if (rc == SXERR_ABORT) {
-      return SXERR_ABORT;
-    }
-  }
-  /* Ignore the path */
-  while (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_NSSEP /*'\'*/ | PH7_TK_ID | PH7_TK_KEYWORD))) {
-    pGen->pIn++;
-  }
-  if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_SEMI /*';'*/ | PH7_TK_OCB /*'{'*/)) == 0) {
-    /* Unexpected token */
     rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine,
-                             "Namespace: Unexpected token '%z',expecting ';' or '{'", &pGen->pIn->sData);
+                             "Namespace: Unexpected token '%z', expecting a namespace name followed by ';' or '{'", &pTok->sData);
     if (rc == SXERR_ABORT) {
       return SXERR_ABORT;
     }
+    /* Synchronize with the next ';' or '{' */
+    pGen->pIn = pPathEnd;
+    while (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_SEMI | PH7_TK_OCB)) == 0) {
+      pGen->pIn++;
+    }
+    return SXRET_OK;
   }
-  /* Emit a warning */
-  /* TODO: create a namespace block */
-  PH7_GenCompileError(&(*pGen), E_WARNING, nLine,
-                      "Namespace support is disabled in the current release of the PH7(%s) engine", ph7_lib_version());
-  return SXRET_OK;
+  /* Set the current namespace. Names imported by the previous namespace are forgotten */
+  rc = GenStateSetNamespace(&(*pGen), pFirst, pPathEnd);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  if (pPathEnd->nType & PH7_TK_SEMI) {
+    /* namespace A\B; The namespace lasts until the next namespace statement or the end of the file */
+    pGen->pIn = pPathEnd;
+    return SXRET_OK;
+  }
+  /* namespace A\B { ... } */
+  pGen->pIn = &pPathEnd[1]; /* Jump the leading curly brace */
+  pBodyEnd = 0;             /* cc warning */
+  PH7_DelimitNestedTokens(pGen->pIn, pGen->pEnd, PH7_TK_OCB /*'{'*/, PH7_TK_CCB /*'}'*/, &pBodyEnd);
+  if (pBodyEnd >= pGen->pEnd) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "Namespace: missing closing braces '}'");
+    GenStateResetNamespace(&(*pGen));
+    pGen->pIn = pGen->pEnd;
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
+  }
+  /* Compile the body with the new end of the token stream */
+  pSaveEnd = pGen->pEnd;
+  pGen->pEnd = pBodyEnd;
+  rc = GenStateCompileChunk(&(*pGen), 0);
+  pGen->pEnd = pSaveEnd;
+  pGen->pIn = &pBodyEnd[1]; /* Jump the closing curly brace */
+  /* Back to the global namespace */
+  GenStateResetNamespace(&(*pGen));
+  return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
 }
 /*
  * Compile the 'use' statement
@@ -3612,48 +4021,154 @@ static sxi32 PH7_CompileNamespace(ph7_gen_state *pGen) {
  *  is an important feature of namespaces. This is similar to the ability of unix-based
  *  filesystems to create symbolic links to a file or to a directory.
  *  PHP namespaces support three kinds of aliasing or importing: aliasing a class name
- *  aliasing an interface name, and aliasing a namespace name. Note that importing
- *  a function or constant is not supported.
+ *  aliasing an interface name, and aliasing a namespace name.
  *  In PHP, aliasing is accomplished with the 'use' operator.
- * NOTE
- *  AS OF THIS VERSION NAMESPACE SUPPORT IS DISABLED. IF YOU NEED A WORKING VERSION THAT IMPLEMENT 
- *  NAMESPACE,PLEASE CONTACT SYMISC SYSTEMS VIA contact@symisc.net.
+ * Supported syntax:
+ *   use A\B;              use A\B as C;          use A\B, C\D;
+ *   use function A\f;     use const A\C;
+ *   use A\{B, C as D};    use A\{function f, const C};
+ * The names are recorded in the table of synonyms of the current namespace.
  */
-static sxi32 PH7_CompileUse(ph7_gen_state *pGen) {
-  sxu32 nLine = pGen->pIn->nLine;
-  sxi32 rc;
-  pGen->pIn++; /* Jump the 'use' keyword */
-  /* Assemeble one or more real namespace path */
-  for (;;) {
-    if (pGen->pIn >= pGen->pEnd) {
-      break;
-    }
-    /* Ignore the path */
-    while (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_NSSEP | PH7_TK_ID))) {
-      pGen->pIn++;
-    }
-    if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_COMMA /*','*/)) {
-      pGen->pIn++; /* Jump the comma and process the next path */
-    } else {
-      break;
-    }
+
+/* Jump the optional 'function' or 'const' keyword which follows 'use' */
+static void GenStateJumpUseKind(ph7_gen_state *pGen, sxi32 *piKind) {
+  sxi32 iKeyword;
+  if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_KEYWORD) == 0) {
+    return;
   }
+  iKeyword = SX_PTR_TO_INT(pGen->pIn->pUserData);
+  if (iKeyword == PH7_TKWRD_FUNCTION) {
+    *piKind = GEN_NAME_FUNC;
+    pGen->pIn++;
+  } else if (iKeyword == PH7_TKWRD_CONST) {
+    *piKind = GEN_NAME_CONST;
+    pGen->pIn++;
+  }
+}
+/*
+ * Compile one imported name: a path with an optional alias [i.e: A\B, A\B as C].
+ * When the path belongs to a group [i.e: use A\{B,C}] zPrefix holds the common part [i.e: A].
+ * Return SXRET_OK, SXERR_SYNTAX when the import is malformed (the error is already
+ * reported) or SXERR_ABORT.
+ */
+static sxi32 GenStateCompileUseItem(ph7_gen_state *pGen, sxi32 iKind, const char *zPrefix, sxu32 nPrefix) {
+  sxu32 nLine = pGen->pIn < pGen->pEnd ? pGen->pIn->nLine : 0;
+  char zTarget[GEN_NAME_MAX];
+  GenNameBuf sTarget;
+  SyString sTargetName, sAlias;
+  SyToken *pFirst, *pPathEnd;
+  sxi32 rc;
+  pFirst = pGen->pIn;
+  if (pFirst < pGen->pEnd && (pFirst->nType & PH7_TK_NSSEP)) {
+    pFirst++; /* 'use \A\B' is the same as 'use A\B' */
+  }
+  if (pFirst >= pGen->pEnd || (pFirst->nType & (PH7_TK_ID | PH7_TK_KEYWORD)) == 0) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "use statement: a name is expected");
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXERR_SYNTAX;
+  }
+  pPathEnd = GenStateScanName(pFirst, pGen->pEnd);
+  /* The target is the group prefix followed by the path */
+  GenNameBufInit(&sTarget, zTarget, sizeof(zTarget));
+  if (nPrefix > 0) {
+    GenNameBufAppend(&sTarget, zPrefix, nPrefix);
+    GenNameBufAppend(&sTarget, "\\", 1);
+  }
+  GenNameBufAppendTokens(&sTarget, pFirst, pPathEnd);
+  if (sTarget.bOverflow) {
+    rc = GenStateNameTooLong(&(*pGen), nLine);
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXERR_SYNTAX;
+  }
+  SyStringInitFromBuf(&sTargetName, zTarget, sTarget.nUsed);
+  /* Unless an alias is given, the alias is the last name of the path */
+  sAlias = pPathEnd[-1].sData;
+  pGen->pIn = pPathEnd;
   if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_KEYWORD) && PH7_TKWRD_AS == SX_PTR_TO_INT(pGen->pIn->pUserData)) {
     pGen->pIn++; /* Jump the 'as' keyword */
-    /* Compile one or more aliasses */
-    for (;;) {
-      if (pGen->pIn >= pGen->pEnd) {
-        break;
-      }
-      while (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_NSSEP | PH7_TK_ID))) {
-        pGen->pIn++;
-      }
-      if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_COMMA /*','*/)) {
-        pGen->pIn++; /* Jump the comma and process the next alias */
-      } else {
-        break;
-      }
+    if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_KEYWORD)) == 0) {
+      rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "use statement: an alias is expected after 'as'");
+      return rc == SXERR_ABORT ? SXERR_ABORT : SXERR_SYNTAX;
     }
+    sAlias = pGen->pIn->sData;
+    pGen->pIn++; /* Jump the alias */
+  }
+  return GenStateInstallUse(&(*pGen), iKind, &sAlias, &sTargetName, nLine);
+}
+/*
+ * Compile a group of imported names: A\{B, C as D}.
+ * pPrefixFirst and pPrefixEnd delimit the common part of the names [i.e: A].
+ * The cursor is on the first token after the common part, which is the '\' followed by '{'.
+ */
+static sxi32 GenStateCompileUseGroup(ph7_gen_state *pGen, sxi32 iKind, SyToken *pPrefixFirst, SyToken *pPrefixEnd) {
+  sxu32 nLine = pPrefixEnd->nLine;
+  char zPrefix[GEN_NAME_MAX];
+  GenNameBuf sPrefix;
+  sxi32 iItemKind;
+  sxi32 rc;
+  GenNameBufInit(&sPrefix, zPrefix, sizeof(zPrefix));
+  GenNameBufAppendTokens(&sPrefix, pPrefixFirst, pPrefixEnd);
+  if (sPrefix.bOverflow) {
+    rc = GenStateNameTooLong(&(*pGen), nLine);
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXERR_SYNTAX;
+  }
+  pGen->pIn = &pPrefixEnd[2]; /* Jump the '\' and the '{' */
+  for (;;) {
+    if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_CCB)) {
+      break; /* Empty group or trailing comma */
+    }
+    iItemKind = iKind;
+    if (iKind == GEN_NAME_CLASS) {
+      /* use A\{function f, const C} */
+      GenStateJumpUseKind(&(*pGen), &iItemKind);
+    }
+    rc = GenStateCompileUseItem(&(*pGen), iItemKind, zPrefix, sPrefix.nUsed);
+    if (rc != SXRET_OK) {
+      return rc;
+    }
+    if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_COMMA /*','*/)) {
+      pGen->pIn++; /* Jump the comma and process the next name */
+      continue;
+    }
+    break;
+  }
+  if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_CCB) == 0) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "use statement: missing closing braces '}'");
+    return rc == SXERR_ABORT ? SXERR_ABORT : SXERR_SYNTAX;
+  }
+  pGen->pIn++; /* Jump the closing curly brace */
+  return SXRET_OK;
+}
+static sxi32 PH7_CompileUse(ph7_gen_state *pGen) {
+  sxu32 nLine = pGen->pIn->nLine;
+  SyToken *pFirst, *pPathEnd;
+  sxi32 iKind;
+  sxi32 rc;
+  pGen->pIn++; /* Jump the 'use' keyword */
+  iKind = GEN_NAME_CLASS;
+  GenStateJumpUseKind(&(*pGen), &iKind);
+  /* One or more names separated by commas */
+  for (;;) {
+    pFirst = pGen->pIn;
+    if (pFirst < pGen->pEnd && (pFirst->nType & PH7_TK_NSSEP)) {
+      pFirst++;
+    }
+    pPathEnd = GenStateScanName(pFirst, pGen->pEnd);
+    if (&pPathEnd[1] < pGen->pEnd && (pPathEnd->nType & PH7_TK_NSSEP) && (pPathEnd[1].nType & PH7_TK_OCB)) {
+      /* use A\{B,C} */
+      rc = GenStateCompileUseGroup(&(*pGen), iKind, pFirst, pPathEnd);
+    } else {
+      rc = GenStateCompileUseItem(&(*pGen), iKind, 0, 0);
+    }
+    if (rc == SXERR_ABORT) {
+      return SXERR_ABORT;
+    }
+    if (rc != SXRET_OK) {
+      goto Synchronize;
+    }
+    if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_COMMA /*','*/)) {
+      pGen->pIn++; /* Jump the comma and process the next name */
+      continue;
+    }
+    break;
   }
   if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_SEMI /*';'*/) == 0) {
     /* Unexpected token */
@@ -3662,11 +4177,14 @@ static sxi32 PH7_CompileUse(ph7_gen_state *pGen) {
     if (rc == SXERR_ABORT) {
       return SXERR_ABORT;
     }
+    goto Synchronize;
   }
-  /* Emit a notice */
-  PH7_GenCompileError(&(*pGen), E_NOTICE, nLine,
-                      "Namespace support is disabled in the current release of the PH7(%s) engine",
-                      ph7_lib_version());
+  return SXRET_OK;
+Synchronize:
+  /* Synchronize with the next semi-colon and avoid compiling this erroneous statement */
+  while (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_SEMI) == 0) {
+    pGen->pIn++;
+  }
   return SXRET_OK;
 }
 /*
@@ -3862,6 +4380,7 @@ static sxi32 GenStateCollectFuncArgs(ph7_vm_func *pFunc, ph7_gen_state *pGen, Sy
   char *zDup;           /* Copy of argument name */
   sxi32 rc;
   sxu32 nKey;
+  SyToken *pTypeEnd; /* End of the type hint */
 
   pIn = pGen->pIn;
   //pCur = 0;
@@ -3895,7 +4414,8 @@ static sxi32 GenStateCollectFuncArgs(ph7_vm_func *pFunc, ph7_gen_state *pGen, Sy
       sArg.iFlags |= VM_FUNC_ARG_NULLABLE;
     }
 
-    if (pIn->nType & (PH7_TK_ID | PH7_TK_KEYWORD)) {
+    pTypeEnd = &pIn[1];
+    if (pIn->nType & (PH7_TK_ID | PH7_TK_KEYWORD | PH7_TK_NSSEP)) {
 
       /* Built in types: these are keywords */
       if (pIn->nType & PH7_TK_KEYWORD) {
@@ -3926,7 +4446,16 @@ choose_memobj:
                               &pIn->sData);
         }
       } else {
-        SyString *pName = &pIn->sData; /* Class/Enum name */
+        char zFullName[GEN_NAME_MAX];
+        SyString sFullName;
+        SyString *pName; /* Class/Enum name */
+        /* Resolve the name path [i.e: Name, \Name, A\B\Name] */
+        pTypeEnd = GenStateScanName(pIn, pEnd);
+        rc = GenStateResolveName(pGen, GEN_NAME_CLASS, pIn, pTypeEnd, zFullName, sizeof(zFullName), &sFullName);
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+        pName = &sFullName;
 
         /* function name (Something $...)
          * 'Something' is a class or an enum id. Check if this is an enum and if it is - extract its type.
@@ -3973,7 +4502,7 @@ choose_memobj:
           SyStringInitFromBuf(&sArg.sClass, zDup, pName->nByte);
         }
       }
-      pIn++;
+      pIn = pTypeEnd; /* Jump the type */
     }
 
 
@@ -4399,7 +4928,13 @@ static sxi32 GenStateCompileFunc(
     /* 7.x route for function and closures/lambdas, skip ':' */
 again:
     pGen->pIn++;
-    if (pGen->pIn < pGen->pEnd) {
+    if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP))) {
+      /* A class name [i.e: Name, \Name, A\B\Name] as the return type.
+       * The class is not checked yet, the type is treated as ':object'.
+       */
+      pGen->pIn = GenStateScanName(pGen->pIn, pGen->pEnd);
+      pFunc->iFlags |= (VM_FUNC_RET_TYPE | (unsigned int)PH7_TKWRD_OBJECT | (VM_FUNC_RET_NULLABLE * bNullable));
+    } else if (pGen->pIn < pGen->pEnd) {
       if (pGen->pIn->nType != PH7_TK_KEYWORD) {
 
         if (pGen->pIn->sData.zString[0] == '?') {
@@ -4487,6 +5022,8 @@ OutOfMem:
  *  Refer to the block-comment above for more information.
  */
 static sxi32 PH7_CompileFunction(ph7_gen_state *pGen) {
+  char zFullName[GEN_NAME_MAX];
+  SyString sFullName;
   SyString *pName;
   sxi32 iFlags;
   sxu32 nLine;
@@ -4516,6 +5053,12 @@ static sxi32 PH7_CompileFunction(ph7_gen_state *pGen) {
   }
   pName = &pGen->pIn->sData;
   nLine = pGen->pIn->nLine;
+  /* Functions are declared inside the current namespace */
+  rc = GenStateMangleDeclName(pGen, pName, zFullName, sizeof(zFullName), &sFullName);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  pName = &sFullName;
   /* Jump the function name */
   pGen->pIn++;
 
@@ -5020,7 +5563,13 @@ static sxi32 GenStateCompileClassMethod(
     /* 7.x route for class method, skip ':', read the type */
 again:
     pGen->pIn++;
-    if (pGen->pIn < pGen->pEnd) {
+    if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP))) {
+      /* A class name [i.e: Name, \Name, A\B\Name] as the return type.
+       * The class is not checked yet, the type is treated as ':object'.
+       */
+      pGen->pIn = GenStateScanName(pGen->pIn, pGen->pEnd);
+      pMeth->sFunc.iFlags |= (VM_FUNC_RET_TYPE | (unsigned int)PH7_TKWRD_OBJECT | (VM_FUNC_RET_NULLABLE * bNullable));
+    } else if (pGen->pIn < pGen->pEnd) {
       if (pGen->pIn->nType != PH7_TK_KEYWORD) {
 
         if (pGen->pIn->sData.zString[0] == '?') {
@@ -5108,6 +5657,8 @@ Synchronize:
  */
 static sxi32 PH7_CompileClassInterface(ph7_gen_state *pGen) {
   sxu32 nLine = pGen->pIn->nLine;
+  char zFullName[GEN_NAME_MAX];
+  SyString sFullName;
   ph7_class *pClass, *pBase;
   SyToken *pEnd, *pTmp;
   SyString *pName;
@@ -5115,8 +5666,13 @@ static sxi32 PH7_CompileClassInterface(ph7_gen_state *pGen) {
   sxi32 rc;
   /* Jump the 'interface' keyword */
   pGen->pIn++;
-  /* Extract interface name */
+  /* Extract interface name: an interface is declared inside the current namespace */
   pName = &pGen->pIn->sData;
+  rc = GenStateMangleDeclName(pGen, pName, zFullName, sizeof(zFullName), &sFullName);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  pName = &sFullName;
   /* Advance the stream cursor */
   pGen->pIn++;
   /* Obtain a raw class */
@@ -5134,9 +5690,12 @@ static sxi32 PH7_CompileClassInterface(ph7_gen_state *pGen) {
     nKwrd = SX_PTR_TO_INT(pGen->pIn->pUserData);
     if (nKwrd == PH7_TKWRD_EXTENDS /* interface b extends a */) {
       SyString *pBaseName;
+      SyToken *pPathEnd;
+      char zBaseName[GEN_NAME_MAX];
+      SyString sBaseName;
       /* Extract base interface */
       pGen->pIn++;
-      if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_ID) == 0) {
+      if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP)) == 0) {
         /* Syntax error */
         rc = PH7_GenCompileError(pGen, E_ERROR, nLine,
                                  "Expected 'interface_name' after 'extends' keyword inside interface '%z'",
@@ -5148,7 +5707,12 @@ static sxi32 PH7_CompileClassInterface(ph7_gen_state *pGen) {
         }
         return SXRET_OK;
       }
-      pBaseName = &pGen->pIn->sData;
+      pPathEnd = GenStateScanName(pGen->pIn, pGen->pEnd);
+      rc = GenStateResolveName(pGen, GEN_NAME_CLASS, pGen->pIn, pPathEnd, zBaseName, sizeof(zBaseName), &sBaseName);
+      if (rc == SXERR_ABORT) {
+        return SXERR_ABORT;
+      }
+      pBaseName = &sBaseName;
       pBase = PH7_VmExtractClass(pGen->pVm, pBaseName->zString, pBaseName->nByte, FALSE, 0);
       /* Only interfaces is allowed */
       while (pBase && (pBase->iFlags & PH7_CLASS_INTERFACE) == 0) {
@@ -5163,7 +5727,7 @@ static sxi32 PH7_CompileClassInterface(ph7_gen_state *pGen) {
         }
       }
       /* Advance the stream cursor */
-      pGen->pIn++;
+      pGen->pIn = pPathEnd;
     }
   }
   if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_OCB /*'{'*/) == 0) {
@@ -5321,6 +5885,8 @@ done:
  * }
  */
 static sxi32 GenStateCompileEnum(ph7_gen_state *pGen, sxi32 iFlags) {
+  char zFullName[GEN_NAME_MAX];
+  SyString sFullName;
 
 
 
@@ -5344,8 +5910,13 @@ static sxi32 GenStateCompileEnum(ph7_gen_state *pGen, sxi32 iFlags) {
     return SXERR_ABORT;
   }
 
-  /* Extract enum name */
+  /* Extract enum name: an enum is declared inside the current namespace */
   pName = &pGen->pIn->sData;
+  rc = GenStateMangleDeclName(pGen, pName, zFullName, sizeof(zFullName), &sFullName);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  pName = &sFullName;
 //  PH7_GenCompileError(pGen, E_WARNING, nLine, "enum name is '%z'", &pGen->pIn->sData);
   /* Advance the stream cursor */
   pGen->pIn++;
@@ -5511,6 +6082,8 @@ err:
  */
 static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
   sxu32 nLine = pGen->pIn->nLine;
+  char zFullName[GEN_NAME_MAX];
+  SyString sFullName;
   ph7_class *pClass, *pBase;
   SyToken *pEnd, *pTmp;
   sxi32 iProtection;
@@ -5536,8 +6109,13 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
     }
     return SXRET_OK;
   }
-  /* Extract class name */
+  /* Extract class name: a class is declared inside the current namespace */
   pName = &pGen->pIn->sData;
+  rc = GenStateMangleDeclName(pGen, pName, zFullName, sizeof(zFullName), &sFullName);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  pName = &sFullName;
   /* Advance the stream cursor */
 /*
   PH7_GenCompileError(pGen, E_NOTICE, nLine,
@@ -5561,10 +6139,13 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
   pBase = 0;
   if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_KEYWORD)) {
     SyString *pBaseName;
+    SyToken *pPathEnd;
+    char zBaseName[GEN_NAME_MAX];
+    SyString sBaseName;
     nKwrd = SX_PTR_TO_INT(pGen->pIn->pUserData);
     if (nKwrd == PH7_TKWRD_EXTENDS /* class b extends a */) {
       pGen->pIn++; /* Advance the stream cursor */
-      if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_ID) == 0) {
+      if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP)) == 0) {
         /* Syntax error */
         rc = PH7_GenCompileError(pGen, E_ERROR, nLine,
                                  "'class %z': a parent class name is expected after 'extends' keyword",
@@ -5576,8 +6157,13 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
         }
         return SXRET_OK;
       }
-      /* Extract base class name */
-      pBaseName = &pGen->pIn->sData;
+      /* Extract base class name: resolve the name path [i.e: Name, \Name, A\B\Name] */
+      pPathEnd = GenStateScanName(pGen->pIn, pGen->pEnd);
+      rc = GenStateResolveName(pGen, GEN_NAME_CLASS, pGen->pIn, pPathEnd, zBaseName, sizeof(zBaseName), &sBaseName);
+      if (rc == SXERR_ABORT) {
+        return SXERR_ABORT;
+      }
+      pBaseName = &sBaseName;
       /* Perform the query */
       pBase = PH7_VmExtractClass(pGen->pVm, pBaseName->zString, pBaseName->nByte, FALSE, 0);
       /* Interfaces are not allowed */
@@ -5602,15 +6188,18 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
         }
       }
       /* Advance the stream cursor */
-      pGen->pIn++;
+      pGen->pIn = pPathEnd;
     }
     if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_KEYWORD) && SX_PTR_TO_INT(pGen->pIn->pUserData) == PH7_TKWRD_IMPLEMENTS) {
       ph7_class *pInterface;
       SyString *pIntName;
+      SyToken *pPathEnd;
+      char zIntName[GEN_NAME_MAX];
+      SyString sIntName;
       /* Interface implementation */
       pGen->pIn++; /* Advance the stream cursor */
       for (;;) {
-        if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_ID) == 0) {
+        if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP)) == 0) {
           /* Syntax error */
           rc = PH7_GenCompileError(pGen, E_ERROR, nLine,
                                    "'class %z': interface name is expected after 'implements' keyword",
@@ -5621,8 +6210,13 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
           }
           break;
         }
-        /* Extract interface name */
-        pIntName = &pGen->pIn->sData;
+        /* Extract interface name: resolve the name path [i.e: Name, \Name, A\B\Name] */
+        pPathEnd = GenStateScanName(pGen->pIn, pGen->pEnd);
+        rc = GenStateResolveName(pGen, GEN_NAME_CLASS, pGen->pIn, pPathEnd, zIntName, sizeof(zIntName), &sIntName);
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+        pIntName = &sIntName;
         /* Make sure the interface is already defined */
         pInterface = PH7_VmExtractClass(pGen->pVm, pIntName->zString, pIntName->nByte, FALSE, 0);
         /* Only interfaces are allowed */
@@ -5641,7 +6235,7 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
           SySetPut(&aInterfaces, (const void *)&pInterface);
         }
         /* Advance the stream cursor */
-        pGen->pIn++;
+        pGen->pIn = pPathEnd;
         if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_COMMA) == 0) {
           break;
         }
@@ -5742,7 +6336,6 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
 
         if (pGen->pIn->nType & PH7_TK_KEYWORD) {
           nKwrd = SX_PTR_TO_INT(pGen->pIn->pUserData);
-try_again:
           if ((nKwrd & VM_FUNC_RET_MASK) != 0) { //VM_FUNC_RET_MASK is a bit misleading name.
 #if FIXEDTYPELOG
             fprintf(stderr,"a normal fixed type attribute %08x found\n", nKwrd & VM_FUNC_RET_MASK);
@@ -5752,12 +6345,17 @@ try_again:
             pGen->pIn++; /* Jump the type */
             if (pGen->pIn >= pGen->pEnd)  break;
           }
-        } else if (pGen->pIn->nType & PH7_TK_ID) {
+        } else if (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP)) {
           // public Name $var; 
           // A class. (enums can not be used as a type in a fixed-type properties)
           // Emit a warning if this class is known to be an enum at compile time.
-          nKwrd = PH7_TKWRD_OBJECT;
-          goto try_again;
+          /* public Name $var; public \A\B\Name $var; A class name: not checked yet, treated as 'object' */
+          iAttrflags |= PH7_CLASS_ATTR_FIXEDTYPE;
+          iFixedType = PH7_TKWRD_OBJECT;
+          pGen->pIn = GenStateScanName(pGen->pIn, pGen->pEnd);
+          if (pGen->pIn >= pGen->pEnd) {
+            break;
+          }
         } else {
           /* Not a type. */
         }
@@ -5808,7 +6406,6 @@ try_again:
 
           if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_KEYWORD)) {
             nKwrd = SX_PTR_TO_INT(pGen->pIn->pUserData);
-try_again2:
             if ((nKwrd & VM_FUNC_RET_MASK) != 0) {
 #if FIXEDTYPELOG
               fprintf(stderr,"a static fixed type attribute %08x found\n", nKwrd & VM_FUNC_RET_MASK);
@@ -5818,9 +6415,11 @@ try_again2:
               pGen->pIn++; /* Jump the type */
             }
           } else {
-            if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_ID)) {
-              nKwrd = PH7_TKWRD_OBJECT;
-              goto try_again2;
+            if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP))) {
+              /* static Name $var; A class name: not checked yet, treated as 'object' */
+              iAttrflags |= PH7_CLASS_ATTR_FIXEDTYPE;
+              iFixedType = PH7_TKWRD_OBJECT;
+              pGen->pIn = GenStateScanName(pGen->pIn, pGen->pEnd);
             }
             // Not a type, somethigng we can not understand as a type. May be it is a dollar sign, who knows.
             // just pass it further to process
@@ -6157,6 +6756,9 @@ static sxi32 PH7_CompileCatch(ph7_gen_state *pGen, ph7_exception *pException) {
   GenBlock *pCatch;
   SyToken *pToken;
   SyString *pName;
+  SyToken *pPathEnd;
+  char zFullName[GEN_NAME_MAX];
+  SyString sFullName;
   char *zDup;
   sxi32 rc;
   pGen->pIn++; /* Jump the 'catch' keyword */
@@ -6164,7 +6766,7 @@ static sxi32 PH7_CompileCatch(ph7_gen_state *pGen, ph7_exception *pException) {
   SyZero(&sCatch, sizeof(ph7_exception_block));
   /* Initialize fields */
   SySetInit(&sCatch.sByteCode, &pException->pVm->sAllocator, sizeof(VmInstr));
-  if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_LPAREN) == 0 /*(*/ || &pGen->pIn[1] >= pGen->pEnd || (pGen->pIn[1].nType & (PH7_TK_ID | PH7_TK_KEYWORD)) == 0) {
+  if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_LPAREN) == 0 /*(*/ || &pGen->pIn[1] >= pGen->pEnd || (pGen->pIn[1].nType & (PH7_TK_ID | PH7_TK_KEYWORD | PH7_TK_NSSEP)) == 0) {
     /* Unexpected token,break immediately */
     pToken = pGen->pIn;
     if (pToken >= pGen->pEnd) {
@@ -6179,14 +6781,19 @@ static sxi32 PH7_CompileCatch(ph7_gen_state *pGen, ph7_exception *pException) {
   }
   /* Extract the exception class */
   pGen->pIn++; /* Jump the left parenthesis '(' */
-  /* Duplicate class name */
-  pName = &pGen->pIn->sData;
+  /* Resolve the class name path [i.e: Name, \Name, A\B\Name] and duplicate it */
+  pPathEnd = GenStateScanName(pGen->pIn, pGen->pEnd);
+  rc = GenStateResolveName(pGen, GEN_NAME_CLASS, pGen->pIn, pPathEnd, zFullName, sizeof(zFullName), &sFullName);
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  pName = &sFullName;
   zDup = SyMemBackendStrDup(&pGen->pVm->sAllocator, pName->zString, pName->nByte);
   if (zDup == 0) {
     goto Mem;
   }
   SyStringInitFromBuf(&sCatch.sClass, zDup, pName->nByte);
-  pGen->pIn++;
+  pGen->pIn = pPathEnd;
   if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_DOLLAR) == 0 /*$*/ || &pGen->pIn[1] >= pGen->pEnd || (pGen->pIn[1].nType & (PH7_TK_ID | PH7_TK_KEYWORD)) == 0) {
     /* Unexpected token,break immediately */
     pToken = pGen->pIn;
@@ -6674,6 +7281,24 @@ Synchronize:
  * this function takes care of generating the appropriate
  * error message.
  */
+/*
+ * Tell what kind of name the child of an expression node holds.
+ * iHint is the kind the parent expects [i.e: EXPR_FLAG_NAME_CLASS for the operand of 'new'].
+ * It is only given to a literal or, for 'new Foo(...)', to the call node which wraps the literal:
+ * any other node ignores it.
+ */
+static sxi32 GenStateNameHint(const ph7_expr_node *pChild, sxi32 iHint) {
+  if (pChild == 0 || iHint == 0) {
+    return 0;
+  }
+  if (pChild->pOp == 0 && pChild->xCode == PH7_CompileLiteral) {
+    return iHint;
+  }
+  if (pChild->pOp && pChild->pOp->iOp == EXPR_OP_FUNC_CALL && iHint == EXPR_FLAG_NAME_CLASS) {
+    return iHint;
+  }
+  return 0;
+}
 static sxi32 GenStateEmitExprCode(
   ph7_gen_state *pGen,  /* Code generator state */
   ph7_expr_node *pNode, /* Root of the expression tree */
@@ -6685,6 +7310,9 @@ static sxi32 GenStateEmitExprCode(
   sxu32 iP2 = 0;
   void *p3 = 0;
   sxi32 iVmOp;
+  sxi32 iNameFlag;  /* Kind of name given by the parent node */
+  sxi32 iLeftHint;  /* Kind of name expected from the left operand */
+  sxi32 iRightHint; /* Kind of name expected from the right operand */
   sxi32 rc;
   if (pNode->xCode) {
     SyToken *pTmpIn, *pTmpEnd;
@@ -6700,6 +7328,37 @@ static sxi32 GenStateEmitExprCode(
     return SXERR_ABORT;
   }
   iVmOp = pNode->pOp->iVmOp;
+  /* A name flag is meant for the operand which receives it: it is not passed any further */
+  iNameFlag = iFlags & EXPR_FLAG_NAME_MASK;
+  iFlags &= ~EXPR_FLAG_NAME_MASK;
+  /* What kind of names do the operands hold? Anything else is a constant */
+  iLeftHint = 0;
+  iRightHint = 0;
+  switch (pNode->pOp->iOp) {
+  case EXPR_OP_FUNC_CALL:
+    /* foo(): function name, unless the call is the operand of 'new' [i.e: new Foo()] */
+    iLeftHint = iNameFlag ? iNameFlag : EXPR_FLAG_NAME_FUNC;
+    break;
+  case EXPR_OP_NEW:
+    /* new Foo */
+    iLeftHint = EXPR_FLAG_NAME_CLASS;
+    break;
+  case EXPR_OP_DC:
+    /* Foo::member */
+    iLeftHint = EXPR_FLAG_NAME_CLASS;
+    iRightHint = EXPR_FLAG_NAME_MEMBER;
+    break;
+  case EXPR_OP_ARROW:
+    /* $a->member, $a?->member */
+    iRightHint = EXPR_FLAG_NAME_MEMBER;
+    break;
+  case EXPR_OP_INSTOF:
+    /* $a instanceof Foo */
+    iRightHint = EXPR_FLAG_NAME_CLASS;
+    break;
+  default:
+    break;
+  }
   if (pNode->pOp->iOp == EXPR_OP_QUESTY) {
     sxu32 nJz, nJmp;
     /* Ternary operator require special handling */
@@ -6763,7 +7422,7 @@ static sxi32 GenStateEmitExprCode(
       /* Remove stale flags now */
       iFlags &= ~EXPR_FLAG_RDONLY_LOAD;
     }
-    rc = GenStateEmitExprCode(&(*pGen), pNode->pLeft, iFlags);
+    rc = GenStateEmitExprCode(&(*pGen), pNode->pLeft, iFlags | GenStateNameHint(pNode->pLeft, iLeftHint));
     if (rc != SXRET_OK) {
       return rc;
     }
@@ -6819,7 +7478,7 @@ static sxi32 GenStateEmitExprCode(
     } else if (pNode->pOp->iPrec == 19 /* Combined binary operators [i.e: =,'.=','+=',*=' ...] precedence */) {
       iFlags |= EXPR_FLAG_LOAD_IDX_STORE;
     }
-    rc = GenStateEmitExprCode(&(*pGen), pNode->pRight, iFlags);
+    rc = GenStateEmitExprCode(&(*pGen), pNode->pRight, iFlags | GenStateNameHint(pNode->pRight, iRightHint));
     if (iVmOp == PH7_OP_STORE) {
       pInstr = PH7_VmPeekInstr(pGen->pVm);
       if (pInstr) {
@@ -7149,6 +7808,10 @@ static void CtStripTags(SyString *pS) {
 
 /* Compile `compile` and `compile_once` language constructs
  *
+ * TODO: generate c string literal object and obtain its index
+  if (SXRET_OK != GenStateFindLiteral(&(*pGen), zPath, &nIdx))
+    pObj = PH7_ReserveConstObj(pGen->pVm, &nIdx);
+  This required for future extensions: embedding filename index into bytecode for referencing (e.g. from exceptions)
  */
 static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
   ph7_vm *pVm = pGen->pVm;
@@ -7161,6 +7824,8 @@ static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
   char *zPath;
   sxu32 nLen, nFilesBefore;
   sxi32 rc;
+
+
 
   pGen->pIn++;                 /* the directive */
   sRel = pGen->pIn->sData;     /* the string literal */
@@ -7183,7 +7848,10 @@ static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
 
   SyStringInitFromBuf(&sPath, zPath, nLen);
   SyBlobInit(&sSrc, &pVm->sAllocator);
+
   nFilesBefore = SySetUsed(&pVm->aFiles);
+
+
   rc = CtReadFile(pVm, zPath, nLen, &sSrc);
   if (rc != SXRET_OK) {
     while (SySetUsed(&pVm->aFiles) > nFilesBefore) { (void)SySetPop(&pVm->aFiles); }
@@ -7193,6 +7861,7 @@ static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
     return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
   }
   if (SySetUsed(&pVm->aFiles) == nFilesBefore) {
+
     SySetPut(&pVm->aFiles, (const void *)&sPath);       /* for error messages */
   }
 
@@ -7216,7 +7885,11 @@ static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
 
     rc = SXRET_OK;
     if (pGen->pIn < pGen->pEnd) {
+      ph7_ns_state sSavedNs;
+      /* The included file starts in the global namespace and its imported names do not leak out */
+      GenStateEnterNamespaceScope(pGen, &sSavedNs);
       rc = GenStateCompileChunk(pGen, 0);
+      GenStateLeaveNamespaceScope(pGen, &sSavedNs);
     }
 
     pGen->nCtDepth--;
@@ -7228,7 +7901,12 @@ static sxi32 PH7_CompileCTInclude(ph7_gen_state *pGen) {
   }
 
   SySetRelease(&sTok);
-  while (SySetUsed(&pVm->aFiles) > nFilesBefore) { (void)SySetPop(&pVm->aFiles); }
+
+  while (SySetUsed(&pVm->aFiles) > nFilesBefore) {
+
+    (void)SySetPop(&pVm->aFiles);
+  }
+
   SyBlobRelease(&sSrc);
   if (!bOwned) { SyMemBackendFree(&pVm->sAllocator, zPath); }
   return rc == SXERR_ABORT ? SXERR_ABORT : SXRET_OK;
@@ -7426,6 +8104,7 @@ PH7_PRIVATE sxi32 PH7_CompileScript(
   sxu32 nObjIdx;
   sxi32 nRawObj;
   int is_expr;
+  ph7_ns_state sSavedNs; /* Namespace state of the file which is being compiled, if any */
   sxi32 rc;
   if (pScript->nByte < 1) {
     /* Nothing to compile */
@@ -7458,6 +8137,8 @@ PH7_PRIVATE sxi32 PH7_CompileScript(
     PH7_TokenizeRawText(pScript->zString, pScript->nByte, &aRawToken);
   }
   pCodeGen = &pVm->sCodeGen;
+  /* A file starts in the global namespace and its imported names do not outlive it */
+  GenStateEnterNamespaceScope(pCodeGen, &sSavedNs);
   /* Process high-level tokens */
   pCodeGen->pRawIn = (SyToken *)SySetBasePtr(&aRawToken);
   pCodeGen->pRawEnd = &pCodeGen->pRawIn[SySetUsed(&aRawToken)];
@@ -7526,6 +8207,7 @@ PH7_PRIVATE sxi32 PH7_CompileScript(
   }
 
 cleanup:
+  GenStateLeaveNamespaceScope(pCodeGen, &sSavedNs);
   SySetRelease(&aRawToken);
   SySetRelease(&aPhpToken);
   return rc;
@@ -7555,6 +8237,9 @@ PH7_PRIVATE sxi32 PH7_InitCodeGenerator(
   SyBlobInit(&pGen->sErrBuf, &pVm->sAllocator);
   /* General purpose working buffer */
   SyBlobInit(&pGen->sWorker, &pVm->sAllocator);
+  /* Namespace state of the file being compiled */
+  SyBlobInit(&pGen->sNs.sName, &pVm->sAllocator);
+  SySetInit(&pGen->sNs.aUse, &pVm->sAllocator, sizeof(ph7_ns_use));
   /* Create the global scope */
   GenStateInitBlock(pGen, &pGen->sGlobal, GEN_BLOCK_GLOBAL, PH7_VmInstrLength(&(*pVm)), 0);
   /* Point to the global scope */
@@ -7590,6 +8275,8 @@ PH7_PRIVATE sxi32 PH7_ResetCodeGenerator(
   pGen->pIn = pGen->pEnd = 0;
   pGen->nErr = 0;
   pGen->bInClass = 0;
+  /* Back to the global namespace */
+  GenStateResetNamespace(pGen);
   return SXRET_OK;
 }
 /*

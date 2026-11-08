@@ -1058,10 +1058,19 @@ int ph7_vm_release(ph7_vm *pVm) {
   }
 #endif
 
+#if PH7_ENABLE_SQLITE3
+  /* Free memory which is used by the SQLite library. The context itself belong to the VM arena */
+  if (pVm->pSQLite != NULL) {
+    ph7_sqlite_reset(pVm->pSQLite);
+    /* descriptor is on the arena list already and will be freed later, so we can zeroize it here */
+    pVm->pSQLite = NULL;
+  }
+#endif
+
   /* Delete CWD */
   if (pVm->pCwd != NULL) {
 
-    // TODO: use SyOSFree
+    // TODO: use VM's memory backend for Cwd
     free((void *)pVm->pCwd);
     pVm->pCwd = NULL;
   }
