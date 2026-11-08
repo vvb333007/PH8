@@ -9,7 +9,7 @@ This text is an AI translation of original file in Russian.
 - **`[]` as the target after `as` in `foreach`:** not supported yet; it is planned.
 - **The `??=` operator:** not supported.
 - **Constructor property promotion:** not supported. Class properties must be declared explicitly.
-- **`__set()` and some other magic methods:** not supported. Similar functionality can be implemented in PH8 through `__get()`.
+
 
 ## 2. PH8 Features That Differ from PHP
 
@@ -202,7 +202,7 @@ enum Hello: int {
 
 PH8 implements a simplified and more direct semantics for the `__call()` and `__callStatic()` magic methods compared to Zend PHP 8. Instead of receiving the name of the missing method as the first parameter and all original arguments packed into a single array as the second, the magic method receives the original arguments directly, preserving their number, order, and normal parameter-passing semantics. The name of the intercepted method is available through the special __CALL__ constant. This eliminates the need to unpack an argument array and makes magic methods behave more like transparent handlers for otherwise undefined method calls, while allowing their parameters to be declared according to the actual intercepted call.
 
-Вот полный текст на английском, с новым абзацем про `??`.
+Г‚Г®ГІ ГЇГ®Г«Г­Г»Г© ГІГҐГЄГ±ГІ Г­Г  Г Г­ГЈГ«ГЁГ©Г±ГЄГ®Г¬, Г± Г­Г®ГўГ»Г¬ Г ГЎГ§Г Г¶ГҐГ¬ ГЇГ°Г® `??`.
 
 ---
 
@@ -471,8 +471,8 @@ You can safely write anything that is the same in C and PHP: arithmetic with `* 
 
 Unlike Zend PHP, PH8 provides two additional language constructs: `compile` and `compile_once`. They include source code from other files **at compile time**, similarly to the `#include` directive in C.
 
-- `compile "STRING_LITERAL"` — includes the source code of the specified file. Each occurrence of this construct includes the file again, even if it has already been included.
-- `compile_once "STRING_LITERAL"` — includes the source code of the specified file only once. Subsequent occurrences are ignored if the same source content has already been included using `compile_once`. Conceptually, this is similar to `#include` combined with `#pragma once` in C/C++.
+- `compile "STRING_LITERAL"` В— includes the source code of the specified file. Each occurrence of this construct includes the file again, even if it has already been included.
+- `compile_once "STRING_LITERAL"` В— includes the source code of the specified file only once. Subsequent occurrences are ignored if the same source content has already been included using `compile_once`. Conceptually, this is similar to `#include` combined with `#pragma once` in C/C++.
 
 The argument to either construct must be a string literal.
 
