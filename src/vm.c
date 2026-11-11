@@ -3074,8 +3074,28 @@ static sxi32 VmByteCodeExec(
           }
         }
         break;
+/*
+ * CVT_RELIABLE: * * *     Force the top of the stack to be a reliable value
+   CVT_UNRELIABLE: * * *   Force the top of the stack to be an unreliable value
+   RELIABLE: P1 * *        Enforce MemObjLoad/Store special semantics (exceptions on unreliable values)
+ *
+ * 
+ */
+      case PH7_OP_CVT_RELIABLE:
+        STACK_UNDERFLOW_GOTO(pTos);
+        pTos->iFlags &= ~MEMOBJ_UNREL;
+        break;
+      case PH7_OP_CVT_UNRELIABLE:
+        STACK_UNDERFLOW_GOTO(pTos);
+        pTos->iFlags |= MEMOBJ_UNREL;
+        break;
+      case PH7_OP_RELIABLE:
+        STACK_UNDERFLOW_GOTO(pTos);
+        pVm->bInReliable = pInstr->iP1 ? 1 : 0;
+        break;
 
-      /*
+
+/*
  * CVT_BOOL: * * *
  *
  * Force the top of the stack to be a boolean.
@@ -3088,7 +3108,7 @@ static sxi32 VmByteCodeExec(
           PH7_MemObjToBool(pTos);
         }
         break;
-      /*
+/*
  * CVT_NULL: * * *
  *
  * Nullify the top of the stack.
@@ -3334,6 +3354,10 @@ static sxi32 VmByteCodeExec(
           /* Load variable contents */
           PH7_MemObjLoad(pObj, pTos);
           pTos->nIdx = pObj->nIdx;
+
+          if (pVm->bInReliable && ((pTos->iFlags & MEMOBJ_UNREL) != 0)) {
+            VM_EXCEPTION_GOTO("__typeerror",11,"attempt to use an unreliable value in `reliable` block [PC: %08x]", pc)
+          }
           break;
         }
       /*
@@ -5503,10 +5527,10 @@ static sxi32 VmByteCodeExec(
           ph7_value *pNos;
           SyString sName;
 
-          /* P2 == 0 --> Attribute
-           * P2 >0 --> Method
-           * P1 == 0, $class->method
-           * P1 > 0,  Class::Method()
+          /* P2 == 0  Attribute
+           * P2 >0    Method
+           * P1 == 0, ->
+           * P1 > 0,  ::
            */
 
           if (!pInstr->iP1) {
@@ -5676,6 +5700,12 @@ static sxi32 VmByteCodeExec(
                           /* Load attribute index */
                           pTos->nIdx = pObjAttr->nIdx;
                         }
+                      }
+                      /* Same as in OP_LOAD: if value is unreliable and strict mode is on we
+                       * generate exception here
+                       */
+                      if (pVm->bInReliable && ((pTos->iFlags & MEMOBJ_UNREL) != 0)) {
+                        VM_EXCEPTION_GOTO("__typeerror",11,"attempt to use an unreliable value in `reliable` block [PC: %08x]", pc)
                       }
                     }
                   }
@@ -7073,11 +7103,15 @@ static char const * aOpNames[] = {
     [PH7_OP_ERR_CTRL] = "ERR.CTRL",
     [PH7_OP_IS_A] = "IS.A",
     [PH7_OP_SWITCH] = "SWITCH",
-    [PH7_OP_LOAD_EXCEPTION] = "LOAD_EXCEP",
-    [PH7_OP_POP_EXCEPTION]= "POP_EXCEP",
+    [PH7_OP_LOAD_EXCEPTION] = "LOAD.EXC",
+    [PH7_OP_POP_EXCEPTION]= "POP.EXC",
     [PH7_OP_THROW] = "THROW",
     [PH7_OP_FOREACH_INIT] = "4EACH_INIT",
     [PH7_OP_FOREACH_STEP] = "4EACH_STEP",
+    [PH7_OP_CVT_RELIABLE] = "CVT.REL",
+    [PH7_OP_CVT_UNRELIABLE] = "CVT.UNREL",
+    [PH7_OP_RELIABLE] = "MSR.RELIABLE",
+
 };
 
 static const char *VmInstrToString(sxi32 nOp) {

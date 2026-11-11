@@ -5,15 +5,15 @@
  *   ../tools/mkkeywordhash.c (derived from SQLite source tree)
  */
 static sxu32 KeywordCode(const char *z, int n) {
-/* Hash score: 85
- * zText[] encodes 489 bytes of keyword text in 312 bytes */
+/* Hash score: 88
+ * zText[] encodes 509 bytes of keyword text in 322 bytes */
 /*   extendswitchenddeclarequire_oncelselfinalistaticasechobject        */
 /*   hrowprinterfacelifloatryclonevereturnamespacendifnewconstring      */
 /*   lobalusendwhilenumixedefaultvarrayabstractandievalboolcallable     */
 /*   xitclasscontinuemptydofunctiongotoimplementsinclude_once           */
-/*   ndforeachinstanceofissetparentprivateprotectedpublicatchunset      */
-/*   voidxorbreak                                                       */
-static const char zText[311] = {
+/*   ndforeachinstanceofissetparentprivateprotectedpublicatch           */
+/*   unreliableunsetvoidxorbreak                                        */
+static const char zText[321] = {
   'e','x','t','e','n','d','s','w','i','t','c','h','e','n','d','d','e','c',
   'l','a','r','e','q','u','i','r','e','_','o','n','c','e','l','s','e','l',
   'f','i','n','a','l','i','s','t','a','t','i','c','a','s','e','c','h','o',
@@ -30,56 +30,56 @@ static const char zText[311] = {
   'o','n','c','e','n','d','f','o','r','e','a','c','h','i','n','s','t','a',
   'n','c','e','o','f','i','s','s','e','t','p','a','r','e','n','t','p','r',
   'i','v','a','t','e','p','r','o','t','e','c','t','e','d','p','u','b','l',
-  'i','c','a','t','c','h','u','n','s','e','t','v','o','i','d','x','o','r',
-  'b','r','e','a','k',
+  'i','c','a','t','c','h','u','n','r','e','l','i','a','b','l','e','u','n',
+  's','e','t','v','o','i','d','x','o','r','b','r','e','a','k',
 };
 /* aHash[i] is the hash value for the i-th keyword */
 static const unsigned char aHash[147] = {
-    42,   0,   0,  47,   0,   0,  75,   0,   0,   0,  40,   1,  56,
+    42,   0,   0,  47,   0,   0,  77,   0,   0,   0,  40,   1,  56,
      0,  59,   0,   0,   0,   0,   0,  27,   0,   0,  38,  28,   0,
-    37,  70,  76,  44,  54,  63,  49,   0,  73,  39,   0,  18,   0,
+    37,  70,  78,  44,  54,  63,  49,   0,  75,  39,   0,  18,   0,
      8,   3,   0,  43,   0,   0,  35,   0,   0,  14,   0,   9,   0,
      0,   0,   0,  50,   0,  61,   0,   0,   0,   0,   6,   0,  11,
      0,   0,  64,  17,   0,  13,   0,  72,  55,   0,   0,   0,   0,
-     0,  71,   0,  67,  15,   0,   0,   0,   0,   0,  26,  58,  22,
+     0,  71,   0,  67,  15,   0,   0,   0,  74,   0,  26,  58,  22,
      0,  19,   0,  24,  33,  51,   0,   0,   0,  10,  68,   0,  52,
-    74,  29,   0,   0,   0,   0,  69,  12,   0,   0,  16,   0,   7,
-     0,   0,   0,   0,   0,   5,   0,  32,   2,   0,   0,  66,  41,
+    76,  29,   0,   0,   0,   0,  69,  12,   0,   0,  16,   0,   7,
+     0,   0,   0,   0,   0,   5,   0,  32,   2,   0,   0,  73,  41,
      0,   0,   0,  36,  30,   0,  20,  60,   0,   0,   0,  48,  21,
      0,   4,   0,  46,
 };
 /* aNext[] forms the hash collision chain.  If aHash[i]==0
 ** then the i-th keyword has no more hash collisions.  Otherwise,
 ** the next keyword with the same hash is aHash[i]-1. */
-static const unsigned char aNext[77] = {
+static const unsigned char aNext[79] = {
      0,   0,   0,   0,   0,   0,   0,   0,   0,  65,   0,   0,   0,
      0,   0,   0,   0,   0,   0,  62,   0,   0,   0,   0,   0,   0,
      0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     31,   0,   0,   0,   0,   0,   0,   0,   0,  53,   0,   0,   0,
      0,   0,  34,   0,   0,  45,   0,   0,   0,   0,  25,   0,   0,
-     0,   0,   0,   0,   0,   0,  23,   0,  57,   0,   0,
+     0,   0,   0,   0,   0,   0,  23,  66,   0,   0,  57,   0,   0,
 };
 /* aLen[i] is the length (in bytes) of the i-th keyword */
-static const unsigned char aLen[77] = {
+static const unsigned char aLen[79] = {
      7,   9,   6,   6,   7,  12,   7,   2,   4,   4,   5,   4,   6,
      4,   4,   6,   5,   5,   9,   3,   4,   5,   3,   5,   2,   5,
      6,   9,   5,   2,   2,   3,   5,   6,   6,   3,   8,   5,   4,
      5,   7,   3,   5,   8,   3,   3,   4,   4,   8,   4,   5,   2,
      8,   5,   2,   8,   4,  10,  12,   7,  10,   6,   7,   3,   2,
-    10,   5,   6,   7,   9,   6,   5,   5,   4,   3,   5,
+    10,   5,   6,   7,   9,   6,   5,  10,   8,   5,   4,   3,   5,
 };
 /* aOffset[i] is the index into zText[] of the start of
 ** the text for the i-th keyword. */
-static const unsigned short int aOffset[77] = {
+static const unsigned short int aOffset[79] = {
      0,   3,   6,  12,  15,  20,  20,  21,  31,  33,  36,  40,  42,
     47,  50,  53,  58,  63,  65,  65,  73,  76,  80,  83,  86,  86,
     90,  95, 103, 106, 107, 108, 111, 114, 119, 125, 127, 130, 134,
    137, 141, 148, 149, 154, 162, 164, 166, 170, 174, 181, 185, 187,
    190, 197, 202, 204, 212, 216, 226, 226, 237, 237, 240, 240, 241,
-   247, 257, 262, 268, 275, 284, 289, 294, 299, 303, 306,
+   247, 257, 262, 268, 275, 284, 289, 294, 296, 304, 309, 313, 316,
 };
 /* aCode[i] is the parser symbol code for the i-th keyword */
-static const sxu32 aCode[77] = {
+static const sxu32 aCode[79] = {
   PH7_TKWRD_EXTENDS,   PH7_TKWRD_ENDSWITCH, PH7_TKWRD_SWITCH,    PH7_TKWRD_ENDDEC,    PH7_TKWRD_DECLARE,   
   PH7_TKWRD_REQONCE,   PH7_TKWRD_REQUIRE,   PH7_TKWRD_SEQ,       PH7_TKWRD_ELSE,      PH7_TKWRD_SELF,      
   PH7_TKWRD_FINAL,     PH7_TKWRD_LIST,      PH7_TKWRD_STATIC,    PH7_TKWRD_CASE,      PH7_TKWRD_ECHO,      
@@ -94,8 +94,8 @@ static const sxu32 aCode[77] = {
   PH7_TKWRD_FUNCTION,  PH7_TKWRD_GOTO,      PH7_TKWRD_IMPLEMENTS,PH7_TKWRD_INCONCE,   PH7_TKWRD_INCLUDE,   
   PH7_TKWRD_END4EACH,  PH7_TKWRD_ENDFOR,    PH7_TKWRD_FOREACH,   PH7_TKWRD_FOR,       PH7_TKWRD_OR,        
   PH7_TKWRD_INSTANCEOF,PH7_TKWRD_ISSET,     PH7_TKWRD_PARENT,    PH7_TKWRD_PRIVATE,   PH7_TKWRD_PROTECTED, 
-  PH7_TKWRD_PUBLIC,    PH7_TKWRD_CATCH,     PH7_TKWRD_UNSET,     PH7_TKWRD_VOID,      PH7_TKWRD_XOR,       
-  PH7_TKWRD_BREAK,     
+  PH7_TKWRD_PUBLIC,    PH7_TKWRD_CATCH,     PH7_TKWRD_UNRELIABLE,PH7_TKWRD_RELIABLE,  PH7_TKWRD_UNSET,     
+  PH7_TKWRD_VOID,      PH7_TKWRD_XOR,       PH7_TKWRD_BREAK,     
 };
 /* Hash table decoded ( --> collision chain):
  *   0: var    
@@ -136,6 +136,7 @@ static const sxu32 aCode[77] = {
  *  79: public    
  *  81: isset    
  *  82: echo    
+ *  86: reliable    
  *  88: never    
  *  89:    -->  implements     and    
  *  90: float    
@@ -155,7 +156,7 @@ static const sxu32 aCode[77] = {
  * 122: declare    
  * 124: new    
  * 125: endswitch    
- * 128: instanceof    
+ * 128:    -->  unreliable     instanceof    
  * 129: default    
  * 133: use    
  * 134: if    

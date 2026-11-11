@@ -62,32 +62,41 @@ static sxi64 MemObjRealToInt(ph7_value *pObj) {
 /*
  * Convert a raw token value typically a stream of digit [i.e: hex,octal,binary or decimal] 
  * to a 64-bit integer.
+ * pRet must be a valid pointer!
  */
-PH7_PRIVATE sxi64 PH7_TokenValueToInt64(SyString *pVal) {
+PH7_PRIVATE sxi64 PH7_TokenValueToInt64(SyString *pVal, int *pRet) {
+
+
   sxi64 iVal = 0;
+
   if (pVal->nByte <= 0) {
+    *pRet = SXERR_SYNTAX;
     return 0;
   }
   if (pVal->zString[0] == '0') {
     sxi32 c;
     if (pVal->nByte == sizeof(char)) {
+      *pRet = SXRET_OK;
       return 0;
     }
     c = pVal->zString[1];
     if (c == 'x' || c == 'X') {
       /* Hex digit stream */
-      SyHexStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
+      *pRet = SyHexStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
     } else if (c == 'b' || c == 'B') {
       /* Binary digit stream */
-      SyBinaryStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
+      *pRet = SyBinaryStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
     } else {
-      /* Octal digit stream */
-      SyOctalStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
+      /* octal digit stream */
+      *pRet = SyOctalStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
     }
   } else {
-    /* Decimal digit stream */
-    SyStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
+    /* Hopefully a decimal digit stream */
+    *pRet = SyStrToInt64(pVal->zString, pVal->nByte, (void *)&iVal, 0);
   }
+
+//  fprintf(stderr, "nRet = %d\r\n", *pRet );
+
   return iVal;
 }
 /*
@@ -96,9 +105,13 @@ PH7_PRIVATE sxi64 PH7_TokenValueToInt64(SyString *pVal) {
  * representation.
  */
 static sxi64 MemObjStringToInt(ph7_value *pObj) {
+  int nRet;
   SyString sVal;
   SyStringInitFromBuf(&sVal, SyBlobData(&pObj->sBlob), SyBlobLength(&pObj->sBlob));
-  return PH7_TokenValueToInt64(&sVal);
+  sxi64 iValue = PH7_TokenValueToInt64(&sVal, &nRet); //TODO: check nRet and propagate MEMOBJ_UNREL if needed
+  if (nRet != SXRET_OK)
+    pObj->iFlags |= MEMOBJ_UNREL;
+  return iValue;
 }
 /*
  * Call a magic class method [i.e: __toString(),__toInt(),...]
@@ -671,7 +684,7 @@ PH7_PRIVATE sxi32 PH7_MemObjCast(ph7_value *pNos, sxi32 iFlags) {
     */
     ProcMemObjCast xCast;
   
-    /* Check compound types first
+    /* Check compound types first (nullable is already checked)
     */
     if (iFlags & MEMOBJ_CALLABLE) xCast = PH7_MemObjToCallable; else
     /* Then regular types
@@ -1158,8 +1171,8 @@ PH7_PRIVATE sxi32 PH7_MemObjCmp(ph7_value *pObj1, ph7_value *pObj2, int bStrict,
     }
     // Remove typehints and attributes to compare pure types
     //    
-    iF1 = pObj1->iFlags & ~(MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE|0xffff0000);
-    iF2 = pObj2->iFlags & ~(MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE|0xffff0000);
+    iF1 = pObj1->iFlags & ~(MEMOBJ_UNREL|MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE|0xffff0000);
+    iF2 = pObj2->iFlags & ~(MEMOBJ_UNREL|MEMOBJ_AUX|MEMOBJ_NULLABLE|MEMOBJ_CALLABLE|MEMOBJ_FIXEDTYPE|0xffff0000);
     if (iF1 != iF2) {
       /* Not of the same type */
       return 1;
@@ -1424,6 +1437,11 @@ PH7_PRIVATE sxi32 PH7_MemObjDump(
   for (i = 0; i < nTab; i++) {
     SyBlobAppend(&(*pOut), " ", sizeof(char));
   }
+
+  if ((pObj->iFlags & MEMOBJ_UNREL) != 0) {
+    SyBlobAppend(&(*pOut), "(unreliable)", sizeof("(unreliable)")-1);
+  }
+
   if (ShowType) {
     if (isRef) {
       SyBlobAppend(&(*pOut), "&", sizeof(char));

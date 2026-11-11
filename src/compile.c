@@ -115,6 +115,7 @@ static sxi32 PH7_CompileReturn(ph7_gen_state *pGen);
 
 #define CT_INCLUDE_MAX_DEPTH 16
 
+
 static int GenStateIsCTInclude(const SyString *pName) {
   if (pName->nByte == sizeof("compile") - 1) {
     return SyMemcmp(pName->zString, "compile", pName->nByte) == 0;
@@ -497,12 +498,18 @@ static sxi32 GenStateCompileChunk(ph7_gen_state *pGen, sxi32 iFlags);
  *  documentation.
  */
 static sxi32 PH7_CompileNumLiteral(ph7_gen_state *pGen, sxi32 iCompileFlag) {
+  int nRet;
   SyToken *pToken = pGen->pIn; /* Raw token */
   sxu32 nIdx = 0;
   if (pToken->nType & PH7_TK_INTEGER) {
     ph7_value *pObj;
     sxi64 iValue;
-    iValue = PH7_TokenValueToInt64(&pToken->sData);
+    iValue = PH7_TokenValueToInt64(&pToken->sData, &nRet); 
+
+    /* currently can only happen in octal numbers like 07778. Other cases are caught by parser/lexer */
+    if (nRet != SXRET_OK) {
+      PH7_GenCompileError(pGen, E_WARNING, pGen->pIn->nLine,"Invalid numeric literal, value truncated");
+    }
 #if 1
     if (iValue == 0) {
       pObj = SySetAt(&pGen->pVm->aLitObj, nIdx = PH7_LITPOOL_ZERO); // 3 - is the int(0) in literals pool
@@ -2312,6 +2319,7 @@ static sxi32 PH7_CompileContinue(ph7_gen_state *pGen) {
   sxi32 iLevel;    /* How many nesting loop to skip */
   sxu32 nLine;
   sxi32 rc;
+  int nRet;
   nLine = pGen->pIn->nLine;
   iLevel = 0;
   /* Jump the 'continue' keyword */
@@ -2320,7 +2328,7 @@ static sxi32 PH7_CompileContinue(ph7_gen_state *pGen) {
     /* optional numeric argument which tells us how many levels
      * of enclosing loops we should skip to the end of. 
      */
-    iLevel = (sxi32)PH7_TokenValueToInt64(&pGen->pIn->sData);
+    iLevel = (sxi32)PH7_TokenValueToInt64(&pGen->pIn->sData, &nRet); //TODO: analyze nRet, display a warning on garbage
     if (iLevel < 2) {
       iLevel = 0;
     }
@@ -2377,7 +2385,7 @@ static sxi32 PH7_CompileContinue(ph7_gen_state *pGen) {
 static sxi32 PH7_CompileBreak(ph7_gen_state *pGen) {
   GenBlock *pLoop; /* Target loop */
   sxi32 iLevel;    /* How many nesting loop to skip */
-  //sxu32 nLine;
+  int nRet;
   sxi32 rc;
 
   //nLine = pGen->pIn->nLine;
@@ -2389,7 +2397,7 @@ static sxi32 PH7_CompileBreak(ph7_gen_state *pGen) {
     /* optional numeric argument which tells us how many levels
      * of enclosing loops we should skip to the end of. 
      */
-    iLevel = (sxi32)PH7_TokenValueToInt64(&pGen->pIn->sData);
+    iLevel = (sxi32)PH7_TokenValueToInt64(&pGen->pIn->sData, &nRet); //TODO: analyze nRet, display a warning on garbage
     if (iLevel < 2) {
       iLevel = 0;
     }
@@ -6865,17 +6873,47 @@ Mem:
   return SXERR_ABORT;
 }
 /*
- * Compile a 'try' block.
+ * Compile a 'try' or 'reliable' block.
  * A function using an exception should be in a "try" block.
  * If the exception does not trigger, the code will continue
  * as normal. However if the exception triggers, an exception
  * is "thrown".
+ *
+ * 'reliable' is a 'try' with extra semantics: MemObjLoad/MemObjStore trigger an exception
+ * if they see unreliable value (i.e. MEMOBJ_UNREL)
+ *
+ * special form of 'reliable' also exists: 'reliable on;' and 'reliable off;' these are simply OP_RELIABLE 1|0 instructions
+ * which do not push exception, do not require a catch block
  */
 static sxi32 PH7_CompileTry(ph7_gen_state *pGen) {
   ph7_exception *pException;
   GenBlock *pTry;
   sxu32 nJmpIdx;
   sxi32 rc;
+  int bReliable = FALSE;
+
+  /* Quck check: is it 'reliable on|off;' ? if so - emit just single opcode and return 
+  */
+  if ((pGen->pIn->sData.nByte == sizeof("reliable") - 1) &&
+      (SyMemcmp(pGen->pIn->sData.zString, "reliable", pGen->pIn->sData.nByte) == 0)) {
+    bReliable = TRUE;
+    /* Jump 'reliable' keyword */
+    pGen->pIn++;
+    if (pGen->pIn < pGen->pEnd) {
+      if ((pGen->pIn->sData.nByte > 0) && pGen->pIn->sData.zString[0] == 'o') {
+        if (pGen->pIn->sData.zString[1] == 'n') {
+          PH7_VmEmitInstr(pGen->pVm, PH7_OP_RELIABLE, 1, 0, 0, NULL, pGen);
+        } else {
+          PH7_VmEmitInstr(pGen->pVm, PH7_OP_RELIABLE, 0, 0, 0, NULL, pGen);
+        }
+        /* Jump 'on'/'off' token */
+        pGen->pIn++;
+        return SXRET_OK;
+      }
+    }
+  }
+
+
   /* Create the exception container */
   pException = (ph7_exception *)SyMemBackendAlloc(&pGen->pVm->sAllocator, sizeof(ph7_exception));
   if (pException == 0) {
@@ -6893,11 +6931,19 @@ static sxi32 PH7_CompileTry(ph7_gen_state *pGen) {
   if (rc != SXRET_OK) {
     return SXERR_ABORT;
   }
+  /* Distinguish 'reliable' from 'try' as former emits an extra instructions to 
+   * enable/disable strict values checking 
+   */ 
+  if (bReliable) {
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_RELIABLE, 1, 0, 0, NULL, pGen);
+  }
+
   /* Emit the 'LOAD_EXCEPTION' instruction */
   PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOAD_EXCEPTION, 0, 0, pException, &nJmpIdx, pGen);
   /* Fix the jump later when the destination is resolved */
   GenStateNewJumpFixup(pTry, PH7_OP_LOAD_EXCEPTION, nJmpIdx);
-  pGen->pIn++; /* Jump the 'try' keyword */
+
+//  pGen->pIn++; /* Jump the 'try'/'reliable' keyword */
   /* Compile the block */
   rc = PH7_CompileBlock(&(*pGen), 0);
   if (rc == SXERR_ABORT) {
@@ -6905,8 +6951,14 @@ static sxi32 PH7_CompileTry(ph7_gen_state *pGen) {
   }
   /* Fix forward jumps now the destination is resolved */
   GenStateFixJumps(pTry, -1, PH7_VmInstrLength(pGen->pVm));
+
   /* Emit the 'POP_EXCEPTION' instruction */
   PH7_VmEmitInstr(pGen->pVm, PH7_OP_POP_EXCEPTION, 0, 0, pException, 0, pGen);
+  if (bReliable) {
+    /* Disable strict Load/Store semantics  */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_RELIABLE, 0, 0, 0, NULL, pGen);
+  }
+
   /* Leave the block */
   GenStateLeaveBlock(&(*pGen), 0);
   /* Compile the catch block */
@@ -6917,7 +6969,7 @@ static sxi32 PH7_CompileTry(ph7_gen_state *pGen) {
     }
     /* Unexpected token */
     rc = PH7_GenCompileError(&(*pGen), E_ERROR, pTok->nLine,
-                             "Try: Unexpected token '%z',expecting 'catch' block", &pTok->sData);
+                             "%s: Unexpected token '%z',expecting 'catch' block", bReliable ? "reliable" : "try", &pTok->sData);
     if (rc == SXERR_ABORT) {
       return SXERR_ABORT;
     }
@@ -7703,6 +7755,7 @@ static const LangConstruct aLangConstruct[] = {
   { PH7_TKWRD_DIE, PH7_CompileHalt },            /* die language construct */
   { PH7_TKWRD_EXIT, PH7_CompileHalt },           /* exit language construct */
   { PH7_TKWRD_TRY, PH7_CompileTry },             /* try statement */
+  { PH7_TKWRD_RELIABLE, PH7_CompileTry },        /* reliable statement */
   { PH7_TKWRD_THROW, PH7_CompileThrow },         /* throw statement */
   { PH7_TKWRD_GOTO, PH7_CompileGoto },           /* goto statement */
   { PH7_TKWRD_CONST, PH7_CompileConstant },      /* const statement */

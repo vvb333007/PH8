@@ -787,6 +787,7 @@ struct ph7_value {
 #define MEMOBJ_OBJ       0x080       /* Memory value is an object [i.e: class instance] */
 #define MEMOBJ_RES       0x100       /* Memory value is a resource [User private data] */
 
+
 /* Hints. Can coexist with types above,  */
 #define MEMOBJ_UNKNOWN2  0x200      /* Unused flag */
 #define MEMOBJ_REFERENCE 0x400 /* Memory value hold a reference (64-bit index) of another ph7_value */
@@ -794,7 +795,11 @@ struct ph7_value {
                                   This flag is examined by STORE opeartions which store to a typed class attribute */
 #define MEMOBJ_NULLABLE 0x1000 /* Locked type can be null */
 #define MEMOBJ_CALLABLE 0x2000 /* Locked composite type 'callable' */
-#define MEMOBJ_UNKNOWN3 0x4000 /* Unused flag */
+
+/* Special flags */
+#define MEMOBJ_UNREL     0x4000      /* Numeric value is unreliable: e.g. "64kg" is "unreliable" 64; 
+                                    This flag propagates with STORE operations; can be cleared with 
+                                    "$x = (reliable)$x;" or set with "$x = (unreliable)$x;"; check with "is_reliable($x)"*/
 #define MEMOBJ_UNKNOWN4 0x8000 /* Unused flag */
 
 // iFlags:
@@ -1478,6 +1483,9 @@ struct ph7_vm {
   void *pStdin;                    /* STDIN IO stream */
   void *pStdout;                   /* STDOUT IO stream */
   void *pStderr;                   /* STDERR IO stream */
+
+  /* Machine State Register (MSR) bitfields */
+  int bInReliable:1;
   int bErrReport:1;                /* TRUE to report all runtime Error/Warning/Notice */
   int bListing:1;                  /* TRUE generate disasembly */
   int bHttp:1;                     /* VM is created by HTTP/HTTPS server. pHttpResp contains a pointer 
@@ -1670,6 +1678,10 @@ enum ph7_vm_op {
 
   PH7_OP_JNN,
 
+  PH7_OP_CVT_RELIABLE,     /* (reliable)$x cast (memobj flag control only) */
+  PH7_OP_CVT_UNRELIABLE,   /* (unreliable)$x cast (memobj flag control only) */
+  PH7_OP_RELIABLE,         /* for `reliable {}` try-catch type blocks */
+
 };
 /* -- END-OF INSTRUCTIONS -- */
 /*
@@ -1840,6 +1852,8 @@ enum ph7_expr_id {
 
 
 // Keywords [60..63] are available for use for language extensions
+#define PH7_TKWRD_RELIABLE 60
+#define PH7_TKWRD_UNRELIABLE 61
 // Keywords [65..127] are available for use for language extensions
 
 /* Constants which MUST BE A POWER OF TWO  */
@@ -1941,7 +1955,7 @@ PH7_PRIVATE sxi32 PH7_MemObjToNull(ph7_value *pObj);
 PH7_PRIVATE sxi32 PH7_MemObjToReal(ph7_value *pObj);
 PH7_PRIVATE sxi32 PH7_MemObjToInteger(ph7_value *pObj);
 PH7_PRIVATE sxi32 PH7_MemObjToBool(ph7_value *pObj);
-PH7_PRIVATE sxi64 PH7_TokenValueToInt64(SyString *pData);
+PH7_PRIVATE sxi64 PH7_TokenValueToInt64(SyString *pVal, int *pRet);
 /* lex.c function prototypes */
 PH7_PRIVATE sxi32 PH7_TokenizeRawText(const char *zInput, sxu32 nLen, SySet *pOut);
 PH7_PRIVATE sxi32 PH7_TokenizePHP(const char *zInput, sxu32 nLen, sxu32 nLineStart, SySet *pOut);

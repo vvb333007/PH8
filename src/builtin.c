@@ -174,6 +174,25 @@ static int PH7_builtin_is_int(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   ph7_result_bool(pCtx, res);
   return PH7_OK;
 }
+
+/*
+ * bool is_reliable($var)
+ *  Finds out whether a variable has reliable value. ($a = (int)'42hello';  // value is 42, unreliable)
+ * ($a = (int)'hello';  // value is 0, unreliable)
+ * Parameters
+ *   $var: The variable being evaluated.
+ * Return
+ *  TRUE if value is reliable
+ */
+static int PH7_builtin_is_reliable(ph7_context *pCtx, int nArg, ph7_value **apArg) {
+  int res = 0; /* Assume false by default */
+  if (nArg > 0) {
+    res = ((apArg[0]->iFlags & MEMOBJ_UNREL) == 0);
+  }
+  /* Query result */
+  ph7_result_bool(pCtx, res);
+  return PH7_OK;
+}
 /*
  * bool is_string($var)
  *  Finds out whether a variable is a string.
@@ -9039,7 +9058,7 @@ static int PH7_builtin_preg_match_all(ph7_context *pCtx, int nArg,  ph7_value **
  *     string|array $replacement,
  *     string|array $subject,
  *     int $limit = -1,
- *     int &$count = null   ---> ignored for now, this is a known bug
+ *     int &$count = null
  * )
  *
  * Returns string (or array for an array subject), NULL on error.
@@ -9383,6 +9402,7 @@ static const ph7_builtin_func aBuiltInFunc[] = {
   { "is_array", PH7_builtin_is_array },
   { "is_object", PH7_builtin_is_object },
   { "is_resource", PH7_builtin_is_resource },
+  { "is_reliable", PH7_builtin_is_reliable },
   { "doubleval", PH7_builtin_floatval },
   { "floatval", PH7_builtin_floatval },
   { "intval", PH7_builtin_intval },
@@ -9393,7 +9413,7 @@ static const ph7_builtin_func aBuiltInFunc[] = {
 #if PH7_ENABLE_REGEX
   { "preg_match",          PH7_builtin_preg_match },
   { "preg_match_all",      PH7_builtin_preg_match_all },
-  { "preg_replace",        PH7_builtin_preg_replace },  // TODO: BUG: CITO: last arg is unused because FFI's can not have references as their args except for arrays, which are always passed by reference
+  { "preg_replace",        PH7_builtin_preg_replace },  // TODO: BUG: CITO: last arg is unused
   { "preg_split",          PH7_builtin_preg_split },
   { "preg_grep",           PH7_builtin_preg_grep },
   { "preg_quote",          PH7_builtin_preg_quote },

@@ -44,9 +44,24 @@ WiFi bindings, both native and hosted.
 An analogue of the Arduino Core `.cpp` library, implemented in PHP wherever possible.
 Standard Arduino Core classes: HardwareSerial, SPI, Wire, FS, Print, String and so on
 
-~~Implement class SQLite3~~
+### 5. Namespaces
 
-### 5. Exceptions
+~~Implement `namespace` and `use` language constructs. Resolve names at compile time~~
+
+Fallback for builting functions
+
+### 6. Reliable values
+
+Implement MEMOBJ_UNREL - a flag saying that the value was converted but resilt is unreliable.
+
+Implement MEMOBJ_UNREL for suspicous conversions like array to a scalar or object to a scalar
+
+Introduce `__toArray` so objects properties can be serialized via typecast; if there were private/protected properties then conversion considered unreliable: these properties are NOT serialized
+Parent properies are not serialized
+
+Refactor (array) and (object) casts to use `__toArray`
+
+### 7. Exceptions
 
 ~~Rename `Exception` to `Throwable`, and add `Exception`, `Error`, `TypeError`, `ArgumentCountError`, `ArithmeticError`, `DivisionByZeroError`~~
 
@@ -60,7 +75,7 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 
 ~~Fix recursion depth limiter~~
 
-### 6. Types and overloading
+### 8. Types and overloading
 
   Nullable types in stdlib signatures (`?string`, `?Throwable`) or null will not pass strict checks: null will never match ?type signature when overloading
 
@@ -68,7 +83,7 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 
   Constructor by class name - find places where it is'nt handled (`new`, `parent::`, `method_exists`)
 
-## 7. VM shutdown
+## 9. VM shutdown
 
   ~~Call `__destruct` for all live objects on VM exit (globals are not destructed right now on script DONE), before function and class tables are freed~~
 
@@ -77,11 +92,11 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 ~~Objects with a cyclic references never reach zero refcount, need a list of all live objects~~
 
 
-## 7. RegEx engine
+## 10. RegEx engine
 
 ~~Implement `preg_..` style API~~
 
-## 8. SQL
+## 11. SQL
 
 ~~Import SQLite3 into PH8 codebase, make ESP32 port~~
 
@@ -92,7 +107,7 @@ Replace native SQLite3 memory backand with VM's memory backend
 Review Trilogy source code and decide how it can be ported to mbedTLS API
 
 
-## 9. HTTP(S) server
+## 12. HTTP(S) server
 
 ~~Implement HTTP server for static and dynamic content. Support `100-Continue`, multipart/form-data, PHP variables, query parsing~~
 
@@ -105,6 +120,28 @@ Implement SSE
 ---
 
 ## Smaller tasks
+
+### 0. Introspection API: not a reflection, but similar functionality
+
+
+Full Reflection API is heavy: many classes
+Implement procedural API similar in function to the Reflection
+
+* __has_class(string $name): bool              -->  Does the class exist?
+* __has_interface(string $name): bool          -->  Does the interface exist?
+* __has_enum(string $name): bool               -->  Does the enum exist?
+* __has_method($class, $name)                  -->  Does the class have this method? (Use is_callable() to check whether it can be called.)
+* __has_property($class, $name): int            -->  Does the class have this property? (0 = no, 1 = public, 2 = protected, 3 = private; the sign is inverted if the property is a const.)
+* __fetch_methods($class, bool $include_info = false) -->  List of methods (or an array of detailed records for each method). Own methods only, excluding inherited ones.
+* __fetch_properties($class, bool $include_info = false) -->  List of properties.
+* __fetch_classname(object $object, bool $parent = false) -->  Get the class name of an object.
+* __fetch_parentname(object $class)             -->  Get the parent class name.
+* __child_of(mixed $parent, object $candidate)  -->  Is $candidate a child of $parent?
+* __implements(string $interface, object $candidate) -->  Does $candidate implement the interface?
+* __has_function(string $name)                 -->  Does the function exist?
+* __fetch_function(string $name): array         -->  Get everything the VM knows about a function, including its flags and signature.
+* __fetch_function_list(PHP_BUILTINS|PHP_USER)  -->  List of registered functions.
+* __fetch_constant_list(PHP_BUILTINS|PHP_USER)  -->  List of registered constants.
 
 ### 0. Arrays
 

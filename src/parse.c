@@ -239,6 +239,8 @@ static const ph7_expr_op aOpTable[] = {
   { { "(array)", sizeof("(array)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_ARRAY },
   { { "(object)", sizeof("(object)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_OBJ },
   { { "(unset)", sizeof("(unset)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_NULL },
+  { { "(reliable)", sizeof("(reliable)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_RELIABLE },
+  { { "(unreliable)", sizeof("(unreliable)") - 1 }, EXPR_OP_TYPECAST, 4, EXPR_OP_ASSOC_RIGHT, PH7_OP_CVT_UNRELIABLE },
 
   /* Binary operators */
 
