@@ -8,18 +8,6 @@
  * Email: vvb333007@gmail.com
  */
 
-/* FreeRTOS constants */
-
-const pdPASS = 1;
-const pdFAIL = 0;
-const portMAX_DELAY = 0xffffffff;
-
-const eNoAction = 0;
-const eSetBits = 1;
-const eIncrement = 2;
-const eSetValueWithOverwrite = 3;
-const eSetValueWithoutOverwrite = 4;
-
 
 /** Global array emulating the FreeRTOS queue table.
  * The index in this array is the queue "handle" (analogue of QueueHandle_t which is a pointer 

@@ -8,49 +8,5 @@
  * Email: vvb333007@gmail.com
  */
 
-/* ESP-IDF native constants (GPIO ) */
-
-const GPIO_PORT_0 = 0;
-const GPIO_PORT_MAX = 1;
-
-const GPIO_INTR_DISABLE = 0;
-const GPIO_INTR_POSEDGE = 1;
-const GPIO_INTR_NEGEDGE = 2;
-const GPIO_INTR_ANYEDGE = 3;
-const GPIO_INTR_LOW_LEVEL = 4;
-const GPIO_INTR_HIGH_LEVEL = 5;
-const GPIO_INTR_MAX = 6;
-
-const GPIO_MODE_DEF_DISABLE = 0;
-const GPIO_MODE_DEF_INPUT = 1;
-const GPIO_MODE_DEF_OUTPUT = 2;
-const GPIO_MODE_DEF_OD = 4;
-
-
-const GPIO_MODE_DISABLE = 0;
-const GPIO_MODE_INPUT = 1;
-const GPIO_MODE_OUTPUT = 2;
-const GPIO_MODE_OUTPUT_OD = 6;
-const GPIO_MODE_INPUT_OUTPUT_OD = 7;
-const GPIO_MODE_INPUT_OUTPUT = 3;
-
-
-const GPIO_PULLUP_DISABLE = 0;
-const GPIO_PULLUP_ENABLE = 1;
-
-const GPIO_PULLDOWN_DISABLE = 0;
-const GPIO_PULLDOWN_ENABLE = 1;
-
-const GPIO_PULLUP_ONLY = 0;
-const GPIO_PULLDOWN_ONLY = 1;
-const GPIO_PULLUP_PULLDOWN = 2;
-const GPIO_FLOATING = 3;
-
-const GPIO_DRIVE_CAP_0 = 0;
-const GPIO_DRIVE_CAP_1 = 1;
-const GPIO_DRIVE_CAP_2 = 2;
-const GPIO_DRIVE_CAP_DEFAULT = 2;
-const GPIO_DRIVE_CAP_3 = 3;
-const GPIO_DRIVE_CAP_MAX = 4;
 
 ?>
