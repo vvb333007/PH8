@@ -1,0 +1,22 @@
+<?php
+const SPI_CLOCK_DIV2 = 2;
+const SPI_CLOCK_DIV4 = 4;
+const SPI_CLOCK_DIV8 = 8;
+const SPI_CLOCK_DIV16 = 16;
+const SPI_CLOCK_DIV32 = 32;
+const SPI_CLOCK_DIV64 = 64;
+const SPI_CLOCK_DIV128 = 128;
+
+const SPI_MODE0 = 0;
+const SPI_MODE1 = 1;
+const SPI_MODE2 = 2;
+const SPI_MODE3 = 3;
+
+const SPI_SS0 = 0;
+const SPI_SS1 = 1;
+const SPI_SS2 = 2;
+const SPI_SS_MASK_ALL = 7;
+
+const SPI_LSBFIRST = 0;
+const SPI_MSBFIRST = 1;
+?>

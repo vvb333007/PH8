@@ -1,4 +1,5 @@
 <?php
+
 const SERIAL_8N1 = 0x800001c; 
 
 const UART_SIGNAL_INV_DISABLE = 0;

@@ -6,8 +6,6 @@ const ADC_6db = 2;
 const ADC_11db = 3;
 const ADC_ATTENDB_MAX = 4;
 
-/* Arduino GPIO native constants */
-
 const LOW = 0;
 const HIGH = 1;
 
