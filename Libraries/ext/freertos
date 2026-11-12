@@ -1,12 +1,14 @@
 <?php
-/*
- * PH8 Standard Library
- * 
- * This file is a part of the PH8 scripting language standard library.
- *
- * Copyright (c) Viacheslav Logunov
- * Email: vvb333007@gmail.com
- */
+
+const pdPASS = 1;
+const pdFAIL = 0;
+const portMAX_DELAY = -1;
+
+const eNoAction = 0;
+const eSetBits = 1;
+const eIncrement = 2;
+const eSetValueWithOverwrite = 3;
+const eSetValueWithoutOverwrite = 4;
 
 
 /** Global array emulating the FreeRTOS queue table.

@@ -1,0 +1,4 @@
+<?php
+const RMT_RX_MODE = 0;
+const RMT_TX_MODE = 1;
+?>

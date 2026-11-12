@@ -1,0 +1,12 @@
+<?php
+
+const RGB_BRIGHTNESS = 64;
+const RGB_BUILTIN_LED_COLOR_ORDER = 5;  // default WS2812B color order, GRB
+const LED_COLOR_ORDER_RGB = 0;
+const LED_COLOR_ORDER_BGR = 1;
+const LED_COLOR_ORDER_BRG = 2;
+const LED_COLOR_ORDER_RBG = 3;
+const LED_COLOR_ORDER_GBR = 4;
+const LED_COLOR_ORDER_GRB = 5;
+
+?>

@@ -1,0 +1,35 @@
+<?php
+
+const ADC_0db = 0;
+const ADC_2_5db = 1;
+const ADC_6db = 2;
+const ADC_11db = 3;
+const ADC_ATTENDB_MAX = 4;
+
+/* Arduino GPIO native constants */
+
+const LOW = 0;
+const HIGH = 1;
+
+const INPUT = 1;
+const OUTPUT = 3;
+const PULLUP = 4;
+const INPUT_PULLUP = 5;
+const PULLDOWN = 8;
+const INPUT_PULLDOWN = 9;
+const OPEN_DRAIN = 16;
+const OUTPUT_OPEN_DRAIN = 19;
+const ANALOG = 192;
+const DISABLED = 0;
+const RISING = 1;
+const FALLING = 2;
+const CHANGE = 3;
+const ONLOW = 4;
+const ONHIGH = 5;
+const ONLOW_WE = 12;
+const ONHIGH_WE = 13;
+
+const APB_BEFORE_CHANGE = 0;
+const APB_AFTER_CHANGE = 1;
+
+?>
