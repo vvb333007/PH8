@@ -587,3 +587,58 @@ try {
   echo 'Caught!', PHP_EOL;       // 2. Catch the exception.
 }
 ```
+
+## 10. String-to-Number Conversion; Reliable and Unreliable Values
+
+String-to-number conversion has long been a source for bugs in user PHP scripts. PHP allows a numeric 
+prefix to be extracted from a string even when followed by non-numeric text. 
+
+For example, `(int)"32kg"` produces `32`. While convenient in some situations, this behavior can sometimes cost you a day of debugging:
+ the result looks like a perfectly valid number even though the original input contains invalid data.
+
+Add to this `(int)'hello'` which resolves to `0`
+
+To address this issue, PH8 introduces a special value attribute — `unreliable`. Whenever the VM detects a 
+questionable conversion, it automatically marks the result as `unreliable`. This marker belongs to the value 
+itself, not to the variable: it is preserved when the value is copied and propagates to the result of an 
+operation if at least one of its operands is unreliable. Every value can bear 'unreliable' flag.
+
+The programmer can also explicitly set or clear the marker using the `(unreliable)` and `(reliable)` type-casting operators.
+
+```php
+$a = (int)'32kg';          // 32, unreliable
+$b = $a * 2;               // 64, unreliable
+$c = $b + 10;              // 74, unreliable
+
+$c = 100;                  // 100, reliable
+$a = (unreliable)42;       // 42, unreliable
+$a = (reliable)$a;         // 42, reliable
+```
+
+By default, the `unreliable` attribute has no effect on program execution and can be completely ignored by 
+the programmer.
+
+For reliability checks, PH8 provides the `is_reliable()` function and the `reliable {}` language construct. 
+Within a `reliable` block, any attempt to access a value marked as `unreliable` throws an exception. 
+This makes it possible to detect not only conversion errors but also their consequences elsewhere in 
+the program. The `is_reliable(mixed $a)` function allows the programmer to check a value's reliability 
+and choose an appropriate course of action. For example, potentially problematic values can be explicitly 
+marked as unreliable, while `reliable` blocks can be used as checkpoints to catch accidental use of such 
+values before they have been validated or corrected.
+
+```php
+if (!is_reliable($value)) {
+    // Validate and correct the value
+    $value = validate_and_fix($value);
+    $value = (reliable)$value;
+}
+```
+
+And:
+
+```php
+reliable {
+    // Only reliable values may be used here
+    calculate($value);
+}
+```
