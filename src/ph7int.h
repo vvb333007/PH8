@@ -1965,6 +1965,7 @@ PH7_PRIVATE sxi32 PH7_VmInitFuncState(ph7_vm *pVm, ph7_vm_func *pFunc, const cha
                                       sxi32 iFlags, void *pUserData);
 PH7_PRIVATE sxi32 VmByteCodeDump(SySet *pByteCode, ProcConsumer xConsumer, void *pUserData);
 
+PH7_PRIVATE sxi32 PH7_VmRegisterExtension(ph7_vm *pVm, const char *zName);
 PH7_PRIVATE sxi32 PH7_VmInstallUserFunction(ph7_vm *pVm, ph7_vm_func *pFunc, SyString *pName);
 PH7_PRIVATE sxi32 PH7_VmCreateClassInstanceFrame(ph7_vm *pVm, ph7_class_instance *pObj);
 PH7_PRIVATE sxi32 PH7_VmRefObjRemove(ph7_vm *pVm, sxu32 nIdx, SyHashEntry *pEntry, ph7_hashmap_node *pMapEntry);

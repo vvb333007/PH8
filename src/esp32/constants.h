@@ -24,6 +24,8 @@ void esp32_const_int ## Value_ (ph7_value *, void *)
 #define MinusConst( Value_ ) \
 void esp32_const_mint ## Value_ (ph7_value *, void *)
 
+void esp32_const_8n1( ph7_value *pVal, void *pUserData );
+
 Const( 0 );
 Const( 1 );
 Const( 2 );
@@ -42,6 +44,8 @@ Const( 32 );
 Const( 64 );
 Const( 128 );
 Const( 192 );
+Const( 0x800001c );
+
 
 MinusConst( 1 );
 

@@ -11,9 +11,6 @@
  */
 
 #include "ph7int.h"
-#if defined(ESP32) || defined(__CYGWIN__)
-#  include "esp32/builtins.h"
-#endif
 
 #ifndef PH7_DISABLE_BUILTIN_FUNC
 #include "regexp.h"
@@ -62,7 +59,6 @@ static char s_INF[] = { 'I','N','F', 0 };
  * Return
  *  TRUE if var is a boolean. False otherwise.
  */
-//sxi32 PH7_VmThrow(ph7_vm *pVm, const char *zName, int nBytes, const char *zFormat, ...);
 
 static int PH7_builtin_is_bool(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   int res = 0; /* Assume false by default */
@@ -9574,17 +9570,9 @@ static const ph7_builtin_func aBuiltInFunc[] = {
   { "rawurlencode", PH7_builtin_urlencode },
   { "rawurldecode", PH7_builtin_urldecode },
 #endif /* PH7_DISABLE_BUILTIN_FUNC */
-
-/* ESP32 Extensions: Native ESP-IDF bindings and Arduino Core bindings
- * Set PH7_DISABLE_ESP32_ESPIDF_FUNC to exclude ESP-IDF bindings
- * PH7_DISABLE_ESP32_ARDUINO_FUNC to exclude ESP-IDF bindings 
- */
-#if defined(ESP32) || defined(__CYGWIN__)
-#  include "esp32/builtins.inc"
-#endif
-
-
 };
+
+
 /*
  * Register the built-in functions defined above,the array functions 
  * defined in hashmap.c and the IO functions defined in vfs.c.

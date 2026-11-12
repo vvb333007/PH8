@@ -1113,7 +1113,7 @@ int ph7_create_function(ph7_vm *pVm, const char *zName, int (*xFunc)(ph7_context
     return PH7_CORRUPT;
   }
 
-//  fprintf(stderr,"%s\r\n",zName);
+  //fprintf(stderr,"%s\r\n",zName);
 
   SyStringInitFromBuf(&sName, zName, SyStrlen(zName));
   /* Remove leading and trailing white spaces */

@@ -97,6 +97,31 @@
   { "LED_COLOR_ORDER_RBG", esp32_const_int3 },
   { "LED_COLOR_ORDER_GBR", esp32_const_int4 },
   { "LED_COLOR_ORDER_GRB", esp32_const_int5 },
+
+  { "SERIAL_8N1", esp32_const_8n1 },
+
+  { "UART_SIGNAL_INV_DISABLE", esp32_const_int0 },
+  { "UART_SIGNAL_IRDA_TX_INV", esp32_const_int1 },
+  { "UART_SIGNAL_IRDA_RX_INV", esp32_const_int2 },
+  { "UART_SIGNAL_RXD_INV", esp32_const_int4 },
+  { "UART_SIGNAL_CTS_INV", esp32_const_int8 },
+  { "UART_SIGNAL_DSR_INV", esp32_const_int16 },
+  { "UART_SIGNAL_TXD_INV", esp32_const_int32 },
+  { "UART_SIGNAL_RTS_INV", esp32_const_int64 },
+  { "UART_SIGNAL_DTR_INV", esp32_const_int128 },
+
+  { "ESP32_UART_IRDA_RX", esp32_const_int0 },
+  { "ESP32_UART_IRDA_TX", esp32_const_int1 },
+
+  { "RMT_RX_MODE", esp32_const_int0 },
+  { "RMT_TX_MODE", esp32_const_int1 },
+
+  { "UART_MODE_UART", esp32_const_int0 },
+  { "UART_MODE_RS485_HALF_DUPLEX", esp32_const_int1 },
+  { "UART_MODE_IRDA", esp32_const_int2 },
+  { "UART_MODE_RS485_COLLISION_DETECT", esp32_const_int3 },
+  { "UART_MODE_RS485_APP_CTRL", esp32_const_int4 },
+
 #endif // Disable Arduino constants
 
 #ifndef PH7_DISABLE_ESP32_FREERTOS_CONSTS

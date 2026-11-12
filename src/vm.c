@@ -1812,6 +1812,7 @@ PH7_PRIVATE sxi32 PH7_VmMakeReady(
   }
   /* Zero the reference table */
   SyZero(pVm->apRefObj, sizeof(VmRefObj *) * pVm->nRefSize);
+
   /* Register special functions first [i.e: print, json_encode(), func_get_args(), die, etc.] */
   rc = VmRegisterSpecialFunction(&(*pVm));
   if (rc != SXRET_OK) {
@@ -11825,24 +11826,10 @@ static int vm_builtin_get_included_files(ph7_context *pCtx, int nArg, ph7_value 
   return PH7_OK;
 }
 /*
- * include:
- * According to the PHP reference manual.
- *  The include() function includes and evaluates the specified file.
- *  Files are included based on the file path given or, if none is given
- *  the include_path specified.If the file isn't found in the include_path
- *  include() will finally check in the calling script's own directory
- *  and the current working directory before failing. The include()
- *  construct will emit a warning if it cannot find a file; this is different
- *  behavior from require(), which will emit a fatal error.
- *  If a path is defined пїЅ whether absolute (starting with a drive letter
- *  or \ on Windows, or / on Unix/Linux systems) or relative to the current
- *  directory (starting with . or ..) пїЅ the include_path will be ignored altogether.
- *  For example, if a filename begins with ../, the parser will look in the parent
- *  directory to find the requested file.
- *  When a file is included, the code it contains inherits the variable scope
- *  of the line on which the include occurs. Any variables available at that line
- *  in the calling file will be available within the called file, from that point forward.
- *  However, all functions and classes defined in the included file have the global scope. 
+ * include
+ * Here we extend classic 'include' semantics with idea of built-in extensions:
+ * include 'ext/arduino.gpio'
+ * include 'ext/idf.gpio'
  */
 static int vm_builtin_include(ph7_context *pCtx, int nArg, ph7_value **apArg) {
   SyString sFile;
@@ -11859,6 +11846,12 @@ static int vm_builtin_include(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
+#if 1
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
+      return SXRET_OK;
+  }
+#endif
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, FALSE);
   if (rc != SXRET_OK) {
@@ -11892,6 +11885,13 @@ static int vm_builtin_include_once(ph7_context *pCtx, int nArg, ph7_value **apAr
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
+#if 1
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
+      return SXRET_OK;
+  }
+#endif
+
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, TRUE);
   if (rc == SXERR_EXISTS) {
@@ -11929,6 +11929,14 @@ static int vm_builtin_require(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
+
+#if 1
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
+      return SXRET_OK;
+  }
+#endif
+
   /* Open,compile and execute the desired script */
   
   rc = VmExecIncludedFile(&(*pCtx), &sFile, FALSE);
@@ -11964,6 +11972,13 @@ static int vm_builtin_require_once(ph7_context *pCtx, int nArg, ph7_value **apAr
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
+#if 1
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
+      return SXRET_OK;
+  }
+#endif
+
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, TRUE);
 
@@ -14705,7 +14720,7 @@ static const ph7_builtin_func aVmFunc[] = {
   { "ob_get_length", vm_builtin_ob_get_length },
   { "ob_get_level", vm_builtin_ob_get_level },
   { "ob_implicit_flush", vm_builtin_ob_implicit_flush },
-  { "ob_get_level", vm_builtin_ob_get_level },
+//  { "ob_get_level", vm_builtin_ob_get_level },
   { "ob_list_handlers", vm_builtin_ob_list_handlers },
   { "ob_start", vm_builtin_ob_start },
   /* Assertion functions */

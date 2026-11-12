@@ -20,7 +20,7 @@
  * There are allocations made with malloc(): it is ok, because buffer is duplicated when converted to string
  */
 #include "ph7int.h"
-#include "builtins.h"
+//#include "builtins.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -3061,83 +3061,664 @@ IMPLEMENT_N(timerDetachInterrupt, int,
 #endif //#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
 
 #ifndef PH7_DISABLE_ESP32_ESPIDF_FUNC
-#if 0
 
-$config = [
-  'fun_sel' => 0,                   /*!< Value of IOMUX function selection */
-  'sig_out' => 0,                   /*!< Index of the outputting peripheral signal */ 
-  'drv' => 0,                       /*!< Value of drive strength */
-  'pu' => 0,                        /*!< Status of pull-up enabled or not */
-  'pd' => 0,                        /*!< Status of pull-down enabled or not */
-  'ie' => 0,                        /*!< Status of input enabled or not */
-  'oe' => 0,                        /*!< Status of output enabled or not */
-  'oe_ctrl_by_periph' => 0,          /*!< True if use output enable signal from peripheral, otherwise False */
-  'oe_inv' => 0,                     /*!< Whether the output enable signal is inversed or not */
-  'od' => 0,                         /*!< Status of open-drain enabled or not */
-  'slp_sel' => 0                     /*!< Status of pin sleep mode enabled or not */
-];
+# ifdef ESP32
+#  include "driver/gpio.h"
+#  include "esp_idf_version.h"
+/* Some of the low-level GPIO calls (gpio_input_enable(), gpio_iomux_*() etc) live in a private header */
+#  if defined(__has_include)
+#   if __has_include("esp_private/gpio.h")
+#    include "esp_private/gpio.h"
+#   endif
+#  endif
+# endif
 
-function gpio_config($pin, $cfg);
+/*
+ * GPIO (ESP-IDF driver/gpio.h)
+ *
+ * Almost every function returns esp_err_t as is: 0 is ESP_OK, anything else is an error code.
+ * Functions which have something to return (gpio_get_level(), gpio_get_drive_capability(),
+ * gpio_get_io_config()) return the value itself, or false on error.
+ *
+ * Pin numbers are plain integers. Modes / pull modes / interrupt types / drive strengths are the
+ * numeric values of the corresponding ESP-IDF enums (GPIO_MODE_*, GPIO_PULLUP_ONLY, GPIO_INTR_*,
+ * GPIO_DRIVE_CAP_*).
+ *
+ * Functions which deal with interrupts and ISR service only parse arguments and print a trace,
+ * the real ISR handling is done elsewhere:  TODO(ISR)
+ */
 
-int Impl(gpio_config(ph7_context *ctx, int argc, ph7_value **argv) {  return PH7_OK; }
+/* Fetch an integer element of a PHP array by its string key; 0 if there is no such element */
+static sxi64 __gpioArrayInt(ph7_value *pArray, const char *zKey) {
 
-int Impl(gpio_reset_pin(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  ph7_value *pValue = ph7_array_fetch(pArray, zKey, -1);
 
-int Impl(gpio_get_io_config(ph7_context *ctx, int argc, ph7_value **argv)  { return PH7_OK; }
+  if (pValue == NULL)
+    return 0;
 
-int Impl(gpio_get_drive_capability(ph7_context *ctx, int argc, ph7_value **argv) { return PH7_OK; }
-int Impl(gpio_set_drive_capability(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  return ph7_value_to_int64(pValue);
+}
 
-int Impl(gpio_get_level(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_set_level(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+/* Add an integer element to a PHP array under the string key */
+static void __gpioArrayAddInt(ph7_context *pCtx, ph7_value *pArray, const char *zKey, int iValue) {
 
-int Impl(gpio_set_direction(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  ph7_value *pValue = ph7_context_new_scalar(pCtx);
 
-int Impl(gpio_iomux_input(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_iomux_output(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_func_sel(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  if (pValue == NULL)
+    return;
 
-int Impl(gpio_pulldown_dis(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_pulldown_en(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_pullup_dis(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_pullup_en(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_set_pull_mode(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  ph7_value_int(pValue, iValue);
+  ph7_array_add_strkey_elem(pArray, zKey, pValue);
+  ph7_context_release_value(pCtx, pValue);
+}
 
-int Impl(gpio_od_enable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_od_disable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_input_enable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_input_disable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_output_enable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_output_disable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+// int $err = gpio_config(array $config)
+//
+// $config = [
+//   'pin_bit_mask' => 0,   // bit N set means "configure GPIO N";  1 << 4 | 1 << 5  is GPIO4 and GPIO5
+//   'mode'         => 0,   // GPIO_MODE_*
+//   'pull_up_en'   => 0,   // 0 or 1
+//   'pull_down_en' => 0,   // 0 or 1
+//   'intr_type'    => 0    // GPIO_INTR_*
+// ];
+//
+// Missing keys are treated as 0, which is the "disabled" value for every field
+//
+Impl(gpio_config, pCtx, nArg, apArg) {
 
-int Impl(gpio_sleep_sel_dis(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_sleep_sel_en(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_sleep_set_direction(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_sleep_set_pull_mode(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_hold_dis(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_hold_en(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  if (nArg < 1 || !ph7_value_is_array(apArg[0])) {
+    ph7_context_throw_error(pCtx, PH7_CTX_WARNING, "gpio_config: expected (array $config)");
+    ph7_result_null(pCtx);
+    return PH7_OK;
+  }
 
-int Impl(gpio_deep_sleep_hold_dis(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_deep_sleep_hold_en(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_deep_sleep_wakeup_disable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_deep_sleep_wakeup_enable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  const sxi64 nPinBitMask = __gpioArrayInt(apArg[0], "pin_bit_mask");
+  const int   iMode       = (int)__gpioArrayInt(apArg[0], "mode");
+  const int   iPullUp     = (int)__gpioArrayInt(apArg[0], "pull_up_en");
+  const int   iPullDown   = (int)__gpioArrayInt(apArg[0], "pull_down_en");
+  const int   iIntrType   = (int)__gpioArrayInt(apArg[0], "intr_type");
 
-int Impl(gpio_force_hold_all(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_force_unhold_all(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_config(pin_bit_mask=0x%llx, mode=%d, pull_up_en=%d, pull_down_en=%d, intr_type=%d)\r\n",
+          (long long)nPinBitMask, iMode, iPullUp, iPullDown, iIntrType);
+#else
+  gpio_config_t sConfig;
 
-int Impl(gpio_wakeup_disable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_wakeup_enable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  memset(&sConfig, 0, sizeof(sConfig));
 
-int Impl(gpio_install_isr_service(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_uninstall_isr_service(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_intr_disable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_intr_enable(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_isr_handler_add(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_isr_handler_remove(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_isr_register(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
-int Impl(gpio_set_intr_type(ph7_context *ctx, int argc, ph7_value **argv) {   return PH7_OK; }
+  sConfig.pin_bit_mask = (uint64_t)nPinBitMask;
+  sConfig.mode         = (gpio_mode_t)iMode;
+  sConfig.pull_up_en   = iPullUp   ? GPIO_PULLUP_ENABLE   : GPIO_PULLUP_DISABLE;
+  sConfig.pull_down_en = iPullDown ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
+  sConfig.intr_type    = (gpio_int_type_t)iIntrType;  /* TODO(ISR): interrupts are not wired up yet */
 
-#endif // 0
+  ph7_result_int(pCtx, (int)gpio_config(&sConfig));
+#endif
+  return PH7_OK;
+}
+
+// int $err = gpio_reset_pin(int $pin)
+//
+IMPLEMENT_N(gpio_reset_pin, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_reset_pin(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_reset_pin((gpio_num_t)a0));
+#endif
+)
+
+// array|false $config = gpio_get_io_config(int $pin)
+//
+// Returns the current IO configuration of the pin:
+//
+// $config = [
+//   'pu'                => 0,   // pull-up enabled
+//   'pd'                => 0,   // pull-down enabled
+//   'ie'                => 0,   // input enabled
+//   'oe'                => 0,   // output enabled
+//   'oe_ctrl_by_periph' => 0,   // output enable signal comes from a peripheral
+//   'oe_inv'            => 0,   // output enable signal is inverted
+//   'od'                => 0,   // open-drain enabled
+//   'drv'               => 0,   // drive strength (GPIO_DRIVE_CAP_*)
+//   'fun_sel'           => 0,   // IOMUX function selection
+//   'sig_out'           => 0,   // index of the outputting peripheral signal
+//   'slp_sel'           => 0    // pin sleep mode enabled
+// ];
+//
+// gpio_get_io_config() exists in recent ESP-IDF versions only (5.3 and later)
+//
+Impl(gpio_get_io_config, pCtx, nArg, apArg) {
+
+  if (nArg < 1 || !ph7_value_is_numeric(apArg[0])) {
+    ph7_context_throw_error(pCtx, PH7_CTX_WARNING, "gpio_get_io_config: expected (int $pin)");
+    ph7_result_null(pCtx);
+    return PH7_OK;
+  }
+
+  const int iPin = ph7_value_to_int(apArg[0]);
+
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_get_io_config(%d)\r\n", iPin);
+#else
+#  if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+  gpio_io_config_t sConfig;
+
+  memset(&sConfig, 0, sizeof(sConfig));
+
+  if (gpio_get_io_config((gpio_num_t)iPin, &sConfig) != ESP_OK) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+
+  /* The array is released automatically when this function returns */
+  ph7_value *pArray = ph7_context_new_array(pCtx);
+
+  if (pArray == NULL) {
+    ph7_result_bool(pCtx, 0);
+    return PH7_OK;
+  }
+
+  __gpioArrayAddInt(pCtx, pArray, "pu",                sConfig.pu);
+  __gpioArrayAddInt(pCtx, pArray, "pd",                sConfig.pd);
+  __gpioArrayAddInt(pCtx, pArray, "ie",                sConfig.ie);
+  __gpioArrayAddInt(pCtx, pArray, "oe",                sConfig.oe);
+  __gpioArrayAddInt(pCtx, pArray, "oe_ctrl_by_periph", sConfig.oe_ctrl_by_periph);
+  __gpioArrayAddInt(pCtx, pArray, "oe_inv",            sConfig.oe_inv);
+  __gpioArrayAddInt(pCtx, pArray, "od",                sConfig.od);
+  __gpioArrayAddInt(pCtx, pArray, "drv",               sConfig.drv);
+  __gpioArrayAddInt(pCtx, pArray, "fun_sel",           sConfig.fun_sel);
+  __gpioArrayAddInt(pCtx, pArray, "sig_out",           sConfig.sig_out);
+  __gpioArrayAddInt(pCtx, pArray, "slp_sel",           sConfig.slp_sel);
+
+  ph7_result_value(pCtx, pArray);
+#  else
+  (void)iPin;
+  NOT_SUPPORTED(gpio_get_io_config);
+#  endif
+#endif
+  return PH7_OK;
+}
+
+// int|false $capability = gpio_get_drive_capability(int $pin)
+//
+IMPLEMENT_N(gpio_get_drive_capability, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_get_drive_capability(%d)\r\n",a0);
+#else
+  gpio_drive_cap_t eCapability = GPIO_DRIVE_CAP_DEFAULT;
+
+  if (gpio_get_drive_capability((gpio_num_t)a0, &eCapability) == ESP_OK)
+    ph7_result_int(pCtx, (int)eCapability);
+  else
+    ph7_result_bool(pCtx, 0);
+#endif
+)
+
+// int $err = gpio_set_drive_capability(int $pin, int $capability)
+//
+IMPLEMENT_N_N(gpio_set_drive_capability, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_set_drive_capability(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_set_drive_capability((gpio_num_t)a0, a1));
+#endif
+)
+
+// int $level = gpio_get_level(int $pin)
+//
+IMPLEMENT_N(gpio_get_level, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_get_level(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, gpio_get_level((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_set_level(int $pin, int $level)
+//
+IMPLEMENT_N_N(gpio_set_level, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_set_level(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_set_level((gpio_num_t)a0, a1 ? 1 : 0));
+#endif
+)
+
+// int $err = gpio_set_direction(int $pin, int $mode)     // $mode is GPIO_MODE_*
+//
+IMPLEMENT_N_N(gpio_set_direction, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_set_direction(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_set_direction((gpio_num_t)a0, a1));
+#endif
+)
+
+/*
+ * Low level calls: IOMUX and pad control. Some of them are declared in a private ESP-IDF header and
+ * their signatures changed between ESP-IDF releases
+ */
+
+// int $err = gpio_iomux_input(int $pin, int $func, int $signal_idx)
+//
+IMPLEMENT_N_N_N(gpio_iomux_input, int, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_iomux_input(%d, %d, %d)\r\n",a0,a1,a2);
+#else
+  ph7_result_int(pCtx, (int)gpio_iomux_input((gpio_num_t)a0, a1, a2));
+#endif
+)
+
+// int $err = gpio_iomux_output(int $pin, int $func)
+//
+IMPLEMENT_N_N(gpio_iomux_output, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_iomux_output(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_iomux_output((gpio_num_t)a0, a1));
+#endif
+)
+
+// int $err = gpio_func_sel(int $pin, int $func)
+//
+IMPLEMENT_N_N(gpio_func_sel, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_func_sel(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_func_sel((gpio_num_t)a0, a1));
+#endif
+)
+
+// int $err = gpio_pulldown_dis(int $pin)
+//
+IMPLEMENT_N(gpio_pulldown_dis, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_pulldown_dis(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_pulldown_dis((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_pulldown_en(int $pin)
+//
+IMPLEMENT_N(gpio_pulldown_en, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_pulldown_en(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_pulldown_en((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_pullup_dis(int $pin)
+//
+IMPLEMENT_N(gpio_pullup_dis, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_pullup_dis(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_pullup_dis((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_pullup_en(int $pin)
+//
+IMPLEMENT_N(gpio_pullup_en, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_pullup_en(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_pullup_en((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_set_pull_mode(int $pin, int $mode)     // $mode is GPIO_PULLUP_ONLY, GPIO_PULLDOWN_ONLY, ...
+//
+IMPLEMENT_N_N(gpio_set_pull_mode, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_set_pull_mode(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_set_pull_mode((gpio_num_t)a0, a1));
+#endif
+)
+
+// int $err = gpio_od_enable(int $pin)
+//
+IMPLEMENT_N(gpio_od_enable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_od_enable(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_od_enable((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_od_disable(int $pin)
+//
+IMPLEMENT_N(gpio_od_disable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_od_disable(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_od_disable((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_input_enable(int $pin)
+//
+IMPLEMENT_N(gpio_input_enable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_input_enable(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_input_enable((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_input_disable(int $pin)
+//
+IMPLEMENT_N(gpio_input_disable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_input_disable(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_input_disable((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_output_enable(int $pin)
+//
+IMPLEMENT_N(gpio_output_enable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_output_enable(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_output_enable((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_output_disable(int $pin)
+//
+IMPLEMENT_N(gpio_output_disable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_output_disable(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_output_disable((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_sleep_sel_dis(int $pin)
+//
+IMPLEMENT_N(gpio_sleep_sel_dis, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_sleep_sel_dis(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_sleep_sel_dis((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_sleep_sel_en(int $pin)
+//
+IMPLEMENT_N(gpio_sleep_sel_en, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_sleep_sel_en(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_sleep_sel_en((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_sleep_set_direction(int $pin, int $mode)
+//
+IMPLEMENT_N_N(gpio_sleep_set_direction, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_sleep_set_direction(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_sleep_set_direction((gpio_num_t)a0, a1));
+#endif
+)
+
+// int $err = gpio_sleep_set_pull_mode(int $pin, int $mode)
+//
+IMPLEMENT_N_N(gpio_sleep_set_pull_mode, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_sleep_set_pull_mode(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_sleep_set_pull_mode((gpio_num_t)a0, a1));
+#endif
+)
+
+// int $err = gpio_hold_dis(int $pin)
+//
+IMPLEMENT_N(gpio_hold_dis, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_hold_dis(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_hold_dis((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_hold_en(int $pin)
+//
+IMPLEMENT_N(gpio_hold_en, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_hold_en(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_hold_en((gpio_num_t)a0));
+#endif
+)
+
+// gpio_deep_sleep_hold_dis(): void
+//
+IMPLEMENT(gpio_deep_sleep_hold_dis,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_deep_sleep_hold_dis()\r\n");
+#else
+#  if SOC_GPIO_SUPPORT_HOLD_IO_IN_DSLP
+  gpio_deep_sleep_hold_dis();
+#  else
+  NOT_SUPPORTED(gpio_deep_sleep_hold_dis);
+#  endif
+#endif
+)
+
+// gpio_deep_sleep_hold_en(): void
+//
+IMPLEMENT(gpio_deep_sleep_hold_en,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_deep_sleep_hold_en()\r\n");
+#else
+#  if SOC_GPIO_SUPPORT_HOLD_IO_IN_DSLP
+  gpio_deep_sleep_hold_en();
+#  else
+  NOT_SUPPORTED(gpio_deep_sleep_hold_en);
+#  endif
+#endif
+)
+
+// int $err = gpio_deep_sleep_wakeup_disable(int $pin)
+//
+IMPLEMENT_N(gpio_deep_sleep_wakeup_disable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_deep_sleep_wakeup_disable(%d)\r\n",a0);
+#else
+#  if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+  ph7_result_int(pCtx, (int)gpio_deep_sleep_wakeup_disable((gpio_num_t)a0));
+#  else
+  NOT_SUPPORTED(gpio_deep_sleep_wakeup_disable);
+#  endif
+#endif
+)
+
+// int $err = gpio_deep_sleep_wakeup_enable(int $pin, int $intr_type)
+//
+IMPLEMENT_N_N(gpio_deep_sleep_wakeup_enable, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_deep_sleep_wakeup_enable(%d, %d)\r\n",a0,a1);
+#else
+#  if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+  ph7_result_int(pCtx, (int)gpio_deep_sleep_wakeup_enable((gpio_num_t)a0, a1));
+#  else
+  NOT_SUPPORTED(gpio_deep_sleep_wakeup_enable);
+#  endif
+#endif
+)
+
+// int $err = gpio_force_hold_all()
+//
+IMPLEMENT(gpio_force_hold_all,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_force_hold_all()\r\n");
+#else
+#  if SOC_GPIO_SUPPORT_FORCE_HOLD
+  ph7_result_int(pCtx, (int)gpio_force_hold_all());
+#  else
+  NOT_SUPPORTED(gpio_force_hold_all);
+#  endif
+#endif
+)
+
+// int $err = gpio_force_unhold_all()
+//
+IMPLEMENT(gpio_force_unhold_all,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_force_unhold_all()\r\n");
+#else
+#  if SOC_GPIO_SUPPORT_FORCE_HOLD
+  ph7_result_int(pCtx, (int)gpio_force_unhold_all());
+#  else
+  NOT_SUPPORTED(gpio_force_unhold_all);
+#  endif
+#endif
+)
+
+// int $err = gpio_wakeup_disable(int $pin)
+//
+IMPLEMENT_N(gpio_wakeup_disable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_wakeup_disable(%d)\r\n",a0);
+#else
+  ph7_result_int(pCtx, (int)gpio_wakeup_disable((gpio_num_t)a0));
+#endif
+)
+
+// int $err = gpio_wakeup_enable(int $pin, int $intr_type)    // light sleep wakeup
+//
+IMPLEMENT_N_N(gpio_wakeup_enable, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_wakeup_enable(%d, %d)\r\n",a0,a1);
+#else
+  ph7_result_int(pCtx, (int)gpio_wakeup_enable((gpio_num_t)a0, a1));
+#endif
+)
+
+/*
+ * Interrupts. Handlers are PHP callables.  TODO(ISR): argument parsing and traces only
+ */
+
+// int $err = gpio_install_isr_service(int $intr_alloc_flags)
+//
+IMPLEMENT_N(gpio_install_isr_service, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_install_isr_service(%d)\r\n",a0);
+#else
+  /* TODO(ISR): gpio_install_isr_service() */
+#endif
+)
+
+// gpio_uninstall_isr_service(): void
+//
+IMPLEMENT(gpio_uninstall_isr_service,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_uninstall_isr_service()\r\n");
+#else
+  /* TODO(ISR): gpio_uninstall_isr_service() */
+#endif
+)
+
+// int $err = gpio_intr_disable(int $pin)
+//
+IMPLEMENT_N(gpio_intr_disable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_intr_disable(%d)\r\n",a0);
+#else
+  /* TODO(ISR): gpio_intr_disable() */
+#endif
+)
+
+// int $err = gpio_intr_enable(int $pin)
+//
+IMPLEMENT_N(gpio_intr_enable, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_intr_enable(%d)\r\n",a0);
+#else
+  /* TODO(ISR): gpio_intr_enable() */
+#endif
+)
+
+// int $err = gpio_isr_handler_remove(int $pin)
+//
+IMPLEMENT_N(gpio_isr_handler_remove, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_isr_handler_remove(%d)\r\n",a0);
+#else
+  /* TODO(ISR): gpio_isr_handler_remove() */
+#endif
+)
+
+// int $err = gpio_set_intr_type(int $pin, int $intr_type)
+//
+IMPLEMENT_N_N(gpio_set_intr_type, int, int,
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_set_intr_type(%d, %d)\r\n",a0,a1);
+#else
+  /* TODO(ISR): gpio_set_intr_type() */
+#endif
+)
+
+// int $err = gpio_isr_handler_add(int $pin, callable $handler, mixed $arg)
+//
+Impl(gpio_isr_handler_add, pCtx, nArg, apArg) {
+
+  if (nArg < 3 ||
+      !ph7_value_is_numeric(apArg[0]) ||
+      !ph7_value_is_callable(apArg[1])) {
+    ph7_context_throw_error(pCtx, PH7_CTX_WARNING, "gpio_isr_handler_add: expected (int $pin, callable $handler, mixed $arg)");
+    ph7_result_null(pCtx);
+    return PH7_OK;
+  }
+
+  const int  iPin     = ph7_value_to_int(apArg[0]);
+  ph7_value *pHandler = apArg[1];
+  ph7_value *pUserArg = apArg[2];
+
+  (void)iPin; (void)pHandler; (void)pUserArg;
+
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_isr_handler_add(%d, <callable>, <arg>)\r\n", iPin);
+#else
+  /* TODO(ISR): gpio_isr_handler_add() */
+#endif
+  return PH7_OK;
+}
+
+// int $err = gpio_isr_register(callable $handler, mixed $arg, int $intr_alloc_flags)
+//
+Impl(gpio_isr_register, pCtx, nArg, apArg) {
+
+  if (nArg < 3 ||
+      !ph7_value_is_callable(apArg[0]) ||
+      !ph7_value_is_numeric(apArg[2])) {
+    ph7_context_throw_error(pCtx, PH7_CTX_WARNING, "gpio_isr_register: expected (callable $handler, mixed $arg, int $intr_alloc_flags)");
+    ph7_result_null(pCtx);
+    return PH7_OK;
+  }
+
+  ph7_value *pHandler = apArg[0];
+  ph7_value *pUserArg = apArg[1];
+  const int  iFlags   = ph7_value_to_int(apArg[2]);
+
+  (void)pHandler; (void)pUserArg; (void)iFlags;
+
+#ifdef __CYGWIN__
+  fprintf(stderr,"gpio_isr_register(<callable>, <arg>, %d)\r\n", iFlags);
+#else
+  /* TODO(ISR): gpio_isr_register() */
+#endif
+  return PH7_OK;
+}
+
 #endif // #ifndef PH7_DISABLE_ESP32_ESPIDF_FUNC
 
 
@@ -3189,8 +3770,407 @@ int Impl( ulTaskNotifyTake )(ph7_context *ctx, int argc, ph7_value **argv) {
 
 #undef Impl
 
+/*
+ * Register the built-in functions defined above,the array functions 
+ * defined in hashmap.c and the IO functions defined in vfs.c.
+ */
+#if  1
+#define Bind(Name_) \
+  { #Name_,  esp32_builtin_ ## Name_ }, 
+
+static const ph7_builtin_func aArduFunc[] = {
+#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
+// Advanced I/O
+//
+Bind( shiftIn )
+Bind( shiftOut )
+Bind( pulseIn )
+Bind( pulseInLong )
+
+//Bind( tone )
+//Bind( noTone )
+
+// Characters
+//
+Bind( isAlpha )
+Bind( isAlphaNumeric )
+Bind( isAscii )
+Bind( isControl )
+Bind( isDigit )
+Bind( isGraph )
+Bind( isHexadecimalDigit )
+Bind( isLowerCase )
+Bind( isPrintable )
+Bind( isPunct )
+Bind( isSpace )
+Bind( isUpperCase )
+Bind( isWhitespace )
+Bind( toAscii )
+Bind( toLowerCase )
+Bind( toUpperCase )
+
+// Interrupts / External interrupts
+//
+//Bind( interrupts )
+//Bind( noInterrupts )
+Bind( attachInterrupt )
+Bind( attachInterruptArg )
+Bind( detachInterrupt )
+Bind( enableInterrupt )
+Bind( disableInterrupt )
+
+
+// Analog IO
+//
+Bind( analogChannelToDigitalPin )
+Bind( analogRead )
+Bind( analogReadResolution )
+Bind( analogWrite )
+Bind( analogWriteResolution )
+Bind( analogReadMilliVolts )
+Bind( analogWriteFrequency )
+Bind( analogSetAttenuation )
+Bind( analogSetPinAttenuation )
+{ "analogSetWidth",  esp32_builtin_analogReadResolution },  /* A synonym */
+//Bind( analogContinuous )
+//Bind( analogContinuousDeinit )
+//Bind( analogContinuousRead )
+//Bind( analogContinuousSetAtten )
+//Bind( analogContinuousSetWidth )
+//Bind( analogContinuousStart )
+//Bind( analogContinuousStop )
 
 
 
+// Random Numbers
+Bind( random )
+Bind( randomSeed )
+//Bind( randomVector )
+
+// Misc
+Bind( map )
+Bind( makeWord )
+//Bind( constrain )
+
+// Time
+Bind( micros )
+Bind( millis )
+Bind( delay )
+Bind( delayMicroseconds )
 
 
+// Digital IO
+Bind( pinMode )
+Bind( digitalWrite )
+Bind( digitalRead )
+Bind( digitalPinIsValid )
+Bind( digitalPinCanOutput )
+Bind( digitalPinToRtcPin )
+Bind( digitalPinToDacChannel )
+Bind( digitalPinToTouchChannel )
+Bind( digitalPinToAnalogChannel )
+
+// CPU
+//
+Bind( getApbFrequency )
+Bind( getCpuFrequencyMhz )
+Bind( getXtalFrequencyMhz )
+Bind( setCpuFrequencyMhz )
+Bind( temperatureRead )
+
+// Sigma-Delta
+//
+Bind( sigmaDeltaAttach )
+Bind( sigmaDeltaDetach )
+Bind( sigmaDeltaWrite )
+
+
+// Touch
+//
+Bind( touchAttachInterrupt )
+Bind( touchAttachInterruptArg )
+Bind( touchDetachInterrupt )
+//Bind( touchInterruptGetLastStatus )
+//Bind( touchInterruptSetThresholdDirection )
+Bind( touchRead )
+//Bind( touchSetConfig )
+//Bind( touchSetDefaultThreshold )
+//Bind( touchSetTiming )
+//Bind( touchSleepWakeUpEnable )
+
+
+Bind( timerBegin )
+Bind( timerEnd )
+Bind( timerStart )
+Bind( timerStop )
+Bind( timerRestart )
+Bind( timerWrite )
+Bind( timerRead )
+Bind( timerReadMicros )
+Bind( timerReadMillis )
+Bind( timerReadSeconds )
+Bind( timerGetFrequency )
+Bind( timerAttachInterrupt )
+Bind( timerAttachInterruptArg )
+Bind( timerDetachInterrupt )
+Bind( timerAlarm )
+#endif // Arduino Core bindings
+{ NULL }
+};
+
+static const ph7_builtin_func aUartFunc[] = {
+#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
+Bind( uartAvailable )
+Bind( uartAvailableForWrite )
+Bind( uartBegin )
+Bind( uartDetectBaudrate )
+Bind( uartEnableRxInternalPull )
+Bind( uartEnd )
+Bind( uartFlush )
+Bind( uartFlushTxOnly )
+Bind( uartGetBaudRate )
+Bind( uartGetDebug )
+Bind( uartIsDriverInstalled )
+Bind( uartPeek )
+Bind( uartPinSignalInversion )
+Bind( uartRead )
+Bind( uartReadBytes )
+Bind( uartSetBaudRate )
+Bind( uartSetClockSource )
+Bind( uartSetCtsInvert )
+Bind( uartSetDebug )
+Bind( uartSetFastReading )
+Bind( uartSetHwFlowCtrlMode )
+Bind( uartSetIrdaDirection )
+Bind( uartSetMode )
+Bind( uartSetPins )
+Bind( uartSetRtsInvert )
+Bind( uartSetRxFIFOFull )
+Bind( uartSetRxInvert )
+Bind( uartSetRxTimeout )
+Bind( uartSetTxInvert )
+Bind( uartStartDetectBaudrate )
+Bind( uartWrite )
+Bind( uartWriteBuf )
+#endif // Arduino Core bindings
+{ NULL }
+};
+
+
+static const ph7_builtin_func aSpiFunc[] = {
+#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
+Bind( spiStartBus )
+Bind( spiStopBus )
+Bind( spiAttachSCK )
+Bind( spiAttachMISO )
+Bind( spiAttachMOSI )
+Bind( spiAttachSS )
+Bind( spiDetachSCK )
+Bind( spiDetachMISO )
+Bind( spiDetachMOSI )
+Bind( spiDetachSS )
+Bind( spiEnableSSPins )
+Bind( spiDisableSSPins )
+Bind( spiSSEnable )
+Bind( spiSSDisable )
+Bind( spiSSSet )
+Bind( spiSSClear )
+Bind( spiWaitReady )
+Bind( spiSSInvert )
+Bind( spiGetClockDiv )
+Bind( spiGetDataMode )
+Bind( spiGetBitOrder )
+Bind( spiSetClockDiv )
+Bind( spiSetDataMode )
+Bind( spiSetBitOrder )
+Bind( spiWrite )
+Bind( spiWriteByte )
+Bind( spiWriteWord )
+Bind( spiWriteLong )
+Bind( spiTransfer )
+Bind( spiTransferByte )
+Bind( spiTransferWord )
+Bind( spiTransferLong )
+Bind( spiTransferBytes )
+Bind( spiTransferBits )
+Bind( spiTransaction )
+Bind( spiSimpleTransaction )
+Bind( spiEndTransaction )
+Bind( spiWriteNL )
+Bind( spiWriteByteNL )
+Bind( spiWriteShortNL )
+Bind( spiWriteLongNL )
+Bind( spiWritePixelsNL )
+Bind( spiTransferByteNL )
+Bind( spiTransferShortNL )
+Bind( spiTransferLongNL )
+Bind( spiTransferBytesNL )
+Bind( spiTransferBitsNL )
+Bind( spiFrequencyToClockDiv )
+Bind( spiClockDivToFrequency )
+#endif // Arduino Core bindings
+{ NULL }
+};
+
+static const ph7_builtin_func aI2cFunc[] = {
+#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
+Bind( i2cDeinit )
+Bind( i2cGetClock )
+Bind( i2cInit )
+Bind( i2cIsInit )
+Bind( i2cRead )
+Bind( i2cSetClock )
+Bind( i2cWrite )
+Bind( i2cWriteReadNonStop )
+
+#endif // Arduino Core bindings
+{ NULL }
+};
+
+static const ph7_builtin_func aRmtFunc[] = {
+#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
+Bind( rmtDeinit )
+Bind( rmtInit )
+//Bind( rmtRead )
+//Bind( rmtReadAsync )
+Bind( rmtReceiveCompleted )
+Bind( rmtSetCarrier )
+Bind( rmtSetEOT )
+Bind( rmtSetRxMaxThreshold )
+Bind( rmtSetRxMinThreshold )
+Bind( rmtTransmitCompleted )
+//Bind( rmtWrite )
+//Bind( rmtWriteAsync )
+//Bind( rmtWriteLooping )
+//Bind( rmtWriteRepeated )
+#endif // Arduino Core bindings
+{ NULL }
+};
+
+
+static const ph7_builtin_func aLedcFunc[] = {
+#ifndef PH7_DISABLE_ESP32_ARDUINO_FUNC
+Bind( ledcAttach )
+Bind( ledcAttachChannel )
+Bind( ledcChangeFrequency )
+Bind( ledcDetach )
+Bind( ledcFade )
+//Bind( ledcGetClockSource )
+Bind( ledcOutputInvert )
+Bind( ledcRead )
+Bind( ledcReadFreq )
+//Bind( ledcSetClockSource )
+Bind( ledcWrite )
+Bind( ledcWriteChannel )
+Bind( ledcWriteNote )
+Bind( ledcWriteTone )
+#endif // Arduino Core bindings
+{ NULL }
+};
+
+
+
+static const ph7_builtin_func aIdfFunc[] = {
+
+/* ESP-IDF native bindigs, a subset
+ *
+ */
+#ifndef PH7_DISABLE_ESP32_ESPIDF_FUNC
+Bind( gpio_config )
+Bind( gpio_get_drive_capability )
+Bind( gpio_get_io_config )
+Bind( gpio_get_level )
+Bind( gpio_hold_dis )
+Bind( gpio_hold_en )
+Bind( gpio_install_isr_service )
+Bind( gpio_uninstall_isr_service )
+Bind( gpio_intr_disable )
+Bind( gpio_intr_enable )
+Bind( gpio_isr_handler_add )
+Bind( gpio_isr_handler_remove )
+Bind( gpio_isr_register )
+Bind( gpio_iomux_input )
+Bind( gpio_iomux_output )
+Bind( gpio_func_sel )
+Bind( gpio_pulldown_dis )
+Bind( gpio_pulldown_en )
+Bind( gpio_pullup_dis )
+Bind( gpio_pullup_en )
+Bind( gpio_od_enable )
+Bind( gpio_od_disable )
+Bind( gpio_input_enable )
+Bind( gpio_input_disable )
+Bind( gpio_output_enable )
+Bind( gpio_output_disable )
+Bind( gpio_reset_pin )
+Bind( gpio_set_direction )
+Bind( gpio_set_drive_capability )
+Bind( gpio_set_intr_type )
+Bind( gpio_set_level )
+Bind( gpio_set_pull_mode )
+Bind( gpio_sleep_sel_dis )
+Bind( gpio_sleep_sel_en )
+Bind( gpio_sleep_set_direction )
+Bind( gpio_sleep_set_pull_mode )
+Bind( gpio_deep_sleep_hold_dis )
+Bind( gpio_deep_sleep_hold_en )
+Bind( gpio_deep_sleep_wakeup_disable )
+Bind( gpio_deep_sleep_wakeup_enable )
+Bind( gpio_force_hold_all )
+Bind( gpio_force_unhold_all )
+Bind( gpio_wakeup_disable )
+Bind( gpio_wakeup_enable )
+#endif // ESP-IDF native bindings
+{ NULL }
+};
+
+// TODO: should we make these to be real files containing consts?
+// TODO: what is better: to have all consts as FFI or have it as PHP const?
+static struct {
+  const char *zExtension;
+  const ph7_builtin_func *pFuncs;
+} aExt[] = {
+  {"ext/arduino", aArduFunc},
+  {"ext/arduino.uart", aUartFunc},
+  {"ext/arduino.spi", aSpiFunc},
+  {"ext/arduino.i2c", aI2cFunc},
+  {"ext/arduino.ledc", aLedcFunc},
+  {"ext/arduino.rmt", aRmtFunc},
+  {"ext/idf.gpio", aIdfFunc},
+};
+
+/*
+ * Register the built-in VM functions defined above.
+ * TODO: add iExtLoaded flag to VM. Do not load extension  twice, just return SXRET_OK 
+ */
+PH7_PRIVATE sxi32 PH7_VmRegisterExtension(ph7_vm *pVm, const char *zName) {
+
+  sxi32 rc;
+  sxu32 n;
+
+  const ph7_builtin_func *pFunc = NULL;
+
+  for (n = 0; n < SX_ARRAYSIZE(aExt); ++n) {
+    if (!strcmp(aExt[n].zExtension, zName)) {
+      pFunc = aExt[n].pFuncs;
+      break;
+    }
+  }
+
+  n = 0;
+
+  if (pFunc != NULL) {
+    while (pFunc[n].zName != NULL) {
+      rc = ph7_create_function(pVm, pFunc[n].zName, pFunc[n].xFunc, pVm);
+      if (rc != SXRET_OK) {
+        return rc;
+      }
+      n++;
+    }
+    fprintf(stderr, "Extension %s loaded, %d functions registered\r\n", zName, n);
+    return SXRET_OK;
+  }
+  fprintf(stderr, "Extension %s is not found\r\n", zName);
+  return SXERR_NOTFOUND;
+}
+#endif
