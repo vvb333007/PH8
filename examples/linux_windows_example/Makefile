@@ -20,7 +20,7 @@ CFLAGS  := -Wall -Wextra -O0 -g -MMD -MP  -DDEVEL=1 -DPH7_ENABLE_SQLITE3=1 -DPH7
 
 
 # Common sources
-COMMON_SRC := ../../src/sqlite3.c ../../src/sqlite3/sqlite3.c ../../src/httpd/httpd.c ../../src/httpd/picohttpparser.c ../../src/cygwin/freertos_shim.c ../../src/api.c ../../src/builtin.c ../../src/compile.c ../../src/constant.c ../../src/hashmap.c ../../src/lex.c ../../src/lib.c ../../src/memobj.c ../../src/oo.c ../../src/parse.c ../../src/vfs.c ../../src/vm.c ../../src/regexp.c ../../src/posix_vfs.c ../../src/esp32/builtins.c ../../src/esp32/constants.c  
+COMMON_SRC := ../../src/sqlite3.c ../../src/sqlite3/sqlite3.c ../../src/httpd/httpd.c ../../src/httpd/picohttpparser.c ../../src/cygwin/freertos_shim.c ../../src/api.c ../../src/builtin.c ../../src/compile.c ../../src/constant.c ../../src/hashmap.c ../../src/lex.c ../../src/lib.c ../../src/memobj.c ../../src/oo.c ../../src/parse.c ../../src/vfs.c ../../src/vm.c ../../src/regexp.c ../../src/posix_vfs.c ../../src/esp32/builtins.c 
 #COMMON_SRC := ../../src/httpd/httpd.c ../../src/httpd/picohttpparser.c ../../src/cygwin/freertos_shim.c ../../src/api.c ../../src/builtin.c ../../src/compile.c ../../src/constant.c ../../src/hashmap.c ../../src/lex.c ../../src/lib.c ../../src/memobj.c ../../src/oo.c ../../src/parse.c ../../src/vfs.c ../../src/vm.c ../../src/regexp.c ../../src/posix_vfs.c ../../src/esp32/builtins.c ../../src/esp32/constants.c  
 #COMMON_SRC := amalgam.c
 

@@ -49,9 +49,6 @@
 /* Built-in PHP constants */
 #include "../../src/constant.c"
 
-/* ESP32/Arduino/ESP-IDF specific constants (emulated in CYGWIN )*/
-#include "../../src/esp32/constants.c"
-
 /* Compiler */
 #include "../../src/compile.c"
 
