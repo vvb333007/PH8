@@ -11,10 +11,6 @@
  */
 
 #include "ph7int.h"
-#if defined(ESP32) || defined(__CYGWIN__)
-#  include "esp32/constants.h"
-#endif
-
 
 /* This file implement built-in constants for the PH7 engine.
  * Generic constants: many PH8 built-in constants resolve to the same number. These are grouped here as
