@@ -18,7 +18,10 @@ To play on Windows:
   * Go to PH8/src/examples/linux_windows_example/
   * execute `make`
   * Execute `inter.exe` with a PHP file as an argument
-  * File `PH8/Libraries/exc/sqlite` contains SQLite3 class implementation and must be `include`d by .php script
+  * Copy `PH8/Libraries/ext` to the `inter.exe` directory - this is an extension library
+  * Copy  PH8/examples/test_files/*.php to the `inter.exe` directory - these are examples
+  * Run `inter.exe SCRIPTNAME.php`
+
 
 
 
