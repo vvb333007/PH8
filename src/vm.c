@@ -11846,14 +11846,14 @@ static int vm_builtin_include(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
-#if 1
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
-    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
-      return SXRET_OK;
-  }
-#endif
+
+  
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
+    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, FALSE);
+
   if (rc != SXRET_OK) {
     /* Emit a warning and return false */
     ph7_context_throw_error_format(pCtx, PH7_CTX_WARNING, "Unable to import module: '%z'", &sFile);
@@ -11885,12 +11885,10 @@ static int vm_builtin_include_once(ph7_context *pCtx, int nArg, ph7_value **apAr
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
-#if 1
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
-    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
-      return SXRET_OK;
-  }
-#endif
+
+  // TODO: once
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
+    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
 
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, TRUE);
@@ -11930,12 +11928,8 @@ static int vm_builtin_require(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     return SXRET_OK;
   }
 
-#if 1
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
-    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
-      return SXRET_OK;
-  }
-#endif
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
+    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
 
   /* Open,compile and execute the desired script */
   
@@ -11972,12 +11966,10 @@ static int vm_builtin_require_once(ph7_context *pCtx, int nArg, ph7_value **apAr
     ph7_result_null(pCtx);
     return SXRET_OK;
   }
-#if 1
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
-    if (SXRET_OK == PH7_VmRegisterExtension(pCtx->pVm, sFile.zString))
-      return SXRET_OK;
-  }
-#endif
+
+  // TODO: once!
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
+    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
 
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, TRUE);

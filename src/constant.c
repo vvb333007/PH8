@@ -1915,9 +1915,6 @@ static const ph7_builtin_constant aBuiltIn[] = {
   { "__CLASS__", PH7_self_Const },
   { "parent", PH7_parent_Const },
   { "__CALL__", PH7_CALL_Const },
-#if defined(ESP32) || defined(__CYGWIN__)
-#  include "esp32/constants.inc"
-#endif
 };
 /*
  * Register the built-in constants defined above.
