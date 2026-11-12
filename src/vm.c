@@ -63,6 +63,7 @@ localfn();
 static const char *VmInstrToString(sxi32 nOp);
 PH7_PRIVATE int PH7_VmIsCallable(ph7_vm *pVm, ph7_value *pValue, int CallInvoke);
 PH7_PRIVATE sxi32 PH7_VmThrow(ph7_vm *pVm, const char *zName, int nBytes, const char *zFormat, ...);
+static sxi32 VmMountNewClasses(ph7_vm *pVm);
 
 
 /* Runtime exception thrower, to be used in VmByteCodeExec() only */
@@ -929,6 +930,18 @@ static sxi32 VmMountUserClass(
   ph7_class_attr *pAttr;
   SyHashEntry *pEntry;
   sxi32 rc;
+
+  /* Mark classes as mounted; This is required because include/require may define new classes
+   * so we call remount again;
+  */
+  if (pClass->iFlags & PH7_CLASS_MOUNTED) {
+    /* Already mounted by a previous pass */
+    return SXRET_OK;
+  }
+  pClass->iFlags |= PH7_CLASS_MOUNTED;
+
+
+
   /* Reset the loop cursor */
   SyHashResetLoopCursor(&pClass->hAttr);
   /* Process only static and constant attribute */
@@ -1764,6 +1777,25 @@ static void VmPurgeOperandStack(ph7_value *pFrameStack, sxi32 nCount) {
 static sxi32 VmRegisterSpecialFunction(ph7_vm *pVm);
 static int VmInstanceOf(ph7_class *pThis, ph7_class *pClass);
 static int VmClassMemberAccess(ph7_vm *pVm, ph7_class *pClass, const SyString *pAttrName, sxi32 iProtection, int bLog);
+
+
+/*
+ * Mount every class which is known to the VM but is not mounted yet.
+ * Called at VM start and after a run-time compilation (include/eval).
+ */
+static sxi32 VmMountNewClasses(ph7_vm *pVm) {
+  SyHashEntry *pEntry;
+  sxi32 rc;
+
+  SyHashResetLoopCursor(&pVm->hClass);
+  while ((pEntry = SyHashGetNextEntry(&pVm->hClass)) != 0) {
+    rc = VmMountUserClass(pVm, (ph7_class *)pEntry->pUserData);
+    if (rc != SXRET_OK) {
+      return rc;
+    }
+  }
+  return SXRET_OK;
+}
 /*
  * Prepare the Virtual Machine for byte-code execution.
  * This routine gets called by the PH7 engine after
@@ -1831,12 +1863,19 @@ PH7_PRIVATE sxi32 PH7_VmMakeReady(
   PH7_RegisterBuiltInFunction(&(*pVm));
   /* Initialize and install static and constants class attributes */
   SyHashResetLoopCursor(&pVm->hClass);
+
+#if 0
   while ((pEntry = SyHashGetNextEntry(&pVm->hClass)) != 0) {
     rc = VmMountUserClass(&(*pVm), (ph7_class *)pEntry->pUserData);
     if (rc != SXRET_OK) {
       return rc;
     }
   }
+#else
+  rc = VmMountNewClasses(&(*pVm));
+  if (rc != SXRET_OK)
+    return rc;
+#endif
   /* Random number betwwen 0 and 1023 used to generate unique ID */
   pVm->unique_id = PH7_VmRandomNum(&(*pVm)) & 1023;
   /* VM is ready for bytecode execution */
@@ -11568,6 +11607,16 @@ static sxi32 VmEvalChunk(
       }
       goto Cleanup;
     }
+#if 1
+    if (SXRET_OK != VmMountNewClasses(pVm)) {
+      /* Out of memory */
+      if (pCtx) {
+        ph7_result_bool(pCtx, 0);
+      }
+      goto Cleanup;
+    }
+#endif
+
     if (bTrueReturn) {
       /* Assume a boolean true return value */
       PH7_MemObjInitFromBool(pVm, &sResult, 1);

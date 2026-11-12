@@ -6943,7 +6943,8 @@ static sxi32 PH7_CompileTry(ph7_gen_state *pGen) {
   /* Fix the jump later when the destination is resolved */
   GenStateNewJumpFixup(pTry, PH7_OP_LOAD_EXCEPTION, nJmpIdx);
 
-//  pGen->pIn++; /* Jump the 'try'/'reliable' keyword */
+  if (!bReliable) 
+    pGen->pIn++; /* Jump the 'try'/'reliable' keyword */
   /* Compile the block */
   rc = PH7_CompileBlock(&(*pGen), 0);
   if (rc == SXERR_ABORT) {

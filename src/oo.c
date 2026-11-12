@@ -109,6 +109,7 @@ PH7_PRIVATE ph7_class_method *PH7_NewClassMethod(ph7_vm *pVm, ph7_class *pClass,
     PH7_VmRandomString(&(*pVm), zSalt, sizeof(zSalt));
     pNamePtr->nByte = SyBufferFormat(zName, nByte, "[__%z@%z_%.*s]", &pClass->sName, pName, sizeof(zSalt), zSalt);
     pNamePtr->zString = zName;
+//    fprintf(stderr,"Method %s %x, %x, %x \r\n",zName, iProtection,iFlags,iFuncFlags);
   } else {
     /* Method is condidate for 'overloading' */
     ph7_class_method *pCurrent = (ph7_class_method *)pEntry->pUserData;

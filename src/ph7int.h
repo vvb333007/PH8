@@ -1294,8 +1294,9 @@ struct ph7_class {
 #define PH7_CLASS_ABSTRACT  0x004  /* Class is abstract */
 #define PH7_CLASS_ENUM      0x008  /* Class is enum, only having static const attributes */
 #define PH7_CLASS_BAD       0x010  /* Class is bad: one of its attribute has thrown an exception in its initializer (e.g const A = 1/0;)
-                                    * `new` will fail on a bad class;
-                                   */
+                                    * `new` will fail on a bad class; */
+#define PH7_CLASS_MOUNTED   0x020  /* Class is already mounted */
+
 
 /* Class attribute/methods/constants protection levels */
 #define PH7_CLASS_PROT_PUBLIC 1    /* public */
