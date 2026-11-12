@@ -99,7 +99,7 @@ static int Output_Consumer(const void *pOutput,unsigned int nOutputLen,void *pUs
   }
 #else
   ssize_t nWr;
-  nWr = write(STDOUT_FILENO,pOutput,nOutputLen);
+  nWr = write(STDERR_FILENO,pOutput,nOutputLen);
   if( nWr < 0 ){
     /* Abort processing */
     return PH7_ABORT;
@@ -165,7 +165,7 @@ int main(int argc,char **argv)
   /* Set an error log consumer callback. This callback [Output_Consumer()] will
    * redirect all compile-time error messages to STDOUT.
    */
-
+  
   ph7_config(pEngine,PH7_CONFIG_ERR_OUTPUT,
     Output_Consumer, /* Error log consumer */
     0 /* NULL: Callback Private data */
@@ -176,9 +176,18 @@ int main(int argc,char **argv)
     pEngine, /* PH7 Engine */
     argv[n], /* Path to the PHP file to compile */
     &pVm,    /* OUT: Compiled PHP program */
-    0        /* IN: Compile flags */
+    dump_vm ? PH7_PHP_DISASSEMBLE : 0        /* IN: Compile flags */
     );
 
+#if PH7_ENABLE_SQLITE3
+  ph7_sqlite *pState = NULL;
+  ph7_sqlite_init(pVm, &pState);
+  fprintf(stderr,"SQLite3 extension loaded");
+#endif
+
+
+
+  
 
 
   if( rc != PH7_OK ){ /* Compile error */
@@ -196,6 +205,7 @@ int main(int argc,char **argv)
    * We will install the VM output consumer callback defined above
    * so that we can consume the VM output and redirect it to STDOUT.
    */
+  ph7_vm_config(pVm,PH7_VM_CONFIG_ERR_REPORT);
 
   rc = ph7_vm_config(pVm,
     PH7_VM_CONFIG_OUTPUT,
@@ -234,13 +244,12 @@ fflush(stdout);
   /* All done, cleanup the mess left behind.
   */
 
-  ph7_vm_release(pVm);
-
-
+  ph7_vm_release(pVm);   // sqlite3 is deinited here, if was previously initialized
   ph7_release(pEngine);
-
-
   ph7_lib_shutdown();
+puts("DONE:");
+fflush(stdout);
+  
   return 0;
 }
 #endif
