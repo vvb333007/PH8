@@ -3026,7 +3026,8 @@ static int PH7_builtin_ord(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     return PH7_OK;
   }
   /* Extract the ASCII value of the first character */
-  c = zString[0];
+  // BUG: value was extracted as a signed char
+  c = (int)(unsigned char)zString[0];
   /* Return that value */
   ph7_result_int(pCtx, c);
   return PH7_OK;
