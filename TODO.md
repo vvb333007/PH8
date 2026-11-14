@@ -41,20 +41,22 @@ WiFi bindings, both native and hosted.
 
 ### 4. Arduino Core bindings and SLAC ("Standard Library of Arduino Classes")
 
-An analogue of the Arduino Core `.cpp` library, implemented in PHP wherever possible.
+~~An analogue of the Arduino Core `.cpp` library, implemented in PHP wherever possible.~~
 Standard Arduino Core classes: HardwareSerial, SPI, Wire, FS, Print, String and so on
 
 ### 5. Namespaces
 
 ~~Implement `namespace` and `use` language constructs. Resolve names at compile time~~
 
-Fallback for builting functions
+Fallback for builtin functions
 
 ### 6. Reliable values
 
-Implement MEMOBJ_UNREL - a flag saying that the value was converted but resilt is unreliable.
+~~Implement MEMOBJ_UNREL - a flag saying that the value was converted but resilt is unreliable.~~
 
-Implement MEMOBJ_UNREL for suspicous conversions like array to a scalar or object to a scalar
+~~Implement MEMOBJ_UNREL for suspicous conversions like array to a scalar or object to a scalar~~
+
+MEMOBJ_UNREL propagation through arithmetics
 
 Introduce `__toArray` so objects properties can be serialized via typecast; if there were private/protected properties then conversion considered unreliable: these properties are NOT serialized
 Parent properies are not serialized
@@ -250,29 +252,6 @@ The main use case is communication with PHP services (standalone background PHP 
 
 Implement VM-to-VM IPC using FreeRTOS queues.
 Use FreeRTOS Task Notifications for lightweight VM wake/sleep synchronization.
-
-VM1:
-
-```php
-php_ipc_announce('My Fancy Name');
-```
-
-VM2:
-
-```php
-$handle = php_ipc_bind(
-    $announced_name,
-    $auth_creds_or_null,
-    $timeout
-); // returns the real FreeRTOS task/VM handle as a ph7_value
-
-$err = php_ipc_send($handle, $value); // send an arbitrary PHP value
-$value = php_ipc_recv($handle, $timeout);
-
-php_ipc_wake($handle, $value); // send a 32-bit scalar to wake up a sleeping VM
-php_ipc_sleep($handle, $mask); // sleep until woken up by another VM
-                                  // ($value & $mask != 0 => wake up)
-```
 
 ---
 
