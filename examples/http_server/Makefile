@@ -11,7 +11,7 @@ CFLAGS  := -Wall -Wextra -O2  -MMD -MP -DPH7_ENABLE_THREADS=0 -DPH7_ENABLE_MATH_
 AMALG_OBJ := $(AMALG_DIR)/amalgam.o
 
 httpd: main.o $(AMALG_OBJ)
->$(CC) $(CFLAGS) $^ -o $@
+>$(CC) $(CFLAGS) $^ ../../src/sqlite3/sqlite3.o -o $@
 
 # FORCE forces 'make' in amalgamated/
 $(AMALG_DIR)/amalgam.o: FORCE
