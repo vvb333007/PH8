@@ -1292,10 +1292,11 @@ struct ph7_class {
 #define PH7_CLASS_FINAL     0x001  /* Class is final [cannot be extended] */
 #define PH7_CLASS_INTERFACE 0x002  /* Class is interface */
 #define PH7_CLASS_ABSTRACT  0x004  /* Class is abstract */
-#define PH7_CLASS_ENUM      0x008  /* Class is enum, only having static const attributes */
+#define PH7_CLASS_ENUM      0x008  /* Class is an enum, only having static const attributes */
 #define PH7_CLASS_BAD       0x010  /* Class is bad: one of its attribute has thrown an exception in its initializer (e.g const A = 1/0;)
                                     * `new` will fail on a bad class; */
 #define PH7_CLASS_MOUNTED   0x020  /* Class is already mounted */
+#define PH7_CLASS_TRAIT     0x040  /* Class is a trait, can not be instantiated */
 
 
 /* Class attribute/methods/constants protection levels */
@@ -1486,7 +1487,8 @@ struct ph7_vm {
   void *pStderr;                   /* STDERR IO stream */
 
   /* Machine State Register (MSR) bitfields */
-  int bInReliable:1;
+  sxu32 iExtensionLoaded;          /* Bitfield. Set bit X means extension X is loaded */
+  int bInReliable:1;               /* TRUE if VM is in 'reliable' mode */
   int bErrReport:1;                /* TRUE to report all runtime Error/Warning/Notice */
   int bListing:1;                  /* TRUE generate disasembly */
   int bHttp:1;                     /* VM is created by HTTP/HTTPS server. pHttpResp contains a pointer 
@@ -1501,6 +1503,8 @@ struct ph7_vm {
 #if PH7_ENABLE_SQLITE3
   ph7_sqlite *pSQLite;             /* SQLite3 library state. Must be reset via ph7_sqlite_reset() on VM shutdown, if it is not NULL*/
 #endif
+
+
 
   int nRecursionDepth;             /* Current recursion depth */
   char aFailedMethod[64];          /* Used by __call() and __callStatic() magic methods to obtain the name of the failed method (no, first arg to _call() is not method name in PH8) */

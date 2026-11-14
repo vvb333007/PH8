@@ -1005,6 +1005,7 @@ static sxi32 VmMountUserClass(
     }
   }
   /* Install class methods */
+  // TODO: traits also
   if (pClass->iFlags & PH7_CLASS_INTERFACE) {
     /* Do not mount interface methods since they are signatures only.
      */
@@ -5597,10 +5598,10 @@ static sxi32 VmByteCodeExec(
 
                 // Replace the method name with __call. This changes the __call and __callStatic semantics:
                 // __call() receives all original arguments as, but the name of the called function is in
-                // a special constant CALLED_NAME
+                // a special constant __CALL__
                 /*
                   public function __call($arg1, $arg2, $arg3) {
-                    switch( CALLED_NAME ) {
+                    switch( __CALL__ ) {
                       case 'die': die($arg1);
                       case 'bye': echo $arg1.PHP_EOL; die($arg2);
                     }
@@ -5701,7 +5702,10 @@ static sxi32 VmByteCodeExec(
                     /* Load attribute */
                     pValue = (ph7_value *)SySetAt(&pVm->aMemObj, pObjAttr->nIdx);
                     if (pValue) {
-
+#if 0
+                      if (pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_READONLY) {
+                      }
+#endif
                       /* Perform a type cast? if class attribute was declared with a type hint
                        * then we mark our MemObj as TYPE-LOCKED. We do not rely on MEMOBJ_FIXEDTYPE which was set by VmMountUserClass or VmCreateClassInstance
                        * Propagate nullable/callable properties again as well
@@ -5711,7 +5715,7 @@ static sxi32 VmByteCodeExec(
                         fprintf(stderr,"Fixed type conversion %d on %s attr requested\n",pObjAttr->pAttr->iFlags, pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_STATIC ? "static" : "dynamic");
 #endif
                         pValue->iFlags |= MEMOBJ_FIXEDTYPE;
-                        pValue->iFlags |= PH7_TypeKeywordToHint(pObjAttr->pAttr->nType);
+                        pValue->iFlags |= PH7_TypeKeywordToHint(pObjAttr->pAttr->nType); // TODO: compiler must store a hint in nType, no point in lookup at runtime
                         if (pObjAttr->pAttr->iFlags & PH7_CLASS_ATTR_NULLABLE) {
                           pValue->iFlags |= MEMOBJ_NULLABLE;
                         }
@@ -6156,6 +6160,7 @@ static sxi32 VmByteCodeExec(
    
             VmLocalExec(pVm, &pCase->aByteCode, &sCaseValue);
             /* Compare the two expression */
+            /* TODO: strict cmp here? === instead of == may be?*/
             rc = PH7_MemObjCmp(&sValue, &sCaseValue, FALSE, 0);
             PH7_MemObjRelease(&sValue); /*TODO: check if it can be moved out of the 'for'*/
             PH7_MemObjRelease(&sCaseValue);
@@ -11896,15 +11901,24 @@ static int vm_builtin_include(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     return SXRET_OK;
   }
 
-  
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
-    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+  /* Attempt to load an extension? */  
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    rc = PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+
+    /* SXERR_EXISTS is returned if that extension was already loaded */
+    if (rc == SXERR_EXISTS)
+      return SXRET_OK;
+
+    if (rc != SXRET_OK)
+      goto Unable;
+  }
 
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, FALSE);
 
   if (rc != SXRET_OK) {
     /* Emit a warning and return false */
+Unable:
     ph7_context_throw_error_format(pCtx, PH7_CTX_WARNING, "Unable to import module: '%z'", &sFile);
     ph7_result_bool(pCtx, 0);
   }
@@ -11935,19 +11949,30 @@ static int vm_builtin_include_once(ph7_context *pCtx, int nArg, ph7_value **apAr
     return SXRET_OK;
   }
 
-  // TODO: once
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
-    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+  /* Attempt to load an extension? */  
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    rc = PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+
+    /* SXERR_EXISTS is returned if that extension was already loaded */
+    if (rc == SXERR_EXISTS)
+      goto Already;
+
+    /* Most likely misspelled extension name */
+    if (rc != SXRET_OK)
+      goto Unable;
+  }
 
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, TRUE);
   if (rc == SXERR_EXISTS) {
     /* File already included,return TRUE */
+Already:
     ph7_result_bool(pCtx, 1);
     return SXRET_OK;
   }
   if (rc != SXRET_OK) {
     /* Emit a warning and return false */
+Unable:
     ph7_context_throw_error_format(pCtx, PH7_CTX_WARNING, "Unable to import module: '%z'", &sFile);
     ph7_result_bool(pCtx, 0);
   }
@@ -11977,8 +12002,17 @@ static int vm_builtin_require(ph7_context *pCtx, int nArg, ph7_value **apArg) {
     return SXRET_OK;
   }
 
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
-    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+  /* Attempt to load an extension? */  
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    rc = PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+
+    /* SXERR_EXISTS is returned if that extension was already loaded */
+    if (rc == SXERR_EXISTS)
+      return SXRET_OK;
+
+    if (rc != SXRET_OK)
+      goto Unable;
+  }
 
   /* Open,compile and execute the desired script */
   
@@ -11986,6 +12020,7 @@ static int vm_builtin_require(ph7_context *pCtx, int nArg, ph7_value **apArg) {
 
   if (rc != SXRET_OK) {
     /* Fatal,abort VM execution immediately */
+Unable:
     ph7_context_throw_error_format(pCtx, PH7_CTX_ERR, "Unable to import a required module: '%z'", &sFile);
     ph7_result_bool(pCtx, 0);
     return SXERR_ABORT;
@@ -12016,21 +12051,29 @@ static int vm_builtin_require_once(ph7_context *pCtx, int nArg, ph7_value **apAr
     return SXRET_OK;
   }
 
-  // TODO: once!
-  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0)
-    PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+  /* Attempt to load an extension? */  
+  if (strncmp(sFile.zString, "ext/", sizeof("ext/")-1) == 0) {
+    rc = PH7_VmRegisterExtension(pCtx->pVm, sFile.zString);
+
+    /* SXERR_EXISTS is returned if that extension was already loaded */
+    if (rc == SXERR_EXISTS) goto Already;
+    if (rc != SXRET_OK)     goto Unable;
+  }
+
 
   /* Open,compile and execute the desired script */
   rc = VmExecIncludedFile(&(*pCtx), &sFile, TRUE);
 
   if (rc == SXERR_EXISTS) {
     /* File already included,return TRUE */
+Already:
     ph7_result_bool(pCtx, 1);
     return SXRET_OK;
   }
 
   if (rc != SXRET_OK) {
     /* Fatal,abort VM execution immediately */
+Unable:
     ph7_context_throw_error_format(pCtx, PH7_CTX_ERR, "Unable to import a required module: '%z'", &sFile);
     ph7_result_bool(pCtx, 0);
     return SXERR_ABORT;
