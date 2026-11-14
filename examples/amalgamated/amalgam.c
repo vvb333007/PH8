@@ -19,6 +19,19 @@
 #include "../../src/httpd/picohttpparser.h"
 #include "../../src/httpd/picohttpparser.c"
 
+/* Extensions /Arduino/ESP-IDF specific builtins (emulated in CYGWIN )
+ * Code may #define an extension callback 
+*/
+#include "../../src/esp32/builtins.c"
+
+#ifndef HAS_PH7_RegisterExtension
+PH7_PRIVATE sxi32 PH7_VmRegisterExtension(ph7_vm *pVm, const char *zName) {
+  pVm = pVm;
+  zName = zName;
+  return SXRET_OK;
+}
+#endif
+
 /* PH8 bytecode machine */
 #include "../../src/vm.c"
 
@@ -54,9 +67,6 @@
 
 /* Built-in PHP functions */
 #include "../../src/builtin.c"
-
-/* ESP32/Arduino/ESP-IDF specific builtins (emulated in CYGWIN )*/
-#include "../../src/esp32/builtins.c"
 
 /* Public PH8 API */
 #include "../../src/api.c"
