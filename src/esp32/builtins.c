@@ -19,6 +19,9 @@
  *
  * There are allocations made with malloc(): it is ok, because buffer is duplicated when converted to string
  */
+
+#define HAS_PH7_RegisterExtension 1  /* PH7_RegisterExtension is provided by the code. Affects amalgamation build only (see examples/amalgamated/) */
+
 #include "ph7int.h"
 //#include "builtins.h"
 
@@ -3774,7 +3777,7 @@ int Impl( ulTaskNotifyTake )(ph7_context *ctx, int argc, ph7_value **argv) {
  * Register the built-in functions defined above,the array functions 
  * defined in hashmap.c and the IO functions defined in vfs.c.
  */
-#if  1
+
 #define Bind(Name_) \
   { #Name_,  esp32_builtin_ ## Name_ }, 
 
@@ -4124,24 +4127,39 @@ Bind( gpio_wakeup_enable )
 { NULL }
 };
 
-// TODO: should we make these to be real files containing consts?
-// TODO: what is better: to have all consts as FFI or have it as PHP const?
+/* Extension registration for ESP32 and CYGWIN (stubs)
+ * platforms
+ */
+
+// TODO: only arch-specific functions here
+// TODO: sqlite3 must be moved out
 static struct {
-  const char *zExtension;
-  const ph7_builtin_func *pFuncs;
+
+  const char *zExtension;          /* Extension name */
+  const ph7_builtin_func *pFuncs;  /* Funclist or NULL */
+  char iBit;                       /* -1 or bit number; */
+
 } aExt[] = {
-  {"ext/arduino", aArduFunc},
-  {"ext/arduino.uart", aUartFunc},
-  {"ext/arduino.spi", aSpiFunc},
-  {"ext/arduino.i2c", aI2cFunc},
-  {"ext/arduino.ledc", aLedcFunc},
-  {"ext/arduino.rmt", aRmtFunc},
-  {"ext/idf.gpio", aIdfFunc},
+
+  {"ext/arduino", aArduFunc,     0},
+  {"ext/arduino.uart", aUartFunc,1},
+  {"ext/arduino.spi", aSpiFunc,  2},
+  {"ext/arduino.i2c", aI2cFunc,  3},
+  {"ext/arduino.ledc", aLedcFunc,4},
+  {"ext/arduino.rmt", aRmtFunc,  5},
+  {"ext/idf.gpio", aIdfFunc,     6},
+  {"ext/sqlite3", NULL,          7}, /* SQLite3 API (functions) are registered at startup as core functions */
+  {"ext/freertos", NULL,         8}, /* No FFI functions yet (implemented in .php) */
+
 };
+
+/* pVm has a 32bit field. check that our array size is not larger: every entry corresponds to a 
+ * bit in iExtensionLoaded;
+*/
+_Static_assert(SX_ARRAYSIZE(aExt) <= sizeof(((ph7_vm *)0)->iExtensionLoaded)*8, "ph7_vm::iExtensionLoaded bitwidth is too small");
 
 /*
  * Register the built-in VM functions defined above.
- * TODO: add iExtLoaded flag to VM. Do not load extension  twice, just return SXRET_OK 
  */
 PH7_PRIVATE sxi32 PH7_VmRegisterExtension(ph7_vm *pVm, const char *zName) {
 
@@ -4150,15 +4168,35 @@ PH7_PRIVATE sxi32 PH7_VmRegisterExtension(ph7_vm *pVm, const char *zName) {
 
   const ph7_builtin_func *pFunc = NULL;
 
+  /* Find an aExt entry by its name */
   for (n = 0; n < SX_ARRAYSIZE(aExt); ++n) {
+
+    /* Found */
     if (!strcmp(aExt[n].zExtension, zName)) {
+      
       pFunc = aExt[n].pFuncs;
+
+      /* Was extension loaded already? Should we reload it? */
+      if (aExt[n].iBit >= 0) {
+        sxu32 iFlag = 1UL << aExt[n].iBit;
+        if ((pVm->iExtensionLoaded & iFlag) != 0) {
+          fprintf(stderr, "Extension %s was already loaded, skip loading\r\n", zName);
+          return SXERR_EXISTS;
+        }
+        /* Mark as loaded */
+        pVm->iExtensionLoaded |= iFlag;
+      }
+
+      /* Extension with no functions: return OK so extension support file can be loaded */
+      if (pFunc == NULL)
+        return SXRET_OK;
       break;
     }
   }
 
+  /* Alright, we have got a list of functions: register them 
+  */
   n = 0;
-
   if (pFunc != NULL) {
     while (pFunc[n].zName != NULL) {
       rc = ph7_create_function(pVm, pFunc[n].zName, pFunc[n].xFunc, pVm);
@@ -4167,10 +4205,10 @@ PH7_PRIVATE sxi32 PH7_VmRegisterExtension(ph7_vm *pVm, const char *zName) {
       }
       n++;
     }
-    fprintf(stderr, "Extension %s loaded, %d functions registered\r\n", zName, n);
+    fprintf(stderr, "Loading %s, %d functions imported\r\n", zName, n);
     return SXRET_OK;
   }
-  fprintf(stderr, "Extension %s is not found\r\n", zName);
+  fprintf(stderr, "Extension %s is not available\r\n", zName);
   return SXERR_NOTFOUND;
 }
-#endif
+
