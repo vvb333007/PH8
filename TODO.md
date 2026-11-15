@@ -31,7 +31,7 @@ Supported interrupt types: GPIO interrupts, Software Timer interrupts
 
 ### 3. ESP-IDF bindings
 
-Implement a selected subset of ESP-IDF APIs, starting with the GPIO API.
+~~Implement a selected subset of ESP-IDF APIs, starting with the GPIO API.~~
 
 Implement raw access to MMIO registers.
 
@@ -262,6 +262,19 @@ Not always checked for existence. Should we patch a constructor lookup code?
 
 
 ### 12. `match` keyword
+
+~~Implement match() language construvt; Use existing switch() processing code~~
+
+```php
+    return match ($day) {
+        1, 7       => 'Weekend',
+        2, 3, 4, 5, 6 => 'Working day',
+        default    => 'Invalid day',
+    };
+```
+
+
+
 
 ---
 

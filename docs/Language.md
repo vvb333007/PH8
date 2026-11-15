@@ -16,7 +16,7 @@ This text is an AI translation of original file in Russian.
 The biggest incompatibility between PH8 and Zend PHP 8 is that arrays are always passed and returned by reference. In other words, the semantics are closer to C: passing an array passes a pointer to it. If a function needs its own copy of an array, it must create one explicitly: `$local = array_copy($arg);`
 
 ```php
-$a = array(1,2,3,4);
+$a = [1,2,3,4];
 
 function hello($az) {
 
@@ -525,9 +525,8 @@ In PH8, `echo` can be used in contexts where function can be used. `echo` can be
 
 ### 8.3. Unsupported language constructs.
 
-Thera are many, but most notable these:
-
-`yield` (generators) and `match` are not supported.
+Thera are many, but most notable is `yield` (generators): due to engine internal architecture it is hard to implement, at least for now.
+Rewriting the engine just to be able to use `yield` is not an option.
 
 
 
