@@ -1282,6 +1282,14 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "  }" \
   "}" \
   "" \
+  "class UnhandledMatchError extends Error {" \
+  "  public function __construct(?string $message = null," \
+  "                              int $code = 0) {" \
+  "" \
+  "    parent::__construct($message,$code);" \
+  "  }" \
+  "}" \
+  "" \
   "class TypeError extends Error {" \
   "  public function __construct(?string $message = null," \
   "                              int $code = 0) {" \
@@ -1311,6 +1319,9 @@ static sxi32 VmEvalChunk(ph7_vm *pVm, ph7_context *pCtx, SyString *pChunk, int i
   "}" \
   "function __unknownat($arg) {" \
   "  throw(new Error('Class member: '.$arg));" \
+  "}" \
+  "function __unhandledmatch($arg) {" \
+  "  throw(new UnhandledMatchError('Unhandled match case '.$arg));" \
   "}" \
   "function __typeerror($arg) {" \
   "  throw(new TypeError('Type error: '.$arg));" \
@@ -6134,8 +6145,10 @@ static sxi32 VmByteCodeExec(
       case PH7_OP_SWITCH:
         {
           ph7_switch *pSwitch = (ph7_switch *)pInstr->p3;
+          int bMatch = pInstr->iP1; /* 1: match expression (strict comparison, unmatched value is an error) */
           ph7_case_expr *aCase, *pCase;
           ph7_value sValue, sCaseValue;
+          char zDesc[64];
           sxu32 n, nEntry;
 #ifdef UNTRUST
           if (pSwitch == 0 || pTos < pStack) {
@@ -6150,18 +6163,17 @@ static sxi32 VmByteCodeExec(
           PH7_MemObjInit(pVm, &sCaseValue);
           for (n = 0; n < nEntry; ++n) {
             pCase = &aCase[n];
-            
+
             PH7_MemObjLoad(pTos, &sValue); /*TODO: check if it can be moved out of the 'for'*/
             /* Execute the case expression first */
             /* IDEA: What about simple integer/float values? precache integer/float values in ph7_case_expr?
             *        it could be done via executing the bytecode once and storing the result
             */
             /* TODO: Handle exceptions in complex 'case' statements */
-   
+
             VmLocalExec(pVm, &pCase->aByteCode, &sCaseValue);
-            /* Compare the two expression */
-            /* TODO: strict cmp here? === instead of == may be?*/
-            rc = PH7_MemObjCmp(&sValue, &sCaseValue, FALSE, 0);
+            /* Compare the two expression: 'switch' is loose (==), 'match' is strict (===) */
+            rc = PH7_MemObjCmp(&sValue, &sCaseValue, bMatch ? TRUE : FALSE, 0);
             PH7_MemObjRelease(&sValue); /*TODO: check if it can be moved out of the 'for'*/
             PH7_MemObjRelease(&sCaseValue);
             if (rc == 0) {
@@ -6170,12 +6182,29 @@ static sxi32 VmByteCodeExec(
               break;
             }
           }
-
+          zDesc[0] = 0;
+          if (bMatch && n >= nEntry && pSwitch->nDefault == 0) {
+            /* Describe the subject now: it is gone once popped */
+            if (pTos->iFlags & MEMOBJ_STRING) {
+              PH7_MemObjToString(pTos);
+              SyBufferFormat(zDesc, sizeof(zDesc), "'%.*s'",
+                             (int)SyBlobLength(&pTos->sBlob), (const char *)SyBlobData(&pTos->sBlob));
+            } else if (pTos->iFlags & (MEMOBJ_INT | MEMOBJ_REAL | MEMOBJ_BOOL)) {
+              PH7_MemObjToString(pTos);
+              SyBufferFormat(zDesc, sizeof(zDesc), "%.*s",
+                             (int)SyBlobLength(&pTos->sBlob), (const char *)SyBlobData(&pTos->sBlob));
+            } else {
+              SyBufferFormat(zDesc, sizeof(zDesc), "of type %s", PH7_MemObjTypeDump(pTos));
+            }
+          }
           VmPopOperand(&pTos, 1);
           if (n >= nEntry) {
             /* No approprite case to execute,jump to the default case */
             if (pSwitch->nDefault > 0) {
               pc = pSwitch->nDefault - 1;
+            } else if (bMatch) {
+              /* match: no arm and no default */
+              VM_EXCEPTION_GOTO("__unhandledmatch", 16, "%s", zDesc)
             } else {
               /* No default case,jump out of this switch */
               pc = pSwitch->nOut - 1;
