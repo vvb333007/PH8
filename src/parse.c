@@ -792,6 +792,51 @@ Synchronize:
   return rc;
 }
 /*
+ * Return TRUE if the keyword 'match' at pCur starts a match expression:  match ( ... ) { ... }
+ * Anything else is a literal, so $obj->match(), Foo::match() and a function named match() still work.
+ */
+static int ExprIsMatchExpression(SyToken *pCur, SyToken *pEnd, const ph7_expr_node *pPrev) {
+  SyToken *pClose;
+  if (pPrev && pPrev->pOp && (pPrev->pOp->iOp == EXPR_OP_ARROW || pPrev->pOp->iOp == EXPR_OP_DC)) {
+    return FALSE; /* member name: $obj->match, ?->match, Foo::match */
+  }
+  if (&pCur[1] >= pEnd || (pCur[1].nType & PH7_TK_LPAREN) == 0) {
+    return FALSE;
+  }
+  PH7_DelimitNestedTokens(&pCur[2], pEnd, PH7_TK_LPAREN, PH7_TK_RPAREN, &pClose);
+  if (pClose >= pEnd || &pClose[1] >= pEnd) {
+    return FALSE;
+  }
+  return (pClose[1].nType & PH7_TK_OCB) ? TRUE : FALSE;
+}
+
+/*
+ * Delimit a match expression: match ( subject ) { arms }
+ * The caller has checked that '(' follows the keyword and that the parenthesis is followed by '{'.
+ * On success *ppCur points just past the closing brace.
+ */
+static sxi32 ExprAssembleMatch(ph7_gen_state *pGen, SyToken **ppCur, SyToken *pEnd) {
+  SyToken *pIn = *ppCur;
+  sxu32 nLine = pIn->nLine;
+  sxi32 rc;
+  pIn += 2; /* Jump the 'match' keyword and '(' */
+  PH7_DelimitNestedTokens(pIn, pEnd, PH7_TK_LPAREN, PH7_TK_RPAREN, &pIn);
+  pIn += 2; /* Jump ')' and '{' */
+  if (pIn > pEnd) {
+    pIn = pEnd;
+  }
+  PH7_DelimitNestedTokens(pIn, pEnd, PH7_TK_OCB, PH7_TK_CCB, &pIn);
+  if (pIn >= pEnd) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "match: missing closing brace '}'");
+    if (rc != SXERR_ABORT) {
+      rc = SXERR_SYNTAX;
+    }
+    return rc;
+  }
+  *ppCur = &pIn[1]; /* Jump the closing brace */
+  return SXRET_OK;
+}
+/*
  * Extract a single expression node from the input.
  * On success store the freshly extractd node in ppNode.
  * When errors,PH7 take care of generating the appropriate error message.
@@ -926,6 +971,14 @@ static sxi32 ExprExtractNode(ph7_gen_state *pGen, ph7_expr_node **ppNode
         //puts("Gonna compile it with PH7_CompileAnnonFunc");
         pNode->xCode = PH7_CompileAnnonFunc;
       }
+    } else if (nKeyword == PH7_TKWRD_MATCH && ExprIsMatchExpression(pCur, pGen->pEnd, pPrev)) {
+      /* match expression: a terminal node, the brackets inside are balanced */
+      rc = ExprAssembleMatch(&(*pGen), &pCur, pGen->pEnd);
+      if (rc != SXRET_OK) {
+        SyMemBackendPoolFree(&pGen->pVm->sAllocator, pNode);
+        return rc;
+      }
+      pNode->xCode = PH7_CompileMatch;
     } else if (PH7_IsLangConstruct(nKeyword, FALSE) == TRUE && &pCur[1] < pGen->pEnd) {
       /* Language constructs [i.e: print,echo,die...] require special handling */
       PH7_DelimitNestedTokens(pCur, pGen->pEnd, PH7_TK_LPAREN | PH7_TK_OCB | PH7_TK_OSB, PH7_TK_RPAREN | PH7_TK_CCB | PH7_TK_CSB, &pCur);
@@ -1347,7 +1400,7 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
         }
         if (iLeft < 0 || !NODE_ISTERM(iLeft) /*|| ( apNode[iLeft]->pOp && apNode[iLeft]->pOp->iPrec != 2)*/) {
           /* Syntax error */
-          rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "Invalid function name");
+          rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "Invalid function name encountered whicle making expression tree");
           if (rc != SXERR_ABORT) {
             rc = SXERR_SYNTAX;
           }
