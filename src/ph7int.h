@@ -1295,6 +1295,7 @@ struct ph7_class {
 #define PH7_CLASS_ENUM      0x008  /* Class is an enum, only having static const attributes */
 #define PH7_CLASS_BAD       0x010  /* Class is bad: one of its attribute has thrown an exception in its initializer (e.g const A = 1/0;)
                                     * `new` will fail on a bad class; */
+#define PH7_CLASS_TRAIT     0x040
 #define PH7_CLASS_MOUNTED   0x020  /* Class is already mounted */
 #define PH7_CLASS_TRAIT     0x040  /* Class is a trait, can not be instantiated */
 
@@ -1319,6 +1320,7 @@ struct ph7_class_attr {
   };
 };
 /* Attribute configuration */
+#define PH7_CLASS_ATTR_TRAIT     0x100
 #define PH7_CLASS_ATTR_STATIC    0x001 /* Static attribute */
 #define PH7_CLASS_ATTR_CONSTANT  0x002 /* Constant attribute OR enum value */
 #define PH7_CLASS_ATTR_ABSTRACT  0x004 /* Abstract method */
@@ -1859,6 +1861,7 @@ enum ph7_expr_id {
 // Keywords [60..63] are available for use for language extensions
 #define PH7_TKWRD_RELIABLE 60
 #define PH7_TKWRD_UNRELIABLE 61
+#define PH7_TKWRD_MATCH 62
 // Keywords [65..127] are available for use for language extensions
 
 /* Constants which MUST BE A POWER OF TWO  */
@@ -2041,6 +2044,7 @@ PH7_PRIVATE sxi32 PH7_CompileString(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileArray(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileList(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileAnnonFunc(ph7_gen_state *pGen, sxi32 iCompileFlag);
+PH7_PRIVATE sxi32 PH7_CompileMatch(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_InitCodeGenerator(ph7_vm *pVm, ProcConsumer xErr, void *pErrData);
 PH7_PRIVATE sxi32 PH7_ResetCodeGenerator(ph7_vm *pVm, ProcConsumer xErr, void *pErrData);
 
@@ -2092,6 +2096,7 @@ PH7_PRIVATE ph7_class_attr *PH7_ClassExtractAttribute(ph7_class *pClass, const c
 PH7_PRIVATE sxi32 PH7_ClassInstallAttr(ph7_class *pClass, ph7_class_attr *pAttr);
 PH7_PRIVATE sxi32 PH7_ClassInstallMethod(ph7_class *pClass, ph7_class_method *pMeth);
 PH7_PRIVATE sxi32 PH7_ClassInherit(ph7_gen_state *pGen, ph7_class *pSub, ph7_class *pBase);
+PH7_PRIVATE sxi32 PH7_ClassUseTrait(ph7_gen_state *pGen, ph7_class *pClass, ph7_class *pTrait);
 PH7_PRIVATE sxi32 PH7_ClassInterfaceInherit(ph7_class *pSub, ph7_class *pBase);
 PH7_PRIVATE sxi32 PH7_ClassImplement(ph7_class *pMain, ph7_class *pInterface);
 PH7_PRIVATE ph7_class_instance *PH7_NewClassInstance(ph7_vm *pVm, ph7_class *pClass);
