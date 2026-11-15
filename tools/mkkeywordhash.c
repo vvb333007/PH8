@@ -139,6 +139,7 @@ static Keyword aKeywordTable[] = {
   { "callable",        "PH7_TKWRD_CALLABLE", 1, 6 },
   { "unreliable",        "PH7_TKWRD_UNRELIABLE", 1, 0 },
   { "reliable",        "PH7_TKWRD_RELIABLE", 1, 0 },
+  { "match",        "PH7_TKWRD_MATCH", 1, 0 },
 };
 
 /* Number of keywords */
