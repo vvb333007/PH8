@@ -5051,7 +5051,7 @@ static sxi32 PH7_CompileFunction(ph7_gen_state *pGen) {
     /* Jump the '&' token */
     pGen->pIn++;
   }
-  if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (/*PH7_TK_ID | */PH7_TK_KEYWORD)) != 0) { //BUG:
+  if (pGen->pIn >= pGen->pEnd /*|| (pGen->pIn->nType & PH7_TK_KEYWORD) != 0*/) { //BUG: 
     /* Invalid function name */
     rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "Invalid function name");
     if (rc == SXERR_ABORT) {
@@ -6100,6 +6100,9 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
   SyToken *pEnd, *pTmp;
   sxi32 iProtection;
   SySet aInterfaces;
+  SySet aTraits;      /* traits used by the class (ph7_class *) */
+  ph7_class **apTrait;
+  sxu32 nTrait;
   sxi32 iAttrflags;
   sxi32 iFixedType;
   SyString *pName;
@@ -6147,6 +6150,8 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
   }
   /* implemented interfaces container */
   SySetInit(&aInterfaces, &pGen->pVm->sAllocator, sizeof(ph7_class *));
+  /* used traits container */
+  SySetInit(&aTraits, &pGen->pVm->sAllocator, sizeof(ph7_class *));
   /* Assume a standalone class */
   pBase = 0;
   if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_KEYWORD)) {
@@ -6155,6 +6160,14 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
     char zBaseName[GEN_NAME_MAX];
     SyString sBaseName;
     nKwrd = SX_PTR_TO_INT(pGen->pIn->pUserData);
+    if ((iFlags & PH7_CLASS_TRAIT) && (nKwrd == PH7_TKWRD_EXTENDS || nKwrd == PH7_TKWRD_IMPLEMENTS)) {
+      PH7_GenCompileError(pGen, E_ERROR, nLine,
+                          "Trait '%z' cannot use 'extends' or 'implements'", pName);
+      SyMemBackendPoolFree(&pGen->pVm->sAllocator, pClass);
+      SySetRelease(&aInterfaces);
+      SySetRelease(&aTraits);
+      return SXERR_ABORT;
+    }
     if (nKwrd == PH7_TKWRD_EXTENDS /* class b extends a */) {
       pGen->pIn++; /* Advance the stream cursor */
       if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP)) == 0) {
@@ -6303,6 +6316,76 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
         return SXERR_ABORT;
       }
       goto done;
+    }
+    if ((pGen->pIn->nType & PH7_TK_KEYWORD) && SX_PTR_TO_INT(pGen->pIn->pUserData) == PH7_TKWRD_USE) {
+      /* use TraitA, \Name\Space\TraitB; */
+      ph7_class *pTrait;
+      SyString *pTraitName;
+      SyToken *pPathEnd;
+      char zTraitName[GEN_NAME_MAX];
+      SyString sTraitName;
+      pGen->pIn++; /* Jump the 'use' keyword */
+      for (;;) {
+        if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & (PH7_TK_ID | PH7_TK_NSSEP)) == 0) {
+          rc = PH7_GenCompileError(pGen, E_ERROR, pGen->pIn < pGen->pEnd ? pGen->pIn->nLine : nLine,
+                                   "'class %z': trait name is expected after 'use' keyword", pName);
+          if (rc == SXERR_ABORT) {
+            return SXERR_ABORT;
+          }
+          goto done;
+        }
+        /* Resolve the name path [i.e: Name, \Name, A\B\Name] */
+        pPathEnd = GenStateScanName(pGen->pIn, pGen->pEnd);
+        rc = GenStateResolveName(pGen, GEN_NAME_CLASS, pGen->pIn, pPathEnd, zTraitName, sizeof(zTraitName), &sTraitName);
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+        pTraitName = &sTraitName;
+        /* Make sure the trait is already defined. Only traits are allowed */
+        pTrait = PH7_VmExtractClass(pGen->pVm, pTraitName->zString, pTraitName->nByte, FALSE, 0);
+        while (pTrait && (pTrait->iFlags & PH7_CLASS_TRAIT) == 0) {
+          pTrait = pTrait->pNextName;
+        }
+        if (pTrait == 0) {
+          rc = PH7_GenCompileError(pGen, E_ERROR, pGen->pIn->nLine, "Inexistant trait '%z'", pTraitName);
+          if (rc == SXERR_ABORT) {
+            return SXERR_ABORT;
+          }
+        } else {
+          /* Register the trait, its members are imported once the class body is compiled */
+          SySetPut(&aTraits, (const void *)&pTrait);
+        }
+        pGen->pIn = pPathEnd;
+        if (pGen->pIn >= pGen->pEnd || (pGen->pIn->nType & PH7_TK_COMMA) == 0) {
+          break;
+        }
+        pGen->pIn++; /* Jump the comma */
+      }
+      if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_OCB /*'{'*/)) {
+        /* use A, B { A::foo insteadof B; B::foo as bar; }: not supported yet, skip the block */
+        SyToken *pBlockEnd = 0;
+        rc = PH7_GenCompileError(pGen, E_ERROR, pGen->pIn->nLine,
+                                 "'class %z': 'insteadof' and 'as' rules after 'use' are not supported yet", pName);
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+        pGen->pIn++; /* Jump the leading curly brace */
+        PH7_DelimitNestedTokens(pGen->pIn, pGen->pEnd, PH7_TK_OCB, PH7_TK_CCB, &pBlockEnd);
+        if (pBlockEnd >= pGen->pEnd) {
+          goto done;
+        }
+        pGen->pIn = &pBlockEnd[1];
+      } else if (pGen->pIn < pGen->pEnd && (pGen->pIn->nType & PH7_TK_SEMI /*';'*/)) {
+        pGen->pIn++; /* Jump the semi-colon */
+      } else {
+        rc = PH7_GenCompileError(pGen, E_ERROR, pGen->pIn < pGen->pEnd ? pGen->pIn->nLine : nLine,
+                                 "'class %z': expected ';' after 'use' declaration", pName);
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+        goto done;
+      }
+      continue;
     }
     /* Assume public visibility */
     iProtection = PH7_TKWRD_PUBLIC;
@@ -6579,6 +6662,25 @@ static sxi32 GenStateCompileClass(ph7_gen_state *pGen, sxi32 iFlags) {
       }
     }
   }
+  /* Import the members of the used traits. This must come before PH7_VmInstallClass(),
+   * which mounts the methods and allocates the static attribute slots, and before
+   * PH7_ClassInherit(), so that the traits override the inherited members */
+  rc = SXRET_OK;
+  apTrait = (ph7_class **)SySetBasePtr(&aTraits);
+  for (nTrait = 0; nTrait < SySetUsed(&aTraits); nTrait++) {
+    rc = PH7_ClassUseTrait(&(*pGen), pClass, apTrait[nTrait]);
+    if (rc != SXRET_OK) {
+      break;
+    }
+  }
+  SySetRelease(&aTraits);
+  if (rc != SXRET_OK) {
+    if (rc == SXERR_ABORT) {
+      return SXERR_ABORT;
+    }
+    PH7_GenCompileOOM(pGen);
+    return SXERR_ABORT;
+  }
   /* Install the class */
   rc = PH7_VmInstallClass(pGen->pVm, pClass);
   if (rc == SXRET_OK) {
@@ -6608,6 +6710,22 @@ done:
   pGen->pIn = &pEnd[1];
   pGen->pEnd = pTmp;
   return PH7_OK;
+}
+/*
+ * Compile a user-defined trait.
+ *  A trait is compiled exactly like a class and registered under its own name, but it is
+ *  marked with PH7_CLASS_TRAIT, so it is not a real class: it cannot be instantiated,
+ *  extended or implemented. When a class says 'use TraitName;' its attributes and methods
+ *  are copied into that class (see PH7_ClassUseTrait()).
+ *  A trait cannot have a parent class or implement interfaces, this is checked in
+ *  GenStateCompileClass().
+ */
+static sxi32 PH7_CompileTrait(ph7_gen_state *pGen) {
+  sxi32 rc;
+  pGen->bInClass++;
+  rc = GenStateCompileClass(&(*pGen), PH7_CLASS_TRAIT);
+  pGen->bInClass--;
+  return rc;
 }
 /*
  * Compile a user-defined abstract class.
@@ -7111,6 +7229,200 @@ static sxi32 GenStateCompileCaseExpr(ph7_gen_state *pGen, ph7_case_expr *pExpr) 
   }
   return SXRET_OK;
 }
+/*
+ * Find the end of a match condition list or of an arm result: the first ',' at nesting
+ * level zero. For conditions the '=>' that separates them from the result stops the scan too,
+ * except the '=>' of an arrow function [i.e: fn($x) => $x] used inside the condition.
+ */
+static SyToken *GenStateMatchScan(SyToken *pIn, SyToken *pEnd, int bCondition) {
+  sxi32 iNest = 0;
+  sxi32 nArrowPending = 0; /* arrow functions whose '=>' was not seen yet */
+  while (pIn < pEnd) {
+    if (pIn->nType & (PH7_TK_LPAREN | PH7_TK_OSB | PH7_TK_OCB)) {
+      iNest++;
+    } else if (pIn->nType & (PH7_TK_RPAREN | PH7_TK_CSB | PH7_TK_CCB)) {
+      iNest--;
+    } else if (iNest <= 0) {
+      if (pIn->nType & PH7_TK_COMMA) {
+        break;
+      }
+      if (bCondition && (pIn->nType & PH7_TK_ARRAY_OP)) {
+        if (nArrowPending <= 0) {
+          break;
+        }
+        nArrowPending--;
+      }
+      if ((pIn->nType & PH7_TK_KEYWORD) && SX_PTR_TO_INT(pIn->pUserData) == PH7_TKWRD_FUNCTION) {
+        nArrowPending++;
+      }
+    }
+    pIn++;
+  }
+  return pIn;
+}
+
+/*
+ * Compile the expression delimited by [pIn,pEnd).
+ * pContainer: byte-code container to compile into (a match condition: it is closed with OP_DONE
+ * exactly like a 'case' expression) or 0 to compile into the current one (subject, arm result).
+ */
+static sxi32 GenStateCompileMatchExpr(ph7_gen_state *pGen, SyToken *pIn, SyToken *pEnd,
+                                      SySet *pContainer, sxu32 nLine, const char *zWhat) {
+  SySet *pOldContainer = 0;
+  SyToken *pTmpIn, *pTmpEnd;
+  sxi32 rc;
+  if (pIn >= pEnd) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "match: empty %s", zWhat);
+    return (rc == SXERR_ABORT) ? SXERR_ABORT : SXRET_OK;
+  }
+  if (pContainer) {
+    pOldContainer = PH7_VmGetByteCodeContainer(pGen->pVm);
+    PH7_VmSetByteCodeContainer(pGen->pVm, pContainer);
+  }
+  SWAP_DELIMITER(pGen, pIn, pEnd);
+  rc = PH7_CompileExpr(&(*pGen), EXPR_FLAG_RDONLY_LOAD, 0);
+  if (rc != SXERR_ABORT && pGen->pIn < pGen->pEnd) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, pGen->pIn->nLine,
+                             "match: unexpected token '%z' in %s", &pGen->pIn->sData, zWhat);
+  }
+  RE_SWAP_DELIMITER(pGen);
+  if (pContainer) {
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_DONE, (rc != SXERR_EMPTY ? 1 : 0), 0, 0, 0, pGen);
+    PH7_VmSetByteCodeContainer(pGen->pVm, pOldContainer);
+  }
+  return (rc == SXERR_ABORT) ? SXERR_ABORT : SXRET_OK;
+}
+
+/*
+ * Compile a match expression:
+ *   match (subject) { cond1, cond2 => result1, cond3 => result2, default => result3, }
+ * The code  leaves the value of the expression on the stack:
+ *          <subject>
+ *          SWITCH P1=1 P3=ph7_switch   pops the subject, compares it strictly with the conditions
+ *                                      in source order and jumps to the code of the matching arm
+ *   arm1:  <result 1>   JMP out
+ *   arm2:  <result 2>   JMP out
+ *   armN:  <default>
+ *   out:
+ * 'a, b => r' makes two ph7_case_expr entries which point to the same code.
+ */
+PH7_PRIVATE sxi32 PH7_CompileMatch(ph7_gen_state *pGen, sxi32 iCompileFlag) {
+
+  sxu32 nLine = pGen->pIn->nLine;
+  SyToken *pSubjectEnd, *pBodyEnd, *pCur, *pCondEnd, *pResultEnd;
+  ph7_switch *pMatch;
+  ph7_case_expr *aCase;
+  SySet aOutJump; /* indexes of the JMP instructions which leave the arms */
+  sxu32 *anOutJump;
+  sxu32 nArmStart, nJump, nCond, n;
+  VmInstr *pInstr;
+  sxi32 rc;
+  SXUNUSED(iCompileFlag);
+
+  pGen->pIn += 2; /* Jump the 'match' keyword and '(' */
+  PH7_DelimitNestedTokens(pGen->pIn, pGen->pEnd, PH7_TK_LPAREN, PH7_TK_RPAREN, &pSubjectEnd);
+  /* The subject goes to the current stream */
+  rc = GenStateCompileMatchExpr(&(*pGen), pGen->pIn, pSubjectEnd, 0, nLine, "subject");
+  if (rc == SXERR_ABORT) {
+    return SXERR_ABORT;
+  }
+  pCur = &pSubjectEnd[2]; /* Jump ')' and '{' */
+  PH7_DelimitNestedTokens(pCur, pGen->pEnd, PH7_TK_OCB, PH7_TK_CCB, &pBodyEnd);
+
+  pMatch = (ph7_switch *)SyMemBackendAlloc(&pGen->pVm->sAllocator, sizeof(ph7_switch));
+  if (pMatch == 0) {
+    PH7_GenCompileOOM(pGen);
+    return SXERR_ABORT;
+  }
+  SyZero(pMatch, sizeof(ph7_switch));
+  SySetInit(&pMatch->aCaseExpr, &pGen->pVm->sAllocator, sizeof(ph7_case_expr));
+  SySetInit(&aOutJump, &pGen->pVm->sAllocator, sizeof(sxu32));
+  /* P1 = 1: match semantics (strict comparison, no matching arm is an error) */
+  PH7_VmEmitInstr(pGen->pVm, PH7_OP_SWITCH, 1, 0, pMatch, 0, pGen);
+
+  while (pCur < pBodyEnd) {
+    int bDefault = 0;
+    nCond = SySetUsed(&pMatch->aCaseExpr); /* first condition of this arm */
+    /*  Conditions 
+    */
+    if ((pCur->nType & PH7_TK_KEYWORD) && SX_PTR_TO_INT(pCur->pUserData) == PH7_TKWRD_DEFAULT
+        && &pCur[1] < pBodyEnd && (pCur[1].nType & PH7_TK_ARRAY_OP)) {
+      if (pMatch->nDefault > 0) {
+        rc = PH7_GenCompileError(&(*pGen), E_ERROR, pCur->nLine, "match: 'default' arm already defined");
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+      }
+      bDefault = 1;
+      pCur += 2; /* Jump 'default' and '=>' */
+    } else {
+      for (;;) {
+        ph7_case_expr sCase;
+        SySetInit(&sCase.aByteCode, &pGen->pVm->sAllocator, sizeof(VmInstr));
+        sCase.nStart = 0; /* set when the code of the arm is known */
+        pCondEnd = GenStateMatchScan(pCur, pBodyEnd, TRUE);
+        rc = GenStateCompileMatchExpr(&(*pGen), pCur, pCondEnd, &sCase.aByteCode, nLine, "condition");
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+        SySetPut(&pMatch->aCaseExpr, (const void *)&sCase);
+        pCur = pCondEnd;
+        if (pCur < pBodyEnd && (pCur->nType & PH7_TK_COMMA)) {
+          pCur++; /* Jump the comma */
+          if (pCur < pBodyEnd && (pCur->nType & PH7_TK_ARRAY_OP)) {
+            break; /* trailing comma in the condition list */
+          }
+          continue;
+        }
+        break;
+      }
+      if (pCur >= pBodyEnd || (pCur->nType & PH7_TK_ARRAY_OP) == 0) {
+        rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "match: expected '=>' after the condition");
+        if (rc == SXERR_ABORT) {
+          return SXERR_ABORT;
+        }
+        break;
+      }
+      pCur++; /* Jump '=>' */
+    }
+    /*  Result
+     *   compiled in the main stream, the conditions of the arm point to it
+    */
+    nArmStart = PH7_VmInstrLength(pGen->pVm);
+    if (bDefault) {
+      pMatch->nDefault = nArmStart;
+    } else {
+      aCase = (ph7_case_expr *)SySetBasePtr(&pMatch->aCaseExpr);
+      for (n = nCond; n < SySetUsed(&pMatch->aCaseExpr); n++) {
+        aCase[n].nStart = nArmStart;
+      }
+    }
+    pResultEnd = GenStateMatchScan(pCur, pBodyEnd, FALSE);
+    rc = GenStateCompileMatchExpr(&(*pGen), pCur, pResultEnd, 0, nLine, "result");
+    if (rc == SXERR_ABORT) {
+      return SXERR_ABORT;
+    }
+    nJump = 0;
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_JMP, 0, 0, 0, &nJump, pGen);
+    SySetPut(&aOutJump, (const void *)&nJump);
+    pCur = pResultEnd;
+    if (pCur < pBodyEnd) {
+      pCur++; /* Jump the comma between arms */
+    }
+  }
+  /* Fix the jumps now the destination is known */
+  pMatch->nOut = PH7_VmInstrLength(pGen->pVm);
+  anOutJump = (sxu32 *)SySetBasePtr(&aOutJump);
+  for (n = 0; n < SySetUsed(&aOutJump); n++) {
+    pInstr = PH7_VmGetInstr(pGen->pVm, anOutJump[n]);
+    if (pInstr) {
+      pInstr->iP2 = pMatch->nOut;
+    }
+  }
+  SySetRelease(&aOutJump);
+  return SXRET_OK;
+}
+
 /*
  * Compile the smart switch statement.
  * According to the PHP language reference manual
@@ -7827,6 +8139,7 @@ static int GenStateisLangConstruct(sxu32 nKeyword) {
   rc = PH7_IsLangConstruct(nKeyword, TRUE);
   if (rc == FALSE) {
     if (nKeyword == PH7_TKWRD_SELF || nKeyword == PH7_TKWRD_PARENT || nKeyword == PH7_TKWRD_STATIC
+        || nKeyword == PH7_TKWRD_MATCH
         /*|| nKeyword == PH7_TKWRD_CLASS || nKeyword == PH7_TKWRD_FINAL || nKeyword == PH7_TKWRD_EXTENDS 
         || nKeyword == PH7_TKWRD_ABSTRACT || nKeyword == PH7_TKWRD_INTERFACE 
         || nKeyword == PH7_TKWRD_PUBLIC || nKeyword == PH7_TKWRD_PROTECTED 
