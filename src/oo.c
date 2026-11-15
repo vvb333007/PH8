@@ -1148,3 +1148,183 @@ PH7_PRIVATE ph7_value *PH7_ClassInstanceFetchAttr(ph7_class_instance *pThis, con
   return ExtractClassAttrValue(pThis->pVm, pAttr);
 }
 
+/*
+ * Append a copy of every instruction of pSource to pDest.
+ */
+static sxi32 ClassCopyByteCode(SySet *pDest, SySet *pSource) {
+  sxu32 nIdx;
+  sxi32 iRc;
+  for (nIdx = 0; nIdx < SySetUsed(pSource); nIdx++) {
+    iRc = SySetPut(pDest, SySetAt(pSource, nIdx));
+    if (iRc != SXRET_OK) {
+      return iRc;
+    }
+  }
+  return SXRET_OK;
+}
+
+/*
+ * Return non-zero if pName is in the given set of (SyString *).
+ */
+static int ClassNameInSet(SySet *pNames, const SyString *pName) {
+  SyString **apName = (SyString **)SySetBasePtr(pNames);
+  sxu32 nIdx;
+  for (nIdx = 0; nIdx < SySetUsed(pNames); nIdx++) {
+    if (SyStringCmp(apName[nIdx], pName, SyMemcmp) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+/*
+ * Make a private copy of a trait attribute (property, static property or constant).
+ * nIdx stays SXU32_HIGH: the slot of a static attribute is allocated when the
+ * using class is mounted, so every class gets its own storage.
+ */
+static ph7_class_attr *ClassCloneAttr(ph7_vm *pVm, ph7_class_attr *pSource) {
+  ph7_class_attr *pAttr;
+  /* nLine/nType share a union, passing nLine keeps the declared type of typed attributes */
+  pAttr = PH7_NewClassAttr(pVm, &pSource->sName, pSource->nLine, pSource->iProtection, pSource->iFlags);
+  if (pAttr == 0) {
+    return 0;
+  }
+  if (ClassCopyByteCode(&pAttr->aByteCode, &pSource->aByteCode) != SXRET_OK) {
+    return 0;
+  }
+  return pAttr;
+}
+
+/*
+ * Make a private copy of a trait method, owned by pClass.
+ * The VM name ([__pClass@method_salt]) is NOT copied: PH7_NewClassMethod() generates
+ * it from the name of pClass, or reuses the one of an already installed method with the
+ * same name (overloading). Never copy the whole structure: sFunc.sName points inside
+ * the VM name buffer.
+ */
+static ph7_class_method *ClassCloneMethod(ph7_vm *pVm, ph7_class *pClass, ph7_class_method *pSource) {
+  ph7_class_method *pMeth;
+  ph7_vm_func_static_var *aStatic, sStatic;
+  SyString sName;
+  sxu32 nIdx;
+
+  sName = pSource->sFunc.sName;
+  pMeth = PH7_NewClassMethod(pVm, pClass, &sName, pSource->nLine, pSource->iProtection,
+                             pSource->iFlags | PH7_CLASS_ATTR_TRAIT, pSource->sFunc.iFlags);
+  if (pMeth == 0) {
+    return 0;
+  }
+  pMeth->iCloneDepth = pSource->iCloneDepth;
+  pMeth->sFunc.sSignature = pSource->sFunc.sSignature;
+  /* The bytecode and the argument list (with the code of the default values) are read-only
+   * after compilation, so the copy shares them with the trait: the same structure assignment
+   * as OP_LOAD_CLOSURE does in vm.c. Drop the buffer preallocated by PH7_VmInitFuncState()
+   * first. If anybody ever starts releasing the sets of a function one by one, these need
+   * a reference count. */
+  SySetRelease(&pMeth->sFunc.aByteCode);
+  SySetRelease(&pMeth->sFunc.aArgs);
+  pMeth->sFunc.aByteCode = pSource->sFunc.aByteCode;
+  pMeth->sFunc.aArgs = pSource->sFunc.aArgs;
+  /* Static variables are written at the first call: every class needs its own */
+  aStatic = (ph7_vm_func_static_var *)SySetBasePtr(&pSource->sFunc.aStatic);
+  for (nIdx = 0; nIdx < SySetUsed(&pSource->sFunc.aStatic); nIdx++) {
+    sStatic = aStatic[nIdx];
+    sStatic.nIdx = SXU32_HIGH;
+    SySetInit(&sStatic.aByteCode, &pVm->sAllocator, sizeof(VmInstr));
+    if (ClassCopyByteCode(&sStatic.aByteCode, &aStatic[nIdx].aByteCode) != SXRET_OK
+        || SySetPut(&pMeth->sFunc.aStatic, &sStatic) != SXRET_OK) {
+      return 0;
+    }
+  }
+  return pMeth;
+}
+
+/*
+ * Import the attributes and methods of a trait into a class.
+ *  - what the class declares itself always wins over the trait;
+ *  - the trait wins over what the class inherits (inheritance runs later);
+ *  - two traits providing the same method name is an error (until insteadof is supported);
+ *  - an attribute already present is kept as it is.
+ * Must be called after the class body has been compiled, but before
+ * PH7_VmInstallClass() (it mounts the methods and allocates the static attribute slots)
+ * and before PH7_ClassInherit().
+ * Return SXRET_OK on success, SXERR_ABORT if the error limit was reached, SXERR_MEM if
+ * out of memory.
+ */
+PH7_PRIVATE sxi32 PH7_ClassUseTrait(ph7_gen_state *pGen, ph7_class *pClass, ph7_class *pTrait) {
+  ph7_vm *pVm = pGen->pVm;
+  ph7_class_method *pMeth, *pExisting, *pClone;
+  ph7_class_attr *pAttr, *pAttrClone;
+  SyHashEntry *pEntry;
+  SyString *pName, *pInstalled;
+  SySet aInstalled; /* names of the methods already imported from THIS trait (overloads share a name) */
+  sxi32 iRc;
+
+  if ((pTrait->iFlags & PH7_CLASS_TRAIT) == 0 || pTrait == pClass) {
+    iRc = PH7_GenCompileError(pGen, E_ERROR, pClass->nLine,
+                              "Class '%z' cannot use '%z': it is not a trait", &pClass->sName, &pTrait->sName);
+    return (iRc == SXERR_ABORT) ? SXERR_ABORT : SXRET_OK;
+  }
+  /* Attributes */
+  SyHashResetLoopCursor(&pTrait->hAttr);
+  while ((pEntry = SyHashGetNextEntry(&pTrait->hAttr)) != 0) {
+    pAttr = (ph7_class_attr *)pEntry->pUserData;
+    pName = &pAttr->sName;
+    if (SyHashGet(&pClass->hAttr, (const void *)pName->zString, pName->nByte) != 0) {
+      continue;
+    }
+    pAttrClone = ClassCloneAttr(pVm, pAttr);
+    if (pAttrClone == 0) {
+      return SXERR_MEM;
+    }
+    iRc = PH7_ClassInstallAttr(pClass, pAttrClone);
+    if (iRc != SXRET_OK) {
+      return iRc;
+    }
+  }
+  /* Methods */
+  SySetInit(&aInstalled, &pVm->sAllocator, sizeof(SyString *));
+  iRc = SXRET_OK;
+  SyHashResetLoopCursor(&pTrait->hMethod);
+  while ((pEntry = SyHashGetNextEntry(&pTrait->hMethod)) != 0) {
+    pMeth = (ph7_class_method *)pEntry->pUserData;
+    pName = &pMeth->sFunc.sName;
+    if (pMeth->iFlags & PH7_CLASS_ATTR_ABSTRACT) {
+      /* Nothing to import. Whether the class provides it is not checked here, since it
+       * can also come from the base class, which is not inherited yet */
+      continue;
+    }
+    if (!ClassNameInSet(&aInstalled, pName)) {
+      pEntry = SyHashGet(&pClass->hMethod, (const void *)pName->zString, pName->nByte);
+      if (pEntry != 0) {
+        pExisting = (ph7_class_method *)pEntry->pUserData;
+        if (pExisting->iFlags & PH7_CLASS_ATTR_TRAIT) {
+          iRc = PH7_GenCompileError(pGen, E_ERROR, pClass->nLine,
+                                    "Trait method '%z::%z' has not been applied, because there are collisions "
+                                    "with other trait methods on '%z'", &pTrait->sName, pName, &pClass->sName);
+          if (iRc == SXERR_ABORT) {
+            break;
+          }
+          iRc = SXRET_OK;
+        }
+        /* otherwise the method is declared by the class itself: it wins */
+        continue;
+      }
+    }
+    pClone = ClassCloneMethod(pVm, pClass, pMeth);
+    if (pClone == 0) {
+      iRc = SXERR_MEM;
+      break;
+    }
+    iRc = PH7_ClassInstallMethod(pClass, pClone);
+    if (iRc != SXRET_OK) {
+      break;
+    }
+    pInstalled = &pClone->sFunc.sName;
+    if (!ClassNameInSet(&aInstalled, pInstalled)) {
+      SySetPut(&aInstalled, &pInstalled);
+    }
+  }
+  SySetRelease(&aInstalled);
+  return iRc;
+}
