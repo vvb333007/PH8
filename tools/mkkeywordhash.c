@@ -76,6 +76,7 @@ static Keyword aKeywordTable[] = {
   { "namespace",       "PH7_TKWRD_NAMESPACE", 1, 0 },
   { "echo",            "PH7_TKWRD_ECHO", 1, 0 },
   { "object",          "PH7_TKWRD_OBJECT", 1, 10 },
+  { "trait",           "PH7_TKWRD_TRAIT", 1, 0 },
   { "throw",           "PH7_TKWRD_THROW", 1, 10 },
   { "bool",            "PH7_TKWRD_BOOL", 1, 0 },
   { "and",             "PH7_TKWRD_AND", 1, 0 },
