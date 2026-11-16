@@ -5,101 +5,101 @@
  *   ../tools/mkkeywordhash.c (derived from SQLite source tree)
  */
 static sxu32 KeywordCode(const char *z, int n) {
-/* Hash score: 90
- * zText[] encodes 515 bytes of keyword text in 327 bytes */
+/* Hash score: 91
+ * zText[] encodes 521 bytes of keyword text in 331 bytes */
 /*   extendswitchenddeclarequire_oncelselfinalistaticasechobject        */
-/*   hrowprinterfacelifloatryclonevereturnamespacendifnewconstring      */
-/*   lobalusendwhilenumixedefaultvarrayabstractandievalboolcallable     */
-/*   xitclasscontinuemptydofunctiongotoimplementsinclude_once           */
-/*   ndforeachinstanceofissetparentprivateprotectedpublicatch           */
-/*   unreliableunsetvoidxorbreakmatch                                   */
-static const char zText[326] = {
+/*   raithrowprinterfacelifloatryclonevereturnamespacendifnewconst      */
+/*   ringlobalusendwhilenumixedefaultvarrayabstractandievalbool         */
+/*   callablexitclasscontinuemptydofunctiongotoimplements               */
+/*   include_oncendforeachinstanceofissetparentprivateprotected         */
+/*   publicatchunreliableunsetvoidxorbreakmatch                         */
+static const char zText[330] = {
   'e','x','t','e','n','d','s','w','i','t','c','h','e','n','d','d','e','c',
   'l','a','r','e','q','u','i','r','e','_','o','n','c','e','l','s','e','l',
   'f','i','n','a','l','i','s','t','a','t','i','c','a','s','e','c','h','o',
-  'b','j','e','c','t','h','r','o','w','p','r','i','n','t','e','r','f','a',
-  'c','e','l','i','f','l','o','a','t','r','y','c','l','o','n','e','v','e',
-  'r','e','t','u','r','n','a','m','e','s','p','a','c','e','n','d','i','f',
-  'n','e','w','c','o','n','s','t','r','i','n','g','l','o','b','a','l','u',
-  's','e','n','d','w','h','i','l','e','n','u','m','i','x','e','d','e','f',
-  'a','u','l','t','v','a','r','r','a','y','a','b','s','t','r','a','c','t',
-  'a','n','d','i','e','v','a','l','b','o','o','l','c','a','l','l','a','b',
-  'l','e','x','i','t','c','l','a','s','s','c','o','n','t','i','n','u','e',
-  'm','p','t','y','d','o','f','u','n','c','t','i','o','n','g','o','t','o',
-  'i','m','p','l','e','m','e','n','t','s','i','n','c','l','u','d','e','_',
-  'o','n','c','e','n','d','f','o','r','e','a','c','h','i','n','s','t','a',
-  'n','c','e','o','f','i','s','s','e','t','p','a','r','e','n','t','p','r',
-  'i','v','a','t','e','p','r','o','t','e','c','t','e','d','p','u','b','l',
-  'i','c','a','t','c','h','u','n','r','e','l','i','a','b','l','e','u','n',
-  's','e','t','v','o','i','d','x','o','r','b','r','e','a','k','m','a','t',
-  'c','h',
+  'b','j','e','c','t','r','a','i','t','h','r','o','w','p','r','i','n','t',
+  'e','r','f','a','c','e','l','i','f','l','o','a','t','r','y','c','l','o',
+  'n','e','v','e','r','e','t','u','r','n','a','m','e','s','p','a','c','e',
+  'n','d','i','f','n','e','w','c','o','n','s','t','r','i','n','g','l','o',
+  'b','a','l','u','s','e','n','d','w','h','i','l','e','n','u','m','i','x',
+  'e','d','e','f','a','u','l','t','v','a','r','r','a','y','a','b','s','t',
+  'r','a','c','t','a','n','d','i','e','v','a','l','b','o','o','l','c','a',
+  'l','l','a','b','l','e','x','i','t','c','l','a','s','s','c','o','n','t',
+  'i','n','u','e','m','p','t','y','d','o','f','u','n','c','t','i','o','n',
+  'g','o','t','o','i','m','p','l','e','m','e','n','t','s','i','n','c','l',
+  'u','d','e','_','o','n','c','e','n','d','f','o','r','e','a','c','h','i',
+  'n','s','t','a','n','c','e','o','f','i','s','s','e','t','p','a','r','e',
+  'n','t','p','r','i','v','a','t','e','p','r','o','t','e','c','t','e','d',
+  'p','u','b','l','i','c','a','t','c','h','u','n','r','e','l','i','a','b',
+  'l','e','u','n','s','e','t','v','o','i','d','x','o','r','b','r','e','a',
+  'k','m','a','t','c','h',
 };
 /* aHash[i] is the hash value for the i-th keyword */
 static const unsigned char aHash[147] = {
-    42,   0,   0,  47,   0,   0,  77,   0,   0,   0,  40,   1,  56,
-     0,  59,   0,   0,   0,   0,   0,  27,   0,   0,  38,  28,   0,
-    37,  70,  78,  44,  54,  63,  49,   0,  75,  39,   0,  18,   0,
-     8,   3,   0,  43,   0,   0,  35,   0,   0,  14,   0,   9,   0,
-     0,   0,   0,  50,   0,  61,   0,   0,   0,   0,   6,   0,  11,
-     0,   0,  64,  17,   0,  13,   0,  72,  55,   0,   0,   0,   0,
-     0,  71,   0,  67,  15,   0,   0,   0,  74,   0,  26,  58,  22,
-     0,  19,   0,  24,  33,  51,   0,   0,   0,  10,  68,   0,  52,
-    76,  29,   0,   0,   0,   0,  69,  12,   0,   0,  16,   0,   7,
-     0,   0,   0,   0,   0,   5,   0,  32,   2,   0,   0,  73,  79,
-     0,   0,   0,  36,  30,   0,  20,  60,   0,   0,   0,  48,  21,
-     0,   4,   0,  46,
+    43,   0,   0,  48,   0,   0,  78,   0,   0,   0,  41,   1,  57,
+     0,  60,   0,   0,   0,   0,   0,  28,   0,   0,  39,  29,   0,
+    38,  71,  79,  45,  55,  64,  50,  17,  76,  40,   0,  19,   0,
+     8,   3,   0,  44,   0,   0,  36,   0,   0,  14,   0,   9,   0,
+     0,   0,   0,  51,   0,  62,   0,   0,   0,   0,   6,   0,  11,
+     0,   0,  65,  18,   0,  13,   0,  73,  56,   0,   0,   0,   0,
+     0,  72,   0,  68,  15,   0,   0,   0,  75,   0,  27,  59,  23,
+     0,  20,   0,  25,  34,  52,   0,   0,   0,  10,  69,   0,  53,
+    77,  30,   0,   0,   0,   0,  70,  12,   0,   0,  16,   0,   7,
+     0,   0,   0,   0,   0,   5,   0,  33,   2,   0,   0,  74,  80,
+     0,   0,   0,  37,  31,   0,  21,  61,   0,   0,   0,  49,  22,
+     0,   4,   0,  47,
 };
 /* aNext[] forms the hash collision chain.  If aHash[i]==0
 ** then the i-th keyword has no more hash collisions.  Otherwise,
 ** the next keyword with the same hash is aHash[i]-1. */
-static const unsigned char aNext[80] = {
-     0,   0,   0,   0,   0,   0,   0,   0,   0,  65,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,  62,   0,   0,   0,   0,   0,   0,
+static const unsigned char aNext[81] = {
+     0,   0,   0,   0,   0,   0,   0,   0,   0,  66,   0,   0,   0,
+     0,   0,   0,   0,   0,   0,   0,  63,   0,   0,   0,   0,   0,
      0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    31,   0,   0,   0,   0,   0,   0,   0,   0,  53,   0,   0,   0,
-     0,   0,  34,   0,   0,  45,   0,   0,   0,   0,  25,   0,   0,
-     0,   0,   0,   0,   0,   0,  23,  66,   0,   0,  57,   0,   0,
-    41,
+     0,  32,   0,   0,   0,   0,   0,   0,   0,   0,  54,   0,   0,
+     0,   0,   0,  35,   0,   0,  46,   0,   0,   0,   0,  26,   0,
+     0,   0,   0,   0,   0,   0,   0,  24,  67,   0,   0,  58,   0,
+     0,  42,
 };
 /* aLen[i] is the length (in bytes) of the i-th keyword */
-static const unsigned char aLen[80] = {
+static const unsigned char aLen[81] = {
      7,   9,   6,   6,   7,  12,   7,   2,   4,   4,   5,   4,   6,
-     4,   4,   6,   5,   5,   9,   3,   4,   5,   3,   5,   2,   5,
-     6,   9,   5,   2,   2,   3,   5,   6,   6,   3,   8,   5,   4,
-     5,   7,   3,   5,   8,   3,   3,   4,   4,   8,   4,   5,   2,
-     8,   5,   2,   8,   4,  10,  12,   7,  10,   6,   7,   3,   2,
-    10,   5,   6,   7,   9,   6,   5,  10,   8,   5,   4,   3,   5,
-     5,
+     4,   4,   6,   5,   5,   5,   9,   3,   4,   5,   3,   5,   2,
+     5,   6,   9,   5,   2,   2,   3,   5,   6,   6,   3,   8,   5,
+     4,   5,   7,   3,   5,   8,   3,   3,   4,   4,   8,   4,   5,
+     2,   8,   5,   2,   8,   4,  10,  12,   7,  10,   6,   7,   3,
+     2,  10,   5,   6,   7,   9,   6,   5,  10,   8,   5,   4,   3,
+     5,   5,
 };
 /* aOffset[i] is the index into zText[] of the start of
 ** the text for the i-th keyword. */
-static const unsigned short int aOffset[80] = {
+static const unsigned short int aOffset[81] = {
      0,   3,   6,  12,  15,  20,  20,  21,  31,  33,  36,  40,  42,
-    47,  50,  53,  58,  63,  65,  65,  73,  76,  80,  83,  86,  86,
-    90,  95, 103, 106, 107, 108, 111, 114, 119, 125, 127, 130, 134,
-   137, 141, 148, 149, 154, 162, 164, 166, 170, 174, 181, 185, 187,
-   190, 197, 202, 204, 212, 216, 226, 226, 237, 237, 240, 240, 241,
-   247, 257, 262, 268, 275, 284, 289, 294, 296, 304, 309, 313, 316,
-   321,
+    47,  50,  53,  58,  62,  67,  69,  69,  77,  80,  84,  87,  90,
+    90,  94,  99, 107, 110, 111, 112, 115, 118, 123, 129, 131, 134,
+   138, 141, 145, 152, 153, 158, 166, 168, 170, 174, 178, 185, 189,
+   191, 194, 201, 206, 208, 216, 220, 230, 230, 241, 241, 244, 244,
+   245, 251, 261, 266, 272, 279, 288, 293, 298, 300, 308, 313, 317,
+   320, 325,
 };
 /* aCode[i] is the parser symbol code for the i-th keyword */
-static const sxu32 aCode[80] = {
+static const sxu32 aCode[81] = {
   PH7_TKWRD_EXTENDS,   PH7_TKWRD_ENDSWITCH, PH7_TKWRD_SWITCH,    PH7_TKWRD_ENDDEC,    PH7_TKWRD_DECLARE,   
   PH7_TKWRD_REQONCE,   PH7_TKWRD_REQUIRE,   PH7_TKWRD_SEQ,       PH7_TKWRD_ELSE,      PH7_TKWRD_SELF,      
   PH7_TKWRD_FINAL,     PH7_TKWRD_LIST,      PH7_TKWRD_STATIC,    PH7_TKWRD_CASE,      PH7_TKWRD_ECHO,      
-  PH7_TKWRD_OBJECT,    PH7_TKWRD_THROW,     PH7_TKWRD_PRINT,     PH7_TKWRD_INTERFACE, PH7_TKWRD_INT,       
-  PH7_TKWRD_ELIF,      PH7_TKWRD_FLOAT,     PH7_TKWRD_TRY,       PH7_TKWRD_CLONE,     PH7_TKWRD_SNE,       
-  PH7_TKWRD_NEVER,     PH7_TKWRD_RETURN,    PH7_TKWRD_NAMESPACE, PH7_TKWRD_ENDIF,     PH7_TKWRD_IF,        
-  PH7_TKWRD_FUNCTION,  PH7_TKWRD_NEW,       PH7_TKWRD_CONST,     PH7_TKWRD_STRING,    PH7_TKWRD_GLOBAL,    
-  PH7_TKWRD_USE,       PH7_TKWRD_ENDWHILE,  PH7_TKWRD_WHILE,     PH7_TKWRD_ENUM,      PH7_TKWRD_MIXED,     
-  PH7_TKWRD_DEFAULT,   PH7_TKWRD_VAR,       PH7_TKWRD_ARRAY,     PH7_TKWRD_ABSTRACT,  PH7_TKWRD_AND,       
-  PH7_TKWRD_DIE,       PH7_TKWRD_EVAL,      PH7_TKWRD_BOOL,      PH7_TKWRD_CALLABLE,  PH7_TKWRD_EXIT,      
-  PH7_TKWRD_CLASS,     PH7_TKWRD_AS,        PH7_TKWRD_CONTINUE,  PH7_TKWRD_EMPTY,     PH7_TKWRD_DO,        
-  PH7_TKWRD_FUNCTION,  PH7_TKWRD_GOTO,      PH7_TKWRD_IMPLEMENTS,PH7_TKWRD_INCONCE,   PH7_TKWRD_INCLUDE,   
-  PH7_TKWRD_END4EACH,  PH7_TKWRD_ENDFOR,    PH7_TKWRD_FOREACH,   PH7_TKWRD_FOR,       PH7_TKWRD_OR,        
-  PH7_TKWRD_INSTANCEOF,PH7_TKWRD_ISSET,     PH7_TKWRD_PARENT,    PH7_TKWRD_PRIVATE,   PH7_TKWRD_PROTECTED, 
-  PH7_TKWRD_PUBLIC,    PH7_TKWRD_CATCH,     PH7_TKWRD_UNRELIABLE,PH7_TKWRD_RELIABLE,  PH7_TKWRD_UNSET,     
-  PH7_TKWRD_VOID,      PH7_TKWRD_XOR,       PH7_TKWRD_BREAK,     PH7_TKWRD_MATCH,     
+  PH7_TKWRD_OBJECT,    PH7_TKWRD_TRAIT,     PH7_TKWRD_THROW,     PH7_TKWRD_PRINT,     PH7_TKWRD_INTERFACE, 
+  PH7_TKWRD_INT,       PH7_TKWRD_ELIF,      PH7_TKWRD_FLOAT,     PH7_TKWRD_TRY,       PH7_TKWRD_CLONE,     
+  PH7_TKWRD_SNE,       PH7_TKWRD_NEVER,     PH7_TKWRD_RETURN,    PH7_TKWRD_NAMESPACE, PH7_TKWRD_ENDIF,     
+  PH7_TKWRD_IF,        PH7_TKWRD_FUNCTION,  PH7_TKWRD_NEW,       PH7_TKWRD_CONST,     PH7_TKWRD_STRING,    
+  PH7_TKWRD_GLOBAL,    PH7_TKWRD_USE,       PH7_TKWRD_ENDWHILE,  PH7_TKWRD_WHILE,     PH7_TKWRD_ENUM,      
+  PH7_TKWRD_MIXED,     PH7_TKWRD_DEFAULT,   PH7_TKWRD_VAR,       PH7_TKWRD_ARRAY,     PH7_TKWRD_ABSTRACT,  
+  PH7_TKWRD_AND,       PH7_TKWRD_DIE,       PH7_TKWRD_EVAL,      PH7_TKWRD_BOOL,      PH7_TKWRD_CALLABLE,  
+  PH7_TKWRD_EXIT,      PH7_TKWRD_CLASS,     PH7_TKWRD_AS,        PH7_TKWRD_CONTINUE,  PH7_TKWRD_EMPTY,     
+  PH7_TKWRD_DO,        PH7_TKWRD_FUNCTION,  PH7_TKWRD_GOTO,      PH7_TKWRD_IMPLEMENTS,PH7_TKWRD_INCONCE,   
+  PH7_TKWRD_INCLUDE,   PH7_TKWRD_END4EACH,  PH7_TKWRD_ENDFOR,    PH7_TKWRD_FOREACH,   PH7_TKWRD_FOR,       
+  PH7_TKWRD_OR,        PH7_TKWRD_INSTANCEOF,PH7_TKWRD_ISSET,     PH7_TKWRD_PARENT,    PH7_TKWRD_PRIVATE,   
+  PH7_TKWRD_PROTECTED, PH7_TKWRD_PUBLIC,    PH7_TKWRD_CATCH,     PH7_TKWRD_UNRELIABLE,PH7_TKWRD_RELIABLE,  
+  PH7_TKWRD_UNSET,     PH7_TKWRD_VOID,      PH7_TKWRD_XOR,       PH7_TKWRD_BREAK,     PH7_TKWRD_MATCH,     
 };
 /* Hash table decoded ( --> collision chain):
  *   0: var    
@@ -119,6 +119,7 @@ static const sxu32 aCode[80] = {
  *  30: empty    
  *  31:    -->  foreach     ne    
  *  32:    -->  callable     continue    
+ *  33: trait    
  *  34: unset    
  *  35: enum    
  *  37: print    
