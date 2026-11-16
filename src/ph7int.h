@@ -15,24 +15,26 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Experimental; */
 #ifndef TYPEEXCEPTION
 #   define TYPEEXCEPTION 0
 #endif
 
-/* If user didn't specify ENABLE_THREADS and MATH_FUNC - set them to default (DISABLE)*/
+/* If user didnt specify ENABLE_THREADS and MATH_FUNC -set them to default */
 #ifndef PH7_ENABLE_THREADS
 #  define PH7_ENABLE_THREADS 0
 #endif
+
 #ifndef PH7_ENABLE_MATH_FUNC
-#  define PH7_ENABLE_MATH_FUNC 0
+#  define PH7_ENABLE_MATH_FUNC 1
 #endif
 
-/* If user didn't specify ENABLE_REGEX - set them to default (ENABLE)*/
+/* If user didnt specify ENABLE_REGEX -set them to default*/
 #ifndef PH7_ENABLE_REGEX
 #  define PH7_ENABLE_REGEX 1
 #endif
 
-/* If user didn't specify ENABLE_SQLITE3 - set them to default (DISABLE)*/
+/* If user didnt specify ENABLE_SQLITE3 - set them to default */
 #ifndef PH7_ENABLE_SQLITE3
 #  define PH7_ENABLE_SQLITE3 0
 #endif
@@ -1858,10 +1860,12 @@ enum ph7_expr_id {
 #define PH7_TKWRD_NEVER 58           /* 'never' function return type */
 
 
-// Keywords [60..63] are available for use for language extensions
+
 #define PH7_TKWRD_RELIABLE 60
 #define PH7_TKWRD_UNRELIABLE 61
 #define PH7_TKWRD_MATCH 62
+#define PH7_TKWRD_TRAIT 63           /* class */
+// 64 is used for OCB
 // Keywords [65..127] are available for use for language extensions
 
 /* Constants which MUST BE A POWER OF TWO  */

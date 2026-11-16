@@ -129,6 +129,12 @@ extern "C" {
  * Every effort has been made to ensure that the various combinations of compilation 
  * options work harmoniously and produce a working library.
  *
+ * PH7_ENABLE_SQLITE3
+ *   Compile in support for SQLite3: classic functions and SQLite3 classes. SQLite source code 
+ *   is incorporated (see src/sqlite3/);
+ *
+ * PH7_ENABLE_REGEX
+ *   Add support for regular expressions: php functions like preg_replace() or preg_match() and so on
  *
  * PH7_ENABLE_THREADS
  *   This option controls whether or not code is included in PH7 to enable it to operate
