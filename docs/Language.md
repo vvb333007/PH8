@@ -41,6 +41,21 @@ This design reflects the memory constraints of embedded environments. If arrays 
 
 This behavior will be familiar to C and C++ programmers.
 
+
+### 2.0 First class callables:
+
+PHP:
+```
+$a = strlen(...);
+$a('hello');
+```
+
+PH8:
+```
+$a = 'strlen';
+$a('hello');
+```
+
 ### 2.1. Integer Arithmetic and UTF-8
 
 PH8 uses 64-bit integer arithmetic on all platforms. In PHP, the size of an integer depends on the platform: 32 bits on 32-bit platforms and 64 bits on 64-bit platforms.
