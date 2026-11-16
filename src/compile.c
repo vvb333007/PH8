@@ -8114,6 +8114,8 @@ static ProcLangConstruct GenStateGetStatementHandler(
       return PH7_CompileClassInterface;
     } else if (nKeywordID == PH7_TKWRD_CLASS && (pLookahed->nType & PH7_TK_ID)) {
       return PH7_CompileClass;
+    } else if (nKeywordID == PH7_TKWRD_TRAIT && (pLookahed->nType & PH7_TK_ID)) {
+      return PH7_CompileTrait;
     } else if (nKeywordID == PH7_TKWRD_ENUM /*&& (pLookahed->nType & PH7_TK_ID)*/) {
       /* We skip Lookahead type match because otherwise error message will be misleading : "unexpected keyword 'enum'"
          which is wrong. Instead we let the enum parser PH7_CompileEnum hit the syntax error
@@ -8164,14 +8166,25 @@ static void CtStripTags(SyString *pS) {
   const char *z = pS->zString;
   sxu32 n = pS->nByte;
 
-  while (n > 0 && SyisSpace(z[0])) { z++; n--; }
+  while (n > 0 && SyisSpace(z[0])) { 
+    z++; 
+    n--; 
+  }
 
-  if (n >= 5 && SyStrnicmp(z, "<?php", 5) == 0) { z += 5; n -= 5; }
-  else if (n >= 2 && z[0] == '<' && z[1] == '?') { z += 2; n -= 2; }
+  if (n >= 5 && SyStrnicmp(z, "<?php", 5) == 0) {
+    z += 5;
+    n -= 5;
+  }
+  else if (n >= 2 && z[0] == '<' && z[1] == '?') {
+    z += 2;
+    n -= 2;
+  }
 
-  while (n > 0 && SyisSpace(z[n - 1])) { n--; }
+  while (n > 0 && SyisSpace(z[n - 1]))
+    n--;
 
-  if (n >= 2 && z[n - 2] == '?' && z[n - 1] == '>') { n -= 2; }
+  if (n >= 2 && z[n - 2] == '?' && z[n - 1] == '>')
+    n -= 2;
 
   pS->zString = z;
   pS->nByte = n;
@@ -8312,6 +8325,7 @@ static sxi32 GenStateCompileChunk(
         break;
       }
     } else {
+      /* throw new Whatever; */
       xCons = 0;
       if (pGen->pIn->nType & PH7_TK_KEYWORD) {
         sxu32 nKeyword = (sxu32)SX_PTR_TO_INT(pGen->pIn->pUserData);
