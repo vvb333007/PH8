@@ -16,11 +16,10 @@ To play on Windows:
   * Make sure you have Cygwin installed
   * Clone the PH8 repository
   * Go to PH8/src/examples/linux_windows_example/
-  * execute `make`
-  * Execute `inter.exe` with a PHP file as an argument
-  * Copy `PH8/Libraries/ext` to the `inter.exe` directory - this is an extension library
-  * Copy  PH8/examples/test_files/*.php to the `inter.exe` directory - these are examples
-  * Run `inter.exe SCRIPTNAME.php`
+  * execute `make`. You should get `inter.exe`
+  * Optional: Copy `PH8/Libraries/ext` to the `inter.exe` directory - this is an extension library (Arduino API, ESP-IDF API, SQLite3 API)
+  * Optional: Copy  `PH8/examples/test_files/*.php` to the `inter.exe` directory - these are examples
+  * Execute `inter.exe` with a PHP file as an argument: 'inter.exe SCRIPTAME.PHP'
 
 
 
