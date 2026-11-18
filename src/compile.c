@@ -1332,13 +1332,17 @@ PH7_PRIVATE sxi32 PH7_CompileArray(ph7_gen_state *pGen, sxi32 iCompileFlag) {
  * for more inforation.
  */
 static sxi32 GenStateListNodeValidator(ph7_gen_state *pGen, ph7_expr_node *pRoot) {
+
   sxi32 rc = SXRET_OK;
+
   if (pRoot->pOp) {
-    if (pRoot->pOp->iOp != EXPR_OP_SUBSCRIPT /* $a[] */ && pRoot->pOp->iOp != EXPR_OP_ARROW /* -> */
-        && pRoot->pOp->iOp != EXPR_OP_DC /* :: */) {
-      /* Unexpected expression */
+    if (pRoot->pOp->iOp != EXPR_OP_SUBSCRIPT /* $a[] */ && 
+        pRoot->pOp->iOp != EXPR_OP_ARROW /* -> */ &&
+        pRoot->pOp->iOp != EXPR_OP_DC /* :: */) {
+
+      /* Unexpected expression or a constant */
       rc = PH7_GenCompileError(&(*pGen), E_ERROR, pRoot->pStart ? pRoot->pStart->nLine : 0,
-                               "list(): Expecting a variable not an expression");
+                               "list(): Expecting a variable not an expression or a constant");
       if (rc != SXERR_ABORT) {
         rc = SXERR_INVALID;
       }
@@ -1353,6 +1357,27 @@ static sxi32 GenStateListNodeValidator(ph7_gen_state *pGen, ph7_expr_node *pRoot
   }
   return rc;
 }
+
+static sxi32 GenStateListNodeValidator(ph7_gen_state *pGen, ph7_expr_node *pRoot) {
+
+  sxi32 rc = SXRET_OK;
+
+  if (pRoot->pOp || pRoot->xCode != PH7_CompileVariable) {
+    if (pRoot->pOp->iOp != EXPR_OP_SUBSCRIPT /* $a[] */ && 
+        pRoot->pOp->iOp != EXPR_OP_ARROW /* -> */ &&
+        pRoot->pOp->iOp != EXPR_OP_DC /* :: */) {
+
+      /* Unexpected expression or a constant */
+      rc = PH7_GenCompileError(&(*pGen), E_ERROR, pRoot->pStart ? pRoot->pStart->nLine : 0,
+                               "list(): Expecting a variable not an expression or a constant");
+      if (rc != SXERR_ABORT) {
+        rc = SXERR_INVALID;
+      }
+    }
+  }
+  return rc;
+}
+
 /*
  * Compile the 'list' language construct.
  *  According to the PHP language reference
@@ -1372,8 +1397,15 @@ PH7_PRIVATE sxi32 PH7_CompileList(ph7_gen_state *pGen, sxi32 iCompileFlag) {
   sxi32 nExpr;
   sxi32 rc;
   nExpr = 0;
-  /* Jump the 'list' keyword,the leading left parenthesis and the trailing parenthesis */
-  pGen->pIn += 2;
+  /* Jump the 'list' keyword and the leading left parenthesis
+   * If the short syntax was used [i.e: [$a, $b] = ...] - jump the '['
+   */
+  if (pGen->pIn->nType & PH7_TK_OSB) {
+    pGen->pIn += 1;
+  } else {
+    pGen->pIn += 2;
+  }
+  /* Discard closing bracket */
   pGen->pEnd--;
   SXUNUSED(iCompileFlag); /* cc warning */
   while (SXRET_OK == PH7_GetNextExpr(pGen->pIn, pGen->pEnd, &pNext)) {

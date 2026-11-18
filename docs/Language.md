@@ -4,7 +4,7 @@ This text is an AI translation of original file in Russian.
 
 ## 1. Features Not Yet Supported by PH8
 
-- **Short destructuring syntax:** `[$a, $b, $c] = $x;` is not supported yet; it is planned.
+
 - **`list` as the target after `as` in `foreach`:** not supported.
 - **`[]` as the target after `as` in `foreach`:** not supported yet; it is planned.
 - **The `??=` operator:** not supported.
