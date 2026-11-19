@@ -16755,7 +16755,6 @@ typedef int VList;
 
 #  undef SQLITE_OS_WIN
 #  define SQLITE_OS_WIN 0
-
 #  define SQLITE_OMIT_WAL 1
 #  define SQLITE_OMIT_LOAD_EXTENSION 1
 #  define SQLITE_MUTEX_PTHREADS 1
@@ -16772,6 +16771,16 @@ typedef int VList;
 #  define SQLITE_OS_OTHER 0
 #  undef SQLITE_OS_UNIX
 #  define SQLITE_OS_UNIX 0
+
+#  define SQLITE_OMIT_WAL 1
+#  define SQLITE_OMIT_LOAD_EXTENSION 1
+#  define SQLITE_MUTEX_PTHREADS 1
+
+#if defined(ESP_PLATFORM) || defined(ESP32)
+#  define __freertos__ 1
+#endif
+
+
 #endif
 
 
