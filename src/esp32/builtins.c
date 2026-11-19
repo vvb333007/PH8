@@ -250,7 +250,7 @@
 #define HT_PENDING   ((void *)1)   /* Fake address, to signal that slot is reserved reserved */
 
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
 /* PC build: use placeholders instead of real numbers. we are on PC*/
 # define HT_FAKE      ((void *)2)   /* Fake handle on Cygwin */
 
@@ -523,7 +523,7 @@ static void *apSpi[ESP32_SPI_MAX];       /* spi_t *,      slot is the SPI bus nu
 // function pinMode(int $pin, int $mode): void
 //
 IMPLEMENT_N_N(pinMode, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"pinMode(%d, %x)\r\n",a0,a1);
 #else
   pinMode(a0, a1);
@@ -534,7 +534,7 @@ IMPLEMENT_N_N(pinMode, int, int,
 // function digitalWrite
 //
 IMPLEMENT_N_N(digitalWrite, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalWrite(%d, %d)\r\n",a0, a1);
 #else
   digitalWrite(a0, a1 ? 1 : 0);
@@ -544,7 +544,7 @@ IMPLEMENT_N_N(digitalWrite, int, int,
 // function delay
 //
 IMPLEMENT_N(delay, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"delay(%d)\r\n",a0);
 #else
   delay(a0);
@@ -554,7 +554,7 @@ IMPLEMENT_N(delay, int,
 // function delayMicroseconds
 //
 IMPLEMENT_N(delayMicroseconds, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"delayMicroseconds(%lld)\r\n",a0);
 #else
   delayMicroseconds(a0);
@@ -564,7 +564,7 @@ IMPLEMENT_N(delayMicroseconds, long long,
 // function digitalRead
 //
 IMPLEMENT_N(digitalRead, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalRead(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalRead(a0));
@@ -574,7 +574,7 @@ IMPLEMENT_N(digitalRead, int,
 // function millis
 //
 IMPLEMENT(millis,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"millis()\r\n");
 #else
   ph7_result_int64(pCtx, (sxi64)millis());
@@ -584,7 +584,7 @@ IMPLEMENT(millis,
 // function micros
 //
 IMPLEMENT(micros,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"micros()\r\n");
 #else
   ph7_result_int64(pCtx, (sxi64)micros());
@@ -594,7 +594,7 @@ IMPLEMENT(micros,
 // bool $ret = digitalPinIsValid($pin)
 //
 IMPLEMENT_N(digitalPinIsValid, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalPinIsValid(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinIsValid(a0));
@@ -604,7 +604,7 @@ IMPLEMENT_N(digitalPinIsValid, int,
 // bool digitalPinCanOutput($pin)
 //
 IMPLEMENT_N(digitalPinCanOutput, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalPinCanOutput(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinCanOutput(a0));
@@ -615,7 +615,7 @@ IMPLEMENT_N(digitalPinCanOutput, int,
 // $rtc_pin = digitalPinToRtcPin($pin)
 //
 IMPLEMENT_N(digitalPinToRtcPin, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalPinToRtcPin(%d)\r\n",a0);
 #else
 #ifdef RTC_GPIO_IS_VALID_GPIO
@@ -630,7 +630,7 @@ IMPLEMENT_N(digitalPinToRtcPin, int,
 // $chan = digitalPinToDacChannel($pin)
 //
 IMPLEMENT_N(digitalPinToDacChannel, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalPinToDacChannel(%d)\r\n",a0);
 #else
 #ifdef DAC_CHANNEL_1_GPIO_NUM
@@ -643,7 +643,7 @@ IMPLEMENT_N(digitalPinToDacChannel, int,
 // $chan = digitalPinToTouchChannel($pin)
 //
 IMPLEMENT_N(digitalPinToTouchChannel, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalPinToTouchChannel(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinToTouchChannel(a0));
@@ -653,7 +653,7 @@ IMPLEMENT_N(digitalPinToTouchChannel, int,
 // $chan = digitalPinToAnalogChannel($pin)
 //
 IMPLEMENT_N(digitalPinToAnalogChannel, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"digitalPinToAnalogChannel(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, digitalPinToAnalogChannel(a0));
@@ -663,7 +663,7 @@ IMPLEMENT_N(digitalPinToAnalogChannel, int,
 // $digi_pin = analogChannelToDigitalPin($ana_pin);
 //
 IMPLEMENT_N(analogChannelToDigitalPin, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogChannelToDigitalPin(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, analogChannelToDigitalPin(a0));
@@ -674,7 +674,7 @@ IMPLEMENT_N(analogChannelToDigitalPin, int,
 // $bit_order is LSBFIRST (0) or MSBFIRST (1)
 //
 IMPLEMENT_N_N_N(shiftIn, int, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"shiftIn(%d, %d, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_int(pCtx, shiftIn(a0, a1, a2));
@@ -684,7 +684,7 @@ IMPLEMENT_N_N_N(shiftIn, int, int, int,
 // shiftOut(int $data_pin, int $clock_pin, int $bit_order, int $value): void
 //
 IMPLEMENT_N_N_N_N(shiftOut, int, int, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"shiftOut(%d, %d, %d, %d)\r\n",a0,a1,a2,a3);
 #else
   shiftOut(a0, a1, a2, a3);
@@ -719,7 +719,7 @@ static int __pulseIn(ph7_context *pCtx, int nArg, ph7_value **apArg, int bLong, 
 
   (void)bLong; (void)zName; (void)iPin; (void)iState;
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"%s(%d, %d, %lld)\r\n", zName, iPin, iState, (long long)nTimeout);
 #else
   ph7_result_int64(pCtx, (sxi64)(bLong ? pulseInLong(iPin, iState, (unsigned long)nTimeout)
@@ -830,7 +830,7 @@ Impl(random, pCtx, nArg, apArg) {
   if (min >= max) {
     ph7_result_int(pCtx, min);
   } else {
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
     fprintf(stderr,"random() called");
 #else
     ph7_result_int(pCtx, min + (long)(esp_random() % (unsigned long)(max - min)));
@@ -940,7 +940,7 @@ IMPLEMENT_CHAR_CONV(toUpperCase,       (iChar >= 0 && iChar <= 255) ? toupper(iC
 // $raw = analogRead(int $pin): int
 //
 IMPLEMENT_N(analogRead, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogRead(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, analogRead(a0));
@@ -950,7 +950,7 @@ IMPLEMENT_N(analogRead, int,
 // analogReadResolution(int $bits): void
 //
 IMPLEMENT_N(analogReadResolution, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogReadResolution(%d)\r\n",a0);
 #else
   analogReadResolution(a0);
@@ -961,7 +961,7 @@ IMPLEMENT_N(analogReadResolution, int,
 // Removed from Arduino Core 3.x, kept as an alias of analogReadResolution()
 //
 IMPLEMENT_N(analogSetWidth, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogSetWidth(%d)\r\n",a0);
 #else
   analogReadResolution(a0);
@@ -971,7 +971,7 @@ IMPLEMENT_N(analogSetWidth, int,
 // $mv = analogReadMilliVolts(int $pin): int
 //
 IMPLEMENT_N(analogReadMilliVolts, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogReadMilliVolts(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)analogReadMilliVolts(a0));
@@ -981,7 +981,7 @@ IMPLEMENT_N(analogReadMilliVolts, int,
 // analogWrite(int $pin, int $value): void
 //
 IMPLEMENT_N_N(analogWrite, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogWrite(%d, %d)\r\n",a0,a1);
 #else
   analogWrite(a0, a1);
@@ -991,7 +991,7 @@ IMPLEMENT_N_N(analogWrite, int, int,
 // analogWriteResolution(int $pin, int $bits): void
 //
 IMPLEMENT_N_N(analogWriteResolution, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogWriteResolution(%d, %d)\r\n",a0,a1);
 #else
   analogWriteResolution(a0, a1);
@@ -1001,7 +1001,7 @@ IMPLEMENT_N_N(analogWriteResolution, int, int,
 // analogWriteFrequency(int $pin, int $freq_hz): void
 //
 IMPLEMENT_N_N(analogWriteFrequency, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogWriteFrequency(%d, %lld)\r\n",a0,a1);
 #else
   analogWriteFrequency(a0, a1);
@@ -1011,7 +1011,7 @@ IMPLEMENT_N_N(analogWriteFrequency, int, long long,
 // analogSetAttenuation(int $attenuation): void       (ADC_0db, ADC_2_5db, ADC_6db, ADC_11db)
 //
 IMPLEMENT_N(analogSetAttenuation, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogSetAttenuation(%d)\r\n",a0);
 #else
   analogSetAttenuation(a0);
@@ -1021,7 +1021,7 @@ IMPLEMENT_N(analogSetAttenuation, int,
 // analogSetPinAttenuation(int $pin, int $attenuation): void
 //
 IMPLEMENT_N_N(analogSetPinAttenuation, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"analogSetPinAttenuation(%d, %d)\r\n",a0,a1);
 #else
   analogSetPinAttenuation(a0, a1);
@@ -1036,7 +1036,7 @@ IMPLEMENT_N_N(analogSetPinAttenuation, int, int,
 // bool ledcAttach(int $pin, int $freq_hz, int $resolution_bits)
 //
 IMPLEMENT_N_N_N(ledcAttach, int, long long, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcAttach(%d, %lld, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_bool(pCtx, ledcAttach(a0, a1, a2));
@@ -1046,7 +1046,7 @@ IMPLEMENT_N_N_N(ledcAttach, int, long long, int,
 // bool ledcAttachChannel(int $pin, int $freq_hz, int $resolution_bits, int $channel)
 //
 IMPLEMENT_N_N_N_N(ledcAttachChannel, int, long long, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcAttachChannel(%d, %lld, %d, %d)\r\n",a0,a1,a2,a3);
 #else
   ph7_result_bool(pCtx, ledcAttachChannel(a0, a1, a2, a3));
@@ -1056,7 +1056,7 @@ IMPLEMENT_N_N_N_N(ledcAttachChannel, int, long long, int, int,
 // int $freq = ledcChangeFrequency(int $pin, int $freq_hz, int $resolution_bits)  (0 on error)
 //
 IMPLEMENT_N_N_N(ledcChangeFrequency, int, long long, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcChangeFrequency(%d, %lld, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_int64(pCtx, (sxi64)ledcChangeFrequency(a0, a1, a2));
@@ -1066,7 +1066,7 @@ IMPLEMENT_N_N_N(ledcChangeFrequency, int, long long, int,
 // bool ledcDetach(int $pin)
 //
 IMPLEMENT_N(ledcDetach, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcDetach(%d)\r\n",a0);
 #else
   ph7_result_bool(pCtx, ledcDetach(a0));
@@ -1076,7 +1076,7 @@ IMPLEMENT_N(ledcDetach, int,
 // bool ledcFade(int $pin, int $start_duty, int $target_duty, int $max_fade_time_ms)
 //
 IMPLEMENT_N_N_N_N(ledcFade, int, long long, long long, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcFade(%d, %lld, %lld, %d)\r\n",a0,a1,a2,a3);
 #else
   ph7_result_bool(pCtx, ledcFade(a0, a1, a2, a3));
@@ -1086,7 +1086,7 @@ IMPLEMENT_N_N_N_N(ledcFade, int, long long, long long, int,
 // bool ledcOutputInvert(int $pin, bool $invert)
 //
 IMPLEMENT_N_N(ledcOutputInvert, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcOutputInvert(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, ledcOutputInvert(a0, a1 ? 1 : 0));
@@ -1096,7 +1096,7 @@ IMPLEMENT_N_N(ledcOutputInvert, int, int,
 // int $duty = ledcRead(int $pin)
 //
 IMPLEMENT_N(ledcRead, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcRead(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)ledcRead(a0));
@@ -1106,7 +1106,7 @@ IMPLEMENT_N(ledcRead, int,
 // int $freq = ledcReadFreq(int $pin)
 //
 IMPLEMENT_N(ledcReadFreq, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcReadFreq(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)ledcReadFreq(a0));
@@ -1116,7 +1116,7 @@ IMPLEMENT_N(ledcReadFreq, int,
 // bool ledcWrite(int $pin, int $duty)
 //
 IMPLEMENT_N_N(ledcWrite, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcWrite(%d, %lld)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, ledcWrite(a0, a1));
@@ -1126,7 +1126,7 @@ IMPLEMENT_N_N(ledcWrite, int, long long,
 // bool ledcWriteChannel(int $channel, int $duty)
 //
 IMPLEMENT_N_N(ledcWriteChannel, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcWriteChannel(%d, %lld)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, ledcWriteChannel(a0, a1));
@@ -1136,7 +1136,7 @@ IMPLEMENT_N_N(ledcWriteChannel, int, long long,
 // int $freq = ledcWriteNote(int $pin, int $note, int $octave)      ($note: NOTE_C .. NOTE_B = 0..11)
 //
 IMPLEMENT_N_N_N(ledcWriteNote, int, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcWriteNote(%d, %d, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_int64(pCtx, (sxi64)ledcWriteNote(a0, a1, a2));
@@ -1146,7 +1146,7 @@ IMPLEMENT_N_N_N(ledcWriteNote, int, int, int,
 // int $freq = ledcWriteTone(int $pin, int $freq_hz)         ($freq_hz = 0 stops the tone)
 //
 IMPLEMENT_N_N(ledcWriteTone, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"ledcWriteTone(%d, %lld)\r\n",a0,a1);
 #else
   ph7_result_int64(pCtx, (sxi64)ledcWriteTone(a0, a1));
@@ -1161,7 +1161,7 @@ IMPLEMENT_N_N(ledcWriteTone, int, long long,
 // $hz = getApbFrequency(): int
 //
 IMPLEMENT(getApbFrequency,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"getApbFrequency()\r\n");
 #else
   ph7_result_int64(pCtx, (sxi64)getApbFrequency());
@@ -1171,7 +1171,7 @@ IMPLEMENT(getApbFrequency,
 // $mhz = getCpuFrequencyMhz(): int
 //
 IMPLEMENT(getCpuFrequencyMhz,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"getCpuFrequencyMhz()\r\n");
 #else
   ph7_result_int64(pCtx, (sxi64)getCpuFrequencyMhz());
@@ -1181,7 +1181,7 @@ IMPLEMENT(getCpuFrequencyMhz,
 // $mhz = getXtalFrequencyMhz(): int
 //
 IMPLEMENT(getXtalFrequencyMhz,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"getXtalFrequencyMhz()\r\n");
 #else
   ph7_result_int64(pCtx, (sxi64)getXtalFrequencyMhz());
@@ -1191,7 +1191,7 @@ IMPLEMENT(getXtalFrequencyMhz,
 // bool setCpuFrequencyMhz(int $mhz)
 //
 IMPLEMENT_N(setCpuFrequencyMhz, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"setCpuFrequencyMhz(%d)\r\n",a0);
 #else
   ph7_result_bool(pCtx, setCpuFrequencyMhz(a0));
@@ -1201,7 +1201,7 @@ IMPLEMENT_N(setCpuFrequencyMhz, int,
 // float $celsius = temperatureRead()
 //
 IMPLEMENT(temperatureRead,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"temperatureRead()\r\n");
 #else
   ph7_result_double(pCtx, (double)temperatureRead());
@@ -1216,7 +1216,7 @@ IMPLEMENT(temperatureRead,
 // int $value = touchRead(int $pin)
 //
 IMPLEMENT_N(touchRead, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"touchRead(%d)\r\n",a0);
 #else
 #  ifdef SOC_TOUCH_SENSOR_SUPPORTED
@@ -1235,7 +1235,7 @@ IMPLEMENT_N(touchRead, int,
 // bool sigmaDeltaAttach(int $pin, int $freq_hz)
 //
 IMPLEMENT_N_N(sigmaDeltaAttach, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"sigmaDeltaAttach(%d, %lld)\r\n",a0,a1);
 #else
 #  ifdef SOC_SDM_SUPPORTED
@@ -1249,7 +1249,7 @@ IMPLEMENT_N_N(sigmaDeltaAttach, int, long long,
 // bool sigmaDeltaWrite(int $pin, int $duty)
 //
 IMPLEMENT_N_N(sigmaDeltaWrite, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"sigmaDeltaWrite(%d, %d)\r\n",a0,a1);
 #else
 #ifdef SOC_SDM_SUPPORTED
@@ -1263,7 +1263,7 @@ IMPLEMENT_N_N(sigmaDeltaWrite, int, int,
 // bool sigmaDeltaDetach(int $pin)
 //
 IMPLEMENT_N(sigmaDeltaDetach, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"sigmaDeltaDetach(%d)\r\n",a0);
 #else
 #ifdef SOC_SDM_SUPPORTED
@@ -1291,7 +1291,7 @@ IMPLEMENT_N(sigmaDeltaDetach, int,
 // int $err = i2cInit(int $bus, int $sda, int $scl, int $freq_hz)
 //
 IMPLEMENT_N_N_N_N(i2cInit, int, int, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cInit(%d, %d, %d, %lld)\r\n",a0,a1,a2,a3);
 #else
   ph7_result_int(pCtx, (int)i2cInit(a0, a1, a2, a3));
@@ -1301,7 +1301,7 @@ IMPLEMENT_N_N_N_N(i2cInit, int, int, int, long long,
 // int $err = i2cDeinit(int $bus)
 //
 IMPLEMENT_N(i2cDeinit, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cDeinit(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)i2cDeinit(a0));
@@ -1311,7 +1311,7 @@ IMPLEMENT_N(i2cDeinit, int,
 // bool i2cIsInit(int $bus)
 //
 IMPLEMENT_N(i2cIsInit, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cIsInit(%d)\r\n",a0);
 #else
   ph7_result_bool(pCtx, i2cIsInit(a0));
@@ -1321,7 +1321,7 @@ IMPLEMENT_N(i2cIsInit, int,
 // int $err = i2cSetClock(int $bus, int $freq_hz)
 //
 IMPLEMENT_N_N(i2cSetClock, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cSetClock(%d, %lld)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)i2cSetClock(a0, a1));
@@ -1331,7 +1331,7 @@ IMPLEMENT_N_N(i2cSetClock, int, long long,
 // int|false $freq_hz = i2cGetClock(int $bus)
 //
 IMPLEMENT_N(i2cGetClock, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cGetClock(%d)\r\n",a0);
 #else
   uint32_t nFreq = 0;
@@ -1364,7 +1364,7 @@ Impl(i2cWrite, pCtx, nArg, apArg) {
 
  
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cWrite(%d, 0x%02x, <%d bytes>, %lld)\r\n", iBus, iAddress, nLen, (long long)nTimeout);
 #else
   ph7_result_int(pCtx, (int)i2cWrite(iBus, iAddress, (const uint8_t *)zData, (size_t)nLen, (uint32_t)nTimeout));
@@ -1399,7 +1399,7 @@ Impl(i2cRead, pCtx, nArg, apArg) {
 
  
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cRead(%d, 0x%02x, %d, %lld)\r\n", iBus, iAddress, nSize, (long long)nTimeout);
 #else
   uint8_t *pBuf = (uint8_t *)malloc((size_t)nSize);
@@ -1447,7 +1447,7 @@ Impl(i2cWriteReadNonStop, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"i2cWriteReadNonStop(%d, 0x%02x, <%d bytes>, %d, %lld)\r\n", iBus, iAddress, nLen, nSize, (long long)nTimeout);
 #else
   uint8_t *pBuf = (uint8_t *)malloc((size_t)nSize);
@@ -1500,7 +1500,7 @@ Impl(timerBegin, pCtx, nArg, apArg) {
   void *pTimer;
   (void)nFreq;
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerBegin(%lld) = handle %d\r\n", (long long)nFreq, iSlot);
   pTimer = HT_FAKE;
 #else
@@ -1537,7 +1537,7 @@ Impl(timerEnd, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerEnd(%d)\r\n", iIdx);
 #else
   timerEnd((hw_timer_t *)pTimer);
@@ -1550,7 +1550,7 @@ Impl(timerEnd, pCtx, nArg, apArg) {
 // timerStart(int $timer): void
 //
 IMPLEMENT_H(timerStart, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerStart(%d)\r\n",a0);
 #else
   timerStart(pHandle);
@@ -1560,7 +1560,7 @@ IMPLEMENT_H(timerStart, hw_timer_t, esp32_timer_get,
 // timerStop(int $timer): void
 //
 IMPLEMENT_H(timerStop, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerStop(%d)\r\n",a0);
 #else
   timerStop(pHandle);
@@ -1570,7 +1570,7 @@ IMPLEMENT_H(timerStop, hw_timer_t, esp32_timer_get,
 // timerRestart(int $timer): void
 //
 IMPLEMENT_H(timerRestart, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerRestart(%d)\r\n",a0);
 #else
   timerRestart(pHandle);
@@ -1581,7 +1581,7 @@ IMPLEMENT_H(timerRestart, hw_timer_t, esp32_timer_get,
 // Set the counter
 //
 IMPLEMENT_H_N(timerWrite, hw_timer_t, esp32_timer_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerWrite(%d, %lld)\r\n",a0,a1);
 #else
   timerWrite(pHandle, (uint64_t)a1);
@@ -1592,7 +1592,7 @@ IMPLEMENT_H_N(timerWrite, hw_timer_t, esp32_timer_get, long long,
 // $alarm_value is in timer ticks. $reload_count: counter value to restart from
 //
 IMPLEMENT_H_N_N_N(timerAlarm, hw_timer_t, esp32_timer_get, long long, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerAlarm(%d, %lld, %d, %lld)\r\n",a0,a1,a2,a3);
 #else
   timerAlarm(pHandle, (uint64_t)a1, a2 != 0, (uint64_t)a3);
@@ -1602,7 +1602,7 @@ IMPLEMENT_H_N_N_N(timerAlarm, hw_timer_t, esp32_timer_get, long long, int, long 
 // int $ticks = timerRead(int $timer)
 //
 IMPLEMENT_H(timerRead, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerRead(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)timerRead(pHandle));
@@ -1612,7 +1612,7 @@ IMPLEMENT_H(timerRead, hw_timer_t, esp32_timer_get,
 // int $us = timerReadMicros(int $timer)
 //
 IMPLEMENT_H(timerReadMicros, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerReadMicros(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)timerReadMicros(pHandle));
@@ -1622,7 +1622,7 @@ IMPLEMENT_H(timerReadMicros, hw_timer_t, esp32_timer_get,
 // int $ms = timerReadMillis(int $timer)
 //
 IMPLEMENT_H(timerReadMillis, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerReadMillis(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)timerReadMillis(pHandle));
@@ -1632,7 +1632,7 @@ IMPLEMENT_H(timerReadMillis, hw_timer_t, esp32_timer_get,
 // float $sec = timerReadSeconds(int $timer)
 //
 IMPLEMENT_H(timerReadSeconds, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerReadSeconds(%d)\r\n",a0);
 #else
   ph7_result_double(pCtx, (double)timerReadSeconds(pHandle));
@@ -1642,7 +1642,7 @@ IMPLEMENT_H(timerReadSeconds, hw_timer_t, esp32_timer_get,
 // int $hz = timerGetFrequency(int $timer)
 //
 IMPLEMENT_H(timerGetFrequency, hw_timer_t, esp32_timer_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerGetFrequency(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)timerGetFrequency(pHandle));
@@ -1710,7 +1710,7 @@ Impl(uartBegin, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartBegin(%d, %lld, 0x%llx, %d, %d, %lld, %lld, %d, %d) = handle %d\r\n", iNum, (long long)nBaud, (long long)nConfig,
           iRxPin, iTxPin, (long long)nRxBuffer, (long long)nTxBuffer, bInverted, iFifoFull, iNum);
   pUart = HT_FAKE;
@@ -1750,7 +1750,7 @@ Impl(uartEnd, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartEnd(%d)\r\n", iIdx);
 #else
   uartEnd((uint8_t)iIdx);
@@ -1774,7 +1774,7 @@ Impl(uartIsDriverInstalled, pCtx, nArg, apArg) {
   const int iIdx = ph7_value_to_int(apArg[0]);
   uart_t   *pUart = esp32_uart_get(iIdx);
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartIsDriverInstalled(%d)\r\n", iIdx);
   ph7_result_bool(pCtx, pUart != NULL);
 #else
@@ -1786,7 +1786,7 @@ Impl(uartIsDriverInstalled, pCtx, nArg, apArg) {
 // int $count = uartAvailable(int $uart)
 //
 IMPLEMENT_H(uartAvailable, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartAvailable(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)uartAvailable(pHandle));
@@ -1796,7 +1796,7 @@ IMPLEMENT_H(uartAvailable, uart_t, esp32_uart_get,
 // int $count = uartAvailableForWrite(int $uart)
 //
 IMPLEMENT_H(uartAvailableForWrite, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartAvailableForWrite(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)uartAvailableForWrite(pHandle));
@@ -1806,7 +1806,7 @@ IMPLEMENT_H(uartAvailableForWrite, uart_t, esp32_uart_get,
 // int $byte = uartRead(int $uart)       -1 if there is nothing to read
 //
 IMPLEMENT_H(uartRead, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartRead(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, uartAvailable(pHandle) ? (int)uartRead(pHandle) : -1);
@@ -1816,7 +1816,7 @@ IMPLEMENT_H(uartRead, uart_t, esp32_uart_get,
 // int $byte = uartPeek(int $uart)       -1 if there is nothing to read
 //
 IMPLEMENT_H(uartPeek, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartPeek(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, uartAvailable(pHandle) ? (int)uartPeek(pHandle) : -1);
@@ -1852,7 +1852,7 @@ Impl(uartReadBytes, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartReadBytes(%d, %d, %lld)\r\n", iIdx, nSize, (long long)nTimeout);
 #else
   uint8_t *pBuf = (uint8_t *)malloc((size_t)nSize);
@@ -1871,7 +1871,7 @@ Impl(uartReadBytes, pCtx, nArg, apArg) {
 // uartWrite(int $uart, int $byte): void
 //
 IMPLEMENT_H_N(uartWrite, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartWrite(%d, %d)\r\n",a0,a1);
 #else
   uartWrite(pHandle, (uint8_t)a1);
@@ -1881,7 +1881,7 @@ IMPLEMENT_H_N(uartWrite, uart_t, esp32_uart_get, int,
 // uartWriteBuf(int $uart, string $data): void
 //
 IMPLEMENT_H_S(uartWriteBuf, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartWriteBuf(%d, <%d bytes>)\r\n",a0,nLen);
 #else
   uartWriteBuf(pHandle, (const uint8_t *)zData, (size_t)nLen);
@@ -1891,7 +1891,7 @@ IMPLEMENT_H_S(uartWriteBuf, uart_t, esp32_uart_get,
 // uartFlush(int $uart): void
 //
 IMPLEMENT_H(uartFlush, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartFlush(%d)\r\n",a0);
 #else
   uartFlush(pHandle);
@@ -1901,7 +1901,7 @@ IMPLEMENT_H(uartFlush, uart_t, esp32_uart_get,
 // uartFlushTxOnly(int $uart, bool $tx_only): void
 //
 IMPLEMENT_H_N(uartFlushTxOnly, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartFlushTxOnly(%d, %d)\r\n",a0,a1);
 #else
   uartFlushTxOnly(pHandle, a1 != 0);
@@ -1911,7 +1911,7 @@ IMPLEMENT_H_N(uartFlushTxOnly, uart_t, esp32_uart_get, int,
 // bool uartSetBaudRate(int $uart, int $baud)
 //
 IMPLEMENT_H_N(uartSetBaudRate, uart_t, esp32_uart_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetBaudRate(%d, %lld)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetBaudRate(pHandle, (uint32_t)a1));
@@ -1921,7 +1921,7 @@ IMPLEMENT_H_N(uartSetBaudRate, uart_t, esp32_uart_get, long long,
 // int $baud = uartGetBaudRate(int $uart)
 //
 IMPLEMENT_H(uartGetBaudRate, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartGetBaudRate(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)uartGetBaudRate(pHandle));
@@ -1932,7 +1932,7 @@ IMPLEMENT_H(uartGetBaudRate, uart_t, esp32_uart_get,
 // $inv_mask: UART_SIGNAL_RXD_INV, UART_SIGNAL_TXD_INV, UART_SIGNAL_RTS_INV, UART_SIGNAL_CTS_INV
 //
 IMPLEMENT_H_N_N(uartPinSignalInversion, uart_t, esp32_uart_get, long long, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartPinSignalInversion(%d, 0x%llx, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_bool(pCtx, uartPinSignalInversion(pHandle, (uint32_t)a1, a2 != 0));
@@ -1942,7 +1942,7 @@ IMPLEMENT_H_N_N(uartPinSignalInversion, uart_t, esp32_uart_get, long long, int,
 // bool uartSetRxInvert(int $uart, bool $invert)
 //
 IMPLEMENT_H_N(uartSetRxInvert, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetRxInvert(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetRxInvert(pHandle, a1 != 0));
@@ -1952,7 +1952,7 @@ IMPLEMENT_H_N(uartSetRxInvert, uart_t, esp32_uart_get, int,
 // bool uartSetTxInvert(int $uart, bool $invert)
 //
 IMPLEMENT_H_N(uartSetTxInvert, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetTxInvert(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetTxInvert(pHandle, a1 != 0));
@@ -1962,7 +1962,7 @@ IMPLEMENT_H_N(uartSetTxInvert, uart_t, esp32_uart_get, int,
 // bool uartSetCtsInvert(int $uart, bool $invert)
 //
 IMPLEMENT_H_N(uartSetCtsInvert, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetCtsInvert(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetCtsInvert(pHandle, a1 != 0));
@@ -1972,7 +1972,7 @@ IMPLEMENT_H_N(uartSetCtsInvert, uart_t, esp32_uart_get, int,
 // bool uartSetRtsInvert(int $uart, bool $invert)
 //
 IMPLEMENT_H_N(uartSetRtsInvert, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetRtsInvert(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetRtsInvert(pHandle, a1 != 0));
@@ -1982,7 +1982,7 @@ IMPLEMENT_H_N(uartSetRtsInvert, uart_t, esp32_uart_get, int,
 // bool uartSetRxTimeout(int $uart, int $symbols)
 //
 IMPLEMENT_H_N(uartSetRxTimeout, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetRxTimeout(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetRxTimeout(pHandle, (uint8_t)a1));
@@ -1992,7 +1992,7 @@ IMPLEMENT_H_N(uartSetRxTimeout, uart_t, esp32_uart_get, int,
 // bool uartSetRxFIFOFull(int $uart, int $bytes)
 //
 IMPLEMENT_H_N(uartSetRxFIFOFull, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetRxFIFOFull(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetRxFIFOFull(pHandle, (uint8_t)a1));
@@ -2002,7 +2002,7 @@ IMPLEMENT_H_N(uartSetRxFIFOFull, uart_t, esp32_uart_get, int,
 // uartSetFastReading(int $uart): void
 //
 IMPLEMENT_H(uartSetFastReading, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetFastReading(%d)\r\n",a0);
 #else
   uartSetFastReading(pHandle);
@@ -2028,7 +2028,7 @@ Impl(uartSetDebug, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetDebug(%d)\r\n", iIdx);
 #else
   uartSetDebug(pUart);
@@ -2039,7 +2039,7 @@ Impl(uartSetDebug, pCtx, nArg, apArg) {
 // int $uart = uartGetDebug()       UART number which is used for debug output, -1 if none
 //
 IMPLEMENT(uartGetDebug,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartGetDebug()\r\n");
 #else
   ph7_result_int(pCtx, uartGetDebug());
@@ -2049,7 +2049,7 @@ IMPLEMENT(uartGetDebug,
 // bool uartSetPins(int $uart_nr, int $rx, int $tx, int $cts, int $rts)
 //
 IMPLEMENT_N_N_N_N_N(uartSetPins, int, int, int, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetPins(%d, %d, %d, %d, %d)\r\n",a0,a1,a2,a3,a4);
 #else
   ph7_result_bool(pCtx, uartSetPins(a0, a1, a2, a3, a4));
@@ -2059,7 +2059,7 @@ IMPLEMENT_N_N_N_N_N(uartSetPins, int, int, int, int, int,
 // bool uartSetHwFlowCtrlMode(int $uart, int $mode, int $threshold)
 //
 IMPLEMENT_H_N_N(uartSetHwFlowCtrlMode, uart_t, esp32_uart_get, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetHwFlowCtrlMode(%d, %d, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_bool(pCtx, uartSetHwFlowCtrlMode(pHandle, a1, (uint8_t)a2));
@@ -2069,7 +2069,7 @@ IMPLEMENT_H_N_N(uartSetHwFlowCtrlMode, uart_t, esp32_uart_get, int, int,
 // bool uartSetMode(int $uart, int $mode)
 //
 IMPLEMENT_H_N(uartSetMode, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetMode(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetMode(pHandle, a1));
@@ -2080,7 +2080,7 @@ IMPLEMENT_H_N(uartSetMode, uart_t, esp32_uart_get, int,
 // Only after uartSetMode($uart, UART_MODE_IRDA)
 //
 IMPLEMENT_H_N(uartSetIrdaDirection, uart_t, esp32_uart_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetIrdaDirection(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetIrdaDirection(pHandle, a1));
@@ -2091,7 +2091,7 @@ IMPLEMENT_H_N(uartSetIrdaDirection, uart_t, esp32_uart_get, int,
 // Must be called BEFORE uartBegin(), so it takes the UART number, not a handle
 //
 IMPLEMENT_N_N(uartSetClockSource, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartSetClockSource(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartSetClockSource(a0, a1));
@@ -2102,7 +2102,7 @@ IMPLEMENT_N_N(uartSetClockSource, int, int,
 // Must be called BEFORE uartBegin(), so it takes the UART number, not a handle
 //
 IMPLEMENT_N_N(uartEnableRxInternalPull, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartEnableRxInternalPull(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, uartEnableRxInternalPull(a0, a1 != 0));
@@ -2112,7 +2112,7 @@ IMPLEMENT_N_N(uartEnableRxInternalPull, int, int,
 // uartStartDetectBaudrate(int $uart): void
 //
 IMPLEMENT_H(uartStartDetectBaudrate, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartStartDetectBaudrate(%d)\r\n",a0);
 #else
   uartStartDetectBaudrate(pHandle);
@@ -2123,7 +2123,7 @@ IMPLEMENT_H(uartStartDetectBaudrate, uart_t, esp32_uart_get,
 // Blocking, see uartStartDetectBaudrate()
 //
 IMPLEMENT_H(uartDetectBaudrate, uart_t, esp32_uart_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"uartDetectBaudrate(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)uartDetectBaudrate(pHandle));
@@ -2173,7 +2173,7 @@ Impl(spiStartBus, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiStartBus(%d, 0x%llx, %d, %d) = handle %d\r\n", iNum, (long long)nClkDiv, iMode, iOrder, iNum);
   pSpi = HT_FAKE;
 #else
@@ -2211,7 +2211,7 @@ Impl(spiStopBus, pCtx, nArg, apArg) {
     return PH7_OK;
   }
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiStopBus(%d)\r\n", iIdx);
 #else
   spiStopBus((spi_t *)pSpi);
@@ -2224,7 +2224,7 @@ Impl(spiStopBus, pCtx, nArg, apArg) {
 // bool spiAttachSCK(int $spi, int $pin)
 //
 IMPLEMENT_H_N(spiAttachSCK, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiAttachSCK(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, spiAttachSCK(pHandle, (int8_t)a1));
@@ -2234,7 +2234,7 @@ IMPLEMENT_H_N(spiAttachSCK, spi_t, esp32_spi_get, int,
 // bool spiAttachMISO(int $spi, int $pin)
 //
 IMPLEMENT_H_N(spiAttachMISO, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiAttachMISO(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, spiAttachMISO(pHandle, (int8_t)a1));
@@ -2244,7 +2244,7 @@ IMPLEMENT_H_N(spiAttachMISO, spi_t, esp32_spi_get, int,
 // bool spiAttachMOSI(int $spi, int $pin)
 //
 IMPLEMENT_H_N(spiAttachMOSI, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiAttachMOSI(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_bool(pCtx, spiAttachMOSI(pHandle, (int8_t)a1));
@@ -2254,7 +2254,7 @@ IMPLEMENT_H_N(spiAttachMOSI, spi_t, esp32_spi_get, int,
 // bool spiDetachSCK(int $spi)
 //
 IMPLEMENT_H(spiDetachSCK, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiDetachSCK(%d)\r\n",a0);
 #else
   ph7_result_bool(pCtx, spiDetachSCK(pHandle));
@@ -2264,7 +2264,7 @@ IMPLEMENT_H(spiDetachSCK, spi_t, esp32_spi_get,
 // bool spiDetachMISO(int $spi)
 //
 IMPLEMENT_H(spiDetachMISO, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiDetachMISO(%d)\r\n",a0);
 #else
   ph7_result_bool(pCtx, spiDetachMISO(pHandle));
@@ -2274,7 +2274,7 @@ IMPLEMENT_H(spiDetachMISO, spi_t, esp32_spi_get,
 // bool spiDetachMOSI(int $spi)
 //
 IMPLEMENT_H(spiDetachMOSI, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiDetachMOSI(%d)\r\n",a0);
 #else
   ph7_result_bool(pCtx, spiDetachMOSI(pHandle));
@@ -2284,7 +2284,7 @@ IMPLEMENT_H(spiDetachMOSI, spi_t, esp32_spi_get,
 // bool spiAttachSS(int $spi, int $ss_num, int $pin)      $ss_num: SPI_SS0 .. SPI_SS2
 //
 IMPLEMENT_H_N_N(spiAttachSS, spi_t, esp32_spi_get, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiAttachSS(%d, %d, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_bool(pCtx, spiAttachSS(pHandle, (uint8_t)a1, (int8_t)a2));
@@ -2294,7 +2294,7 @@ IMPLEMENT_H_N_N(spiAttachSS, spi_t, esp32_spi_get, int, int,
 // bool spiDetachSS(int $spi)
 //
 IMPLEMENT_H(spiDetachSS, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiDetachSS(%d)\r\n",a0);
 #else
   ph7_result_bool(pCtx, spiDetachSS(pHandle));
@@ -2304,7 +2304,7 @@ IMPLEMENT_H(spiDetachSS, spi_t, esp32_spi_get,
 // spiEnableSSPins(int $spi, int $ss_mask): void           $ss_mask: SPI_SS_MASK_ALL = 7
 //
 IMPLEMENT_H_N(spiEnableSSPins, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiEnableSSPins(%d, %d)\r\n",a0,a1);
 #else
   spiEnableSSPins(pHandle, (uint8_t)a1);
@@ -2314,7 +2314,7 @@ IMPLEMENT_H_N(spiEnableSSPins, spi_t, esp32_spi_get, int,
 // spiDisableSSPins(int $spi, int $ss_mask): void
 //
 IMPLEMENT_H_N(spiDisableSSPins, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiDisableSSPins(%d, %d)\r\n",a0,a1);
 #else
   spiDisableSSPins(pHandle, (uint8_t)a1);
@@ -2324,7 +2324,7 @@ IMPLEMENT_H_N(spiDisableSSPins, spi_t, esp32_spi_get, int,
 // spiSSEnable(int $spi): void        hardware control of SS
 //
 IMPLEMENT_H(spiSSEnable, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSSEnable(%d)\r\n",a0);
 #else
   spiSSEnable(pHandle);
@@ -2334,7 +2334,7 @@ IMPLEMENT_H(spiSSEnable, spi_t, esp32_spi_get,
 // spiSSDisable(int $spi): void
 //
 IMPLEMENT_H(spiSSDisable, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSSDisable(%d)\r\n",a0);
 #else
   spiSSDisable(pHandle);
@@ -2344,7 +2344,7 @@ IMPLEMENT_H(spiSSDisable, spi_t, esp32_spi_get,
 // spiSSSet(int $spi): void           activate enabled SS pins
 //
 IMPLEMENT_H(spiSSSet, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSSSet(%d)\r\n",a0);
 #else
   spiSSSet(pHandle);
@@ -2354,7 +2354,7 @@ IMPLEMENT_H(spiSSSet, spi_t, esp32_spi_get,
 // spiSSClear(int $spi): void         deactivate enabled SS pins
 //
 IMPLEMENT_H(spiSSClear, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSSClear(%d)\r\n",a0);
 #else
   spiSSClear(pHandle);
@@ -2364,7 +2364,7 @@ IMPLEMENT_H(spiSSClear, spi_t, esp32_spi_get,
 // spiWaitReady(int $spi): void
 //
 IMPLEMENT_H(spiWaitReady, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWaitReady(%d)\r\n",a0);
 #else
   spiWaitReady(pHandle);
@@ -2373,7 +2373,7 @@ IMPLEMENT_H(spiWaitReady, spi_t, esp32_spi_get,
 
 // spiSSInvert(int $spi, bool $invert): void
 IMPLEMENT_H_N(spiSSInvert, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSSInvert(%d, %d)\r\n",a0,a1);
 #else
   spiSSInvert(pHandle, a1 != 0);
@@ -2382,7 +2382,7 @@ IMPLEMENT_H_N(spiSSInvert, spi_t, esp32_spi_get, int,
 
 // int $div = spiGetClockDiv(int $spi)
 IMPLEMENT_H(spiGetClockDiv, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiGetClockDiv(%d)\r\n",a0);
 #else
   ph7_result_int64(pCtx, (sxi64)spiGetClockDiv(pHandle));
@@ -2391,7 +2391,7 @@ IMPLEMENT_H(spiGetClockDiv, spi_t, esp32_spi_get,
 
 // int $mode = spiGetDataMode(int $spi)
 IMPLEMENT_H(spiGetDataMode, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiGetDataMode(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)spiGetDataMode(pHandle));
@@ -2400,7 +2400,7 @@ IMPLEMENT_H(spiGetDataMode, spi_t, esp32_spi_get,
 
 // int $order = spiGetBitOrder(int $spi)
 IMPLEMENT_H(spiGetBitOrder, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiGetBitOrder(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)spiGetBitOrder(pHandle));
@@ -2409,7 +2409,7 @@ IMPLEMENT_H(spiGetBitOrder, spi_t, esp32_spi_get,
 
 // spiSetClockDiv(int $spi, int $clock_div): void
 IMPLEMENT_H_N(spiSetClockDiv, spi_t, esp32_spi_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSetClockDiv(%d, 0x%llx)\r\n",a0,a1);
 #else
   spiSetClockDiv(pHandle, (uint32_t)a1);
@@ -2418,7 +2418,7 @@ IMPLEMENT_H_N(spiSetClockDiv, spi_t, esp32_spi_get, long long,
 
 // spiSetDataMode(int $spi, int $mode): void
 IMPLEMENT_H_N(spiSetDataMode, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSetDataMode(%d, %d)\r\n",a0,a1);
 #else
   spiSetDataMode(pHandle, (uint8_t)a1);
@@ -2427,7 +2427,7 @@ IMPLEMENT_H_N(spiSetDataMode, spi_t, esp32_spi_get, int,
 
 // spiSetBitOrder(int $spi, int $order): void
 IMPLEMENT_H_N(spiSetBitOrder, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSetBitOrder(%d, %d)\r\n",a0,a1);
 #else
   spiSetBitOrder(pHandle, (uint8_t)a1);
@@ -2436,7 +2436,7 @@ IMPLEMENT_H_N(spiSetBitOrder, spi_t, esp32_spi_get, int,
 
 // int $div = spiFrequencyToClockDiv(int $spi, int $freq_hz)
 IMPLEMENT_H_N(spiFrequencyToClockDiv, spi_t, esp32_spi_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiFrequencyToClockDiv(%d, %lld)\r\n",a0,a1);
 #else
   ph7_result_int64(pCtx, (sxi64)spiFrequencyToClockDiv(pHandle, (uint32_t)a1));
@@ -2445,7 +2445,7 @@ IMPLEMENT_H_N(spiFrequencyToClockDiv, spi_t, esp32_spi_get, long long,
 
 // int $freq_hz = spiClockDivToFrequency(int $spi, int $clock_div)
 IMPLEMENT_H_N(spiClockDivToFrequency, spi_t, esp32_spi_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiClockDivToFrequency(%d, 0x%llx)\r\n",a0,a1);
 #else
   ph7_result_int64(pCtx, (sxi64)spiClockDivToFrequency(pHandle, (uint32_t)a1));
@@ -2454,7 +2454,7 @@ IMPLEMENT_H_N(spiClockDivToFrequency, spi_t, esp32_spi_get, long long,
 
 // spiWriteByte(int $spi, int $data): void
 IMPLEMENT_H_N(spiWriteByte, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWriteByte(%d, 0x%x)\r\n",a0,a1);
 #else
   spiWriteByte(pHandle, (uint8_t)a1);
@@ -2463,7 +2463,7 @@ IMPLEMENT_H_N(spiWriteByte, spi_t, esp32_spi_get, int,
 
 // spiWriteWord(int $spi, int $data): void       16 bits
 IMPLEMENT_H_N(spiWriteWord, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWriteWord(%d, 0x%x)\r\n",a0,a1);
 #else
   spiWriteWord(pHandle, (uint16_t)a1);
@@ -2472,7 +2472,7 @@ IMPLEMENT_H_N(spiWriteWord, spi_t, esp32_spi_get, int,
 
 // spiWriteLong(int $spi, int $data): void       32 bits
 IMPLEMENT_H_N(spiWriteLong, spi_t, esp32_spi_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWriteLong(%d, 0x%llx)\r\n",a0,a1);
 #else
   spiWriteLong(pHandle, (uint32_t)a1);
@@ -2481,7 +2481,7 @@ IMPLEMENT_H_N(spiWriteLong, spi_t, esp32_spi_get, long long,
 
 // int $in = spiTransferByte(int $spi, int $data)
 IMPLEMENT_H_N(spiTransferByte, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferByte(%d, 0x%x)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)spiTransferByte(pHandle, (uint8_t)a1));
@@ -2490,7 +2490,7 @@ IMPLEMENT_H_N(spiTransferByte, spi_t, esp32_spi_get, int,
 
 // int $in = spiTransferWord(int $spi, int $data)       16 bits
 IMPLEMENT_H_N(spiTransferWord, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferWord(%d, 0x%x)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)spiTransferWord(pHandle, (uint16_t)a1));
@@ -2499,7 +2499,7 @@ IMPLEMENT_H_N(spiTransferWord, spi_t, esp32_spi_get, int,
 
 // int $in = spiTransferLong(int $spi, int $data)       32 bits
 IMPLEMENT_H_N(spiTransferLong, spi_t, esp32_spi_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferLong(%d, 0x%llx)\r\n",a0,a1);
 #else
   ph7_result_int64(pCtx, (sxi64)spiTransferLong(pHandle, (uint32_t)a1));
@@ -2509,7 +2509,7 @@ IMPLEMENT_H_N(spiTransferLong, spi_t, esp32_spi_get, long long,
 // int $in = spiTransferBits(int $spi, int $data, int $bits)
 // Original: spiTransferBits(spi, data, uint32_t *out, bits)
 IMPLEMENT_H_N_N(spiTransferBits, spi_t, esp32_spi_get, long long, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferBits(%d, 0x%llx, %d)\r\n",a0,a1,a2);
 #else
   uint32_t nIn = 0;
@@ -2530,7 +2530,7 @@ IMPLEMENT_H_S(spiWrite, spi_t, esp32_spi_get,
     ph7_context_throw_error(pCtx, PH7_CTX_WARNING, "spiWrite: data must be 4..64 bytes, a multiple of 4");
     ph7_result_bool(pCtx, 0);
   } else {
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
     fprintf(stderr,"spiWrite(%d, <%d bytes>)\r\n",a0,nLen);
 #else
     uint32_t aWords[ESP32_SPI_WORDS_MAX];
@@ -2549,7 +2549,7 @@ IMPLEMENT_H_S(spiTransfer, spi_t, esp32_spi_get,
     ph7_context_throw_error(pCtx, PH7_CTX_WARNING, "spiTransfer: data must be 4..64 bytes, a multiple of 4");
     ph7_result_bool(pCtx, 0);
   } else {
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
     fprintf(stderr,"spiTransfer(%d, <%d bytes>)\r\n",a0,nLen);
 #else
     uint32_t aWords[ESP32_SPI_WORDS_MAX];
@@ -2585,7 +2585,7 @@ static int esp32_spi_xfer(ph7_context *pCtx, int nArg, ph7_value **apArg, int bN
 
   (void)bNoLock; (void)zData;
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferBytes%s(%d, <%d bytes>)\r\n", bNoLock ? "NL" : "", ph7_value_to_int(apArg[0]), nLen);
 #else
   uint8_t *pOut = (uint8_t *)malloc((size_t)nLen);
@@ -2615,7 +2615,7 @@ Impl(spiTransferBytes, pCtx, nArg, apArg) {
 
 // spiTransaction(int $spi, int $clock_div, int $data_mode, int $bit_order): void
 IMPLEMENT_H_N_N_N(spiTransaction, spi_t, esp32_spi_get, long long, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransaction(%d, 0x%llx, %d, %d)\r\n",a0,a1,a2,a3);
 #else
   spiTransaction(pHandle, (uint32_t)a1, (uint8_t)a2, (uint8_t)a3);
@@ -2624,7 +2624,7 @@ IMPLEMENT_H_N_N_N(spiTransaction, spi_t, esp32_spi_get, long long, int, int,
 
 // spiSimpleTransaction(int $spi): void
 IMPLEMENT_H(spiSimpleTransaction, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiSimpleTransaction(%d)\r\n",a0);
 #else
   spiSimpleTransaction(pHandle);
@@ -2633,7 +2633,7 @@ IMPLEMENT_H(spiSimpleTransaction, spi_t, esp32_spi_get,
 
 // spiEndTransaction(int $spi): void
 IMPLEMENT_H(spiEndTransaction, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiEndTransaction(%d)\r\n",a0);
 #else
   spiEndTransaction(pHandle);
@@ -2642,7 +2642,7 @@ IMPLEMENT_H(spiEndTransaction, spi_t, esp32_spi_get,
 
 // spiWriteNL(int $spi, string $data): void
 IMPLEMENT_H_S(spiWriteNL, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWriteNL(%d, <%d bytes>)\r\n",a0,nLen);
 #else
   spiWriteNL(pHandle, zData, (uint32_t)nLen);
@@ -2651,7 +2651,7 @@ IMPLEMENT_H_S(spiWriteNL, spi_t, esp32_spi_get,
 
 // spiWritePixelsNL(int $spi, string $data): void       16 bit pixels, byte swapped on the way out
 IMPLEMENT_H_S(spiWritePixelsNL, spi_t, esp32_spi_get,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWritePixelsNL(%d, <%d bytes>)\r\n",a0,nLen);
 #else
   spiWritePixelsNL(pHandle, zData, (uint32_t)nLen);
@@ -2660,7 +2660,7 @@ IMPLEMENT_H_S(spiWritePixelsNL, spi_t, esp32_spi_get,
 
 // spiWriteByteNL(int $spi, int $data): void
 IMPLEMENT_H_N(spiWriteByteNL, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWriteByteNL(%d, 0x%x)\r\n",a0,a1);
 #else
   spiWriteByteNL(pHandle, (uint8_t)a1);
@@ -2669,7 +2669,7 @@ IMPLEMENT_H_N(spiWriteByteNL, spi_t, esp32_spi_get, int,
 
 // spiWriteShortNL(int $spi, int $data): void       16 bits
 IMPLEMENT_H_N(spiWriteShortNL, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWriteShortNL(%d, 0x%x)\r\n",a0,a1);
 #else
   spiWriteShortNL(pHandle, (uint16_t)a1);
@@ -2678,7 +2678,7 @@ IMPLEMENT_H_N(spiWriteShortNL, spi_t, esp32_spi_get, int,
 
 // spiWriteLongNL(int $spi, int $data): void        32 bits
 IMPLEMENT_H_N(spiWriteLongNL, spi_t, esp32_spi_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiWriteLongNL(%d, 0x%llx)\r\n",a0,a1);
 #else
   spiWriteLongNL(pHandle, (uint32_t)a1);
@@ -2687,7 +2687,7 @@ IMPLEMENT_H_N(spiWriteLongNL, spi_t, esp32_spi_get, long long,
 
 // int $in = spiTransferByteNL(int $spi, int $data)
 IMPLEMENT_H_N(spiTransferByteNL, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferByteNL(%d, 0x%x)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)spiTransferByteNL(pHandle, (uint8_t)a1));
@@ -2696,7 +2696,7 @@ IMPLEMENT_H_N(spiTransferByteNL, spi_t, esp32_spi_get, int,
 
 // int $in = spiTransferShortNL(int $spi, int $data)       16 bits
 IMPLEMENT_H_N(spiTransferShortNL, spi_t, esp32_spi_get, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferShortNL(%d, 0x%x)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)spiTransferShortNL(pHandle, (uint16_t)a1));
@@ -2705,7 +2705,7 @@ IMPLEMENT_H_N(spiTransferShortNL, spi_t, esp32_spi_get, int,
 
 // int $in = spiTransferLongNL(int $spi, int $data)        32 bits
 IMPLEMENT_H_N(spiTransferLongNL, spi_t, esp32_spi_get, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferLongNL(%d, 0x%llx)\r\n",a0,a1);
 #else
   ph7_result_int64(pCtx, (sxi64)spiTransferLongNL(pHandle, (uint32_t)a1));
@@ -2719,7 +2719,7 @@ Impl(spiTransferBytesNL, pCtx, nArg, apArg) {
 
 // int $in = spiTransferBitsNL(int $spi, int $data, int $bits)
 IMPLEMENT_H_N_N(spiTransferBitsNL, spi_t, esp32_spi_get, long long, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"spiTransferBitsNL(%d, 0x%llx, %d)\r\n",a0,a1,a2);
 #else
   uint32_t nIn = 0;
@@ -2741,7 +2741,7 @@ IMPLEMENT_H_N_N(spiTransferBitsNL, spi_t, esp32_spi_get, long long, int,
 // bool rmtInit(int $pin, int $direction, int $mem_blocks, int $freq_hz)       $direction: RMT_RX_MODE 0, RMT_TX_MODE 1
 //
 IMPLEMENT_N_N_N_N(rmtInit, int, int, int, long long,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtInit(%d, %d, %d, %lld)\r\n",a0,a1,a2,a3);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2755,7 +2755,7 @@ IMPLEMENT_N_N_N_N(rmtInit, int, int, int, long long,
 // bool rmtDeinit(int $pin)
 //
 IMPLEMENT_N(rmtDeinit, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtDeinit(%d)\r\n",a0);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2769,7 +2769,7 @@ IMPLEMENT_N(rmtDeinit, int,
 // bool rmtSetEOT(int $pin, int $level)
 //
 IMPLEMENT_N_N(rmtSetEOT, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtSetEOT(%d, %d)\r\n",a0,a1);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2784,7 +2784,7 @@ IMPLEMENT_N_N(rmtSetEOT, int, int,
 // $duty is 0.0 .. 1.0: 38.5 kHz 33%  =>  rmtSetCarrier($pin, true, true, 38500, 0.33)
 //
 IMPLEMENT_N_N_N_N_N(rmtSetCarrier, int, int, int, long long, float,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtSetCarrier(%d, %d, %d, %lld, %f)\r\n",a0,a1,a2,a3,(double)a4);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2798,7 +2798,7 @@ IMPLEMENT_N_N_N_N_N(rmtSetCarrier, int, int, int, long long, float,
 // bool rmtSetRxMaxThreshold(int $pin, int $idle_ticks)
 //
 IMPLEMENT_N_N(rmtSetRxMaxThreshold, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtSetRxMaxThreshold(%d, %d)\r\n",a0,a1);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2812,7 +2812,7 @@ IMPLEMENT_N_N(rmtSetRxMaxThreshold, int, int,
 // bool rmtSetRxMinThreshold(int $pin, int $filter_ticks)
 //
 IMPLEMENT_N_N(rmtSetRxMinThreshold, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtSetRxMinThreshold(%d, %d)\r\n",a0,a1);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2826,7 +2826,7 @@ IMPLEMENT_N_N(rmtSetRxMinThreshold, int, int,
 // bool rmtTransmitCompleted(int $pin)
 //
 IMPLEMENT_N(rmtTransmitCompleted, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtTransmitCompleted(%d)\r\n",a0);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2840,7 +2840,7 @@ IMPLEMENT_N(rmtTransmitCompleted, int,
 // bool rmtReceiveCompleted(int $pin)
 //
 IMPLEMENT_N(rmtReceiveCompleted, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"rmtReceiveCompleted(%d)\r\n",a0);
 #else
 #if SOC_RMT_SUPPORTED
@@ -2876,7 +2876,7 @@ Impl(attachInterrupt, pCtx, nArg, apArg) {
 
   (void)iPin; (void)pHandler; (void)iMode;
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"attachInterrupt(%d, <callable>, %d)\r\n", iPin, iMode);
 #else
   /* TODO(ISR): attachInterrupt() */
@@ -2902,7 +2902,7 @@ Impl(attachInterruptArg, pCtx, nArg, apArg) {
   ph7_value *pUserArg = apArg[2];
   const int  iMode    = ph7_value_to_int(apArg[3]);
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"attachInterruptArg(%d, <callable>, <arg>, %d)\r\n", iPin, iMode);
 #else
   /* TODO(ISR): attachInterruptArg() */
@@ -2913,7 +2913,7 @@ Impl(attachInterruptArg, pCtx, nArg, apArg) {
 // detachInterrupt(int $pin): void
 //
 IMPLEMENT_N(detachInterrupt, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"detachInterrupt(%d)\r\n",a0);
 #else
   /* TODO(ISR): detachInterrupt() */
@@ -2923,7 +2923,7 @@ IMPLEMENT_N(detachInterrupt, int,
 // enableInterrupt(int $pin): void
 //
 IMPLEMENT_N(enableInterrupt, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"enableInterrupt(%d)\r\n",a0);
 #else
   /* TODO(ISR): enableInterrupt() */
@@ -2933,7 +2933,7 @@ IMPLEMENT_N(enableInterrupt, int,
 // disableInterrupt(int $pin): void
 //
 IMPLEMENT_N(disableInterrupt, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"disableInterrupt(%d)\r\n",a0);
 #else
   /* TODO(ISR): disableInterrupt() */
@@ -2957,7 +2957,7 @@ Impl(touchAttachInterrupt, pCtx, nArg, apArg) {
   ph7_value  *pHandler   = apArg[1];
   const sxi64 nThreshold = ph7_value_to_int64(apArg[2]);
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"touchAttachInterrupt(%d, <callable>, %lld)\r\n", iPin, (long long)nThreshold);
 #else
   /* TODO(ISR): touchAttachInterrupt() */
@@ -2983,7 +2983,7 @@ Impl(touchAttachInterruptArg, pCtx, nArg, apArg) {
   ph7_value  *pUserArg   = apArg[2];
   const sxi64 nThreshold = ph7_value_to_int64(apArg[3]);
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"touchAttachInterruptArg(%d, <callable>, <arg>, %lld)\r\n", iPin, (long long)nThreshold);
 #else
   /* TODO(ISR): touchAttachInterruptArg() */
@@ -2994,7 +2994,7 @@ Impl(touchAttachInterruptArg, pCtx, nArg, apArg) {
 // touchDetachInterrupt(int $pin): void
 //
 IMPLEMENT_N(touchDetachInterrupt, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"touchDetachInterrupt(%d)\r\n",a0);
 #else
   /* TODO(ISR): touchDetachInterrupt() */
@@ -3017,7 +3017,7 @@ Impl(timerAttachInterrupt, pCtx, nArg, apArg) {
   const int  iTimer   = ph7_value_to_int(apArg[0]);
   ph7_value *pHandler = apArg[1];
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerAttachInterrupt(%d, <callable>)\r\n", iTimer);
 #else
   /* TODO(ISR): timerAttachInterrupt() */
@@ -3043,7 +3043,7 @@ Impl(timerAttachInterruptArg, pCtx, nArg, apArg) {
 
   (void)iTimer; (void)pHandler; (void)pUserArg;
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerAttachInterruptArg(%d, <callable>, <arg>)\r\n", iTimer);
 #else
   /* TODO(ISR): timerAttachInterruptArg() */
@@ -3054,7 +3054,7 @@ Impl(timerAttachInterruptArg, pCtx, nArg, apArg) {
 // timerDetachInterrupt(int $timer): void
 //
 IMPLEMENT_N(timerDetachInterrupt, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"timerDetachInterrupt(%d)\r\n",a0);
 #else
   /* TODO(ISR): timerDetachInterrupt() */
@@ -3141,7 +3141,7 @@ Impl(gpio_config, pCtx, nArg, apArg) {
   const int   iPullDown   = (int)__gpioArrayInt(apArg[0], "pull_down_en");
   const int   iIntrType   = (int)__gpioArrayInt(apArg[0], "intr_type");
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_config(pin_bit_mask=0x%llx, mode=%d, pull_up_en=%d, pull_down_en=%d, intr_type=%d)\r\n",
           (long long)nPinBitMask, iMode, iPullUp, iPullDown, iIntrType);
 #else
@@ -3163,7 +3163,7 @@ Impl(gpio_config, pCtx, nArg, apArg) {
 // int $err = gpio_reset_pin(int $pin)
 //
 IMPLEMENT_N(gpio_reset_pin, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_reset_pin(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_reset_pin((gpio_num_t)a0));
@@ -3200,7 +3200,7 @@ Impl(gpio_get_io_config, pCtx, nArg, apArg) {
 
   const int iPin = ph7_value_to_int(apArg[0]);
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_get_io_config(%d)\r\n", iPin);
 #else
 #  if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
@@ -3245,7 +3245,7 @@ Impl(gpio_get_io_config, pCtx, nArg, apArg) {
 // int|false $capability = gpio_get_drive_capability(int $pin)
 //
 IMPLEMENT_N(gpio_get_drive_capability, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_get_drive_capability(%d)\r\n",a0);
 #else
   gpio_drive_cap_t eCapability = GPIO_DRIVE_CAP_DEFAULT;
@@ -3260,7 +3260,7 @@ IMPLEMENT_N(gpio_get_drive_capability, int,
 // int $err = gpio_set_drive_capability(int $pin, int $capability)
 //
 IMPLEMENT_N_N(gpio_set_drive_capability, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_set_drive_capability(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_set_drive_capability((gpio_num_t)a0, a1));
@@ -3270,7 +3270,7 @@ IMPLEMENT_N_N(gpio_set_drive_capability, int, int,
 // int $level = gpio_get_level(int $pin)
 //
 IMPLEMENT_N(gpio_get_level, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_get_level(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, gpio_get_level((gpio_num_t)a0));
@@ -3280,7 +3280,7 @@ IMPLEMENT_N(gpio_get_level, int,
 // int $err = gpio_set_level(int $pin, int $level)
 //
 IMPLEMENT_N_N(gpio_set_level, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_set_level(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_set_level((gpio_num_t)a0, a1 ? 1 : 0));
@@ -3290,7 +3290,7 @@ IMPLEMENT_N_N(gpio_set_level, int, int,
 // int $err = gpio_set_direction(int $pin, int $mode)     // $mode is GPIO_MODE_*
 //
 IMPLEMENT_N_N(gpio_set_direction, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_set_direction(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_set_direction((gpio_num_t)a0, a1));
@@ -3305,7 +3305,7 @@ IMPLEMENT_N_N(gpio_set_direction, int, int,
 // int $err = gpio_iomux_input(int $pin, int $func, int $signal_idx)
 //
 IMPLEMENT_N_N_N(gpio_iomux_input, int, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_iomux_input(%d, %d, %d)\r\n",a0,a1,a2);
 #else
   ph7_result_int(pCtx, (int)gpio_iomux_input((gpio_num_t)a0, a1, a2));
@@ -3315,7 +3315,7 @@ IMPLEMENT_N_N_N(gpio_iomux_input, int, int, int,
 // int $err = gpio_iomux_output(int $pin, int $func)
 //
 IMPLEMENT_N_N(gpio_iomux_output, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_iomux_output(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_iomux_output((gpio_num_t)a0, a1));
@@ -3325,7 +3325,7 @@ IMPLEMENT_N_N(gpio_iomux_output, int, int,
 // int $err = gpio_func_sel(int $pin, int $func)
 //
 IMPLEMENT_N_N(gpio_func_sel, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_func_sel(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_func_sel((gpio_num_t)a0, a1));
@@ -3335,7 +3335,7 @@ IMPLEMENT_N_N(gpio_func_sel, int, int,
 // int $err = gpio_pulldown_dis(int $pin)
 //
 IMPLEMENT_N(gpio_pulldown_dis, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_pulldown_dis(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_pulldown_dis((gpio_num_t)a0));
@@ -3345,7 +3345,7 @@ IMPLEMENT_N(gpio_pulldown_dis, int,
 // int $err = gpio_pulldown_en(int $pin)
 //
 IMPLEMENT_N(gpio_pulldown_en, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_pulldown_en(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_pulldown_en((gpio_num_t)a0));
@@ -3355,7 +3355,7 @@ IMPLEMENT_N(gpio_pulldown_en, int,
 // int $err = gpio_pullup_dis(int $pin)
 //
 IMPLEMENT_N(gpio_pullup_dis, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_pullup_dis(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_pullup_dis((gpio_num_t)a0));
@@ -3365,7 +3365,7 @@ IMPLEMENT_N(gpio_pullup_dis, int,
 // int $err = gpio_pullup_en(int $pin)
 //
 IMPLEMENT_N(gpio_pullup_en, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_pullup_en(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_pullup_en((gpio_num_t)a0));
@@ -3375,7 +3375,7 @@ IMPLEMENT_N(gpio_pullup_en, int,
 // int $err = gpio_set_pull_mode(int $pin, int $mode)     // $mode is GPIO_PULLUP_ONLY, GPIO_PULLDOWN_ONLY, ...
 //
 IMPLEMENT_N_N(gpio_set_pull_mode, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_set_pull_mode(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_set_pull_mode((gpio_num_t)a0, a1));
@@ -3385,7 +3385,7 @@ IMPLEMENT_N_N(gpio_set_pull_mode, int, int,
 // int $err = gpio_od_enable(int $pin)
 //
 IMPLEMENT_N(gpio_od_enable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_od_enable(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_od_enable((gpio_num_t)a0));
@@ -3395,7 +3395,7 @@ IMPLEMENT_N(gpio_od_enable, int,
 // int $err = gpio_od_disable(int $pin)
 //
 IMPLEMENT_N(gpio_od_disable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_od_disable(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_od_disable((gpio_num_t)a0));
@@ -3405,7 +3405,7 @@ IMPLEMENT_N(gpio_od_disable, int,
 // int $err = gpio_input_enable(int $pin)
 //
 IMPLEMENT_N(gpio_input_enable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_input_enable(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_input_enable((gpio_num_t)a0));
@@ -3415,7 +3415,7 @@ IMPLEMENT_N(gpio_input_enable, int,
 // int $err = gpio_input_disable(int $pin)
 //
 IMPLEMENT_N(gpio_input_disable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_input_disable(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_input_disable((gpio_num_t)a0));
@@ -3425,7 +3425,7 @@ IMPLEMENT_N(gpio_input_disable, int,
 // int $err = gpio_output_enable(int $pin)
 //
 IMPLEMENT_N(gpio_output_enable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_output_enable(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_output_enable((gpio_num_t)a0));
@@ -3435,7 +3435,7 @@ IMPLEMENT_N(gpio_output_enable, int,
 // int $err = gpio_output_disable(int $pin)
 //
 IMPLEMENT_N(gpio_output_disable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_output_disable(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_output_disable((gpio_num_t)a0));
@@ -3445,7 +3445,7 @@ IMPLEMENT_N(gpio_output_disable, int,
 // int $err = gpio_sleep_sel_dis(int $pin)
 //
 IMPLEMENT_N(gpio_sleep_sel_dis, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_sleep_sel_dis(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_sleep_sel_dis((gpio_num_t)a0));
@@ -3455,7 +3455,7 @@ IMPLEMENT_N(gpio_sleep_sel_dis, int,
 // int $err = gpio_sleep_sel_en(int $pin)
 //
 IMPLEMENT_N(gpio_sleep_sel_en, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_sleep_sel_en(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_sleep_sel_en((gpio_num_t)a0));
@@ -3465,7 +3465,7 @@ IMPLEMENT_N(gpio_sleep_sel_en, int,
 // int $err = gpio_sleep_set_direction(int $pin, int $mode)
 //
 IMPLEMENT_N_N(gpio_sleep_set_direction, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_sleep_set_direction(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_sleep_set_direction((gpio_num_t)a0, a1));
@@ -3475,7 +3475,7 @@ IMPLEMENT_N_N(gpio_sleep_set_direction, int, int,
 // int $err = gpio_sleep_set_pull_mode(int $pin, int $mode)
 //
 IMPLEMENT_N_N(gpio_sleep_set_pull_mode, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_sleep_set_pull_mode(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_sleep_set_pull_mode((gpio_num_t)a0, a1));
@@ -3485,7 +3485,7 @@ IMPLEMENT_N_N(gpio_sleep_set_pull_mode, int, int,
 // int $err = gpio_hold_dis(int $pin)
 //
 IMPLEMENT_N(gpio_hold_dis, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_hold_dis(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_hold_dis((gpio_num_t)a0));
@@ -3495,7 +3495,7 @@ IMPLEMENT_N(gpio_hold_dis, int,
 // int $err = gpio_hold_en(int $pin)
 //
 IMPLEMENT_N(gpio_hold_en, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_hold_en(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_hold_en((gpio_num_t)a0));
@@ -3505,7 +3505,7 @@ IMPLEMENT_N(gpio_hold_en, int,
 // gpio_deep_sleep_hold_dis(): void
 //
 IMPLEMENT(gpio_deep_sleep_hold_dis,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_deep_sleep_hold_dis()\r\n");
 #else
 #  if SOC_GPIO_SUPPORT_HOLD_IO_IN_DSLP
@@ -3519,7 +3519,7 @@ IMPLEMENT(gpio_deep_sleep_hold_dis,
 // gpio_deep_sleep_hold_en(): void
 //
 IMPLEMENT(gpio_deep_sleep_hold_en,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_deep_sleep_hold_en()\r\n");
 #else
 #  if SOC_GPIO_SUPPORT_HOLD_IO_IN_DSLP
@@ -3533,7 +3533,7 @@ IMPLEMENT(gpio_deep_sleep_hold_en,
 // int $err = gpio_deep_sleep_wakeup_disable(int $pin)
 //
 IMPLEMENT_N(gpio_deep_sleep_wakeup_disable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_deep_sleep_wakeup_disable(%d)\r\n",a0);
 #else
 #  if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
@@ -3547,7 +3547,7 @@ IMPLEMENT_N(gpio_deep_sleep_wakeup_disable, int,
 // int $err = gpio_deep_sleep_wakeup_enable(int $pin, int $intr_type)
 //
 IMPLEMENT_N_N(gpio_deep_sleep_wakeup_enable, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_deep_sleep_wakeup_enable(%d, %d)\r\n",a0,a1);
 #else
 #  if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
@@ -3561,7 +3561,7 @@ IMPLEMENT_N_N(gpio_deep_sleep_wakeup_enable, int, int,
 // int $err = gpio_force_hold_all()
 //
 IMPLEMENT(gpio_force_hold_all,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_force_hold_all()\r\n");
 #else
 #  if SOC_GPIO_SUPPORT_FORCE_HOLD
@@ -3575,7 +3575,7 @@ IMPLEMENT(gpio_force_hold_all,
 // int $err = gpio_force_unhold_all()
 //
 IMPLEMENT(gpio_force_unhold_all,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_force_unhold_all()\r\n");
 #else
 #  if SOC_GPIO_SUPPORT_FORCE_HOLD
@@ -3589,7 +3589,7 @@ IMPLEMENT(gpio_force_unhold_all,
 // int $err = gpio_wakeup_disable(int $pin)
 //
 IMPLEMENT_N(gpio_wakeup_disable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_wakeup_disable(%d)\r\n",a0);
 #else
   ph7_result_int(pCtx, (int)gpio_wakeup_disable((gpio_num_t)a0));
@@ -3599,7 +3599,7 @@ IMPLEMENT_N(gpio_wakeup_disable, int,
 // int $err = gpio_wakeup_enable(int $pin, int $intr_type)    // light sleep wakeup
 //
 IMPLEMENT_N_N(gpio_wakeup_enable, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_wakeup_enable(%d, %d)\r\n",a0,a1);
 #else
   ph7_result_int(pCtx, (int)gpio_wakeup_enable((gpio_num_t)a0, a1));
@@ -3613,7 +3613,7 @@ IMPLEMENT_N_N(gpio_wakeup_enable, int, int,
 // int $err = gpio_install_isr_service(int $intr_alloc_flags)
 //
 IMPLEMENT_N(gpio_install_isr_service, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_install_isr_service(%d)\r\n",a0);
 #else
   /* TODO(ISR): gpio_install_isr_service() */
@@ -3623,7 +3623,7 @@ IMPLEMENT_N(gpio_install_isr_service, int,
 // gpio_uninstall_isr_service(): void
 //
 IMPLEMENT(gpio_uninstall_isr_service,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_uninstall_isr_service()\r\n");
 #else
   /* TODO(ISR): gpio_uninstall_isr_service() */
@@ -3633,7 +3633,7 @@ IMPLEMENT(gpio_uninstall_isr_service,
 // int $err = gpio_intr_disable(int $pin)
 //
 IMPLEMENT_N(gpio_intr_disable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_intr_disable(%d)\r\n",a0);
 #else
   /* TODO(ISR): gpio_intr_disable() */
@@ -3643,7 +3643,7 @@ IMPLEMENT_N(gpio_intr_disable, int,
 // int $err = gpio_intr_enable(int $pin)
 //
 IMPLEMENT_N(gpio_intr_enable, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_intr_enable(%d)\r\n",a0);
 #else
   /* TODO(ISR): gpio_intr_enable() */
@@ -3653,7 +3653,7 @@ IMPLEMENT_N(gpio_intr_enable, int,
 // int $err = gpio_isr_handler_remove(int $pin)
 //
 IMPLEMENT_N(gpio_isr_handler_remove, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_isr_handler_remove(%d)\r\n",a0);
 #else
   /* TODO(ISR): gpio_isr_handler_remove() */
@@ -3663,7 +3663,7 @@ IMPLEMENT_N(gpio_isr_handler_remove, int,
 // int $err = gpio_set_intr_type(int $pin, int $intr_type)
 //
 IMPLEMENT_N_N(gpio_set_intr_type, int, int,
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_set_intr_type(%d, %d)\r\n",a0,a1);
 #else
   /* TODO(ISR): gpio_set_intr_type() */
@@ -3688,7 +3688,7 @@ Impl(gpio_isr_handler_add, pCtx, nArg, apArg) {
 
   (void)iPin; (void)pHandler; (void)pUserArg;
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_isr_handler_add(%d, <callable>, <arg>)\r\n", iPin);
 #else
   /* TODO(ISR): gpio_isr_handler_add() */
@@ -3714,7 +3714,7 @@ Impl(gpio_isr_register, pCtx, nArg, apArg) {
 
   (void)pHandler; (void)pUserArg; (void)iFlags;
 
-#ifdef __CYGWIN__
+#if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_isr_register(<callable>, <arg>, %d)\r\n", iFlags);
 #else
   /* TODO(ISR): gpio_isr_register() */
