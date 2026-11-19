@@ -1207,6 +1207,7 @@ struct ph7_vm_func_closure_env {
 */
 #define VM_FUNC_ARG_NULLABLE VM_FUNC_RET_NULLABLE   /* nullable argument type. "?int $x". this flag is used with args only */
 #define VM_FUNC_ARG_CALLABLE VM_FUNC_CLOSURE
+#define VM_FUNC_ARG_PROMOTED VM_FUNC_CLASS_METHOD   /* constructor property promotion: "public int $x". this flag is used with args only */
 
 
 /* Types are keywords with IDs which are power of two integers, starting from 0x200.

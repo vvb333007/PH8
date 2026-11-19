@@ -6,8 +6,7 @@
  * Copyright (C) 2026-present Viacheslav Logunov <vvb333007@gmail.com>
  *
  * Licensed under the Symisc Public License (modified BSD with mandatory
- * source disclosure, clause 3); commercial licensing available from
- * Symisc Systems. Full terms: see LICENSE. Contacts: see CONTACTS.
+ * source disclosure, clause 3); Full terms: see LICENSE. Contacts: see CONTACTS.
  */
 
 #include <stdint.h>
@@ -1353,26 +1352,6 @@ static sxi32 GenStateListNodeValidator(ph7_gen_state *pGen, ph7_expr_node *pRoot
                              "list(): Expecting a variable not an expression");
     if (rc != SXERR_ABORT) {
       rc = SXERR_INVALID;
-    }
-  }
-  return rc;
-}
-
-static sxi32 GenStateListNodeValidator(ph7_gen_state *pGen, ph7_expr_node *pRoot) {
-
-  sxi32 rc = SXRET_OK;
-
-  if (pRoot->pOp || pRoot->xCode != PH7_CompileVariable) {
-    if (pRoot->pOp->iOp != EXPR_OP_SUBSCRIPT /* $a[] */ && 
-        pRoot->pOp->iOp != EXPR_OP_ARROW /* -> */ &&
-        pRoot->pOp->iOp != EXPR_OP_DC /* :: */) {
-
-      /* Unexpected expression or a constant */
-      rc = PH7_GenCompileError(&(*pGen), E_ERROR, pRoot->pStart ? pRoot->pStart->nLine : 0,
-                               "list(): Expecting a variable not an expression or a constant");
-      if (rc != SXERR_ABORT) {
-        rc = SXERR_INVALID;
-      }
     }
   }
   return rc;
@@ -4381,6 +4360,162 @@ static sxi32 GenStateProcessArgValue(ph7_gen_state *pGen, ph7_vm_func_arg *pArg,
   return SXRET_OK;
 }
 /*
+ * Forward declaration: GetProtectionLevel() is defined in the class compiler section below.
+ */
+static sxi32 GetProtectionLevel(sxi32 nKeyword);
+
+/*
+ * Constructor property promotion:
+ *
+ *   class Point {
+ *     public function __construct(public int $x, protected ?string $name = null) { }
+ *   }
+ *
+ * Works by emitting function prologue to initialize new members: it is compiled as if it was written:
+ *
+ *   class Point {
+ *     public int $x;
+ *     protected ?string $name;
+ *     public function __construct(int $x, ?string $name = null) {
+ *       $this->x = $x;
+ *       $this->name = $name;
+ *     }
+ *   }
+ *
+ * 
+ *   GenStateCollectFuncArgs() detects visibility keywords in the function's arg list, declares the
+ *   class attribute (GenStateDeclarePromotedAttr) and marks the parameter with VM_FUNC_ARG_PROMOTED.
+ *
+ *   GenStateCompileFuncBody() checks marks and emits the assignments (see GenStateEmitPromotedArgs)
+ *   before the first statement of the body. If there is no body (e.g. it is an abstract class method)
+ *   error is thrown
+ */
+
+/*
+ * Return TRUE if the method name makes the method a constructor: either '__construct'
+ * or the (PHP 4 style) name of the class itself. The same rule as in VmMountUserClass().
+ *
+ * TODO: there are couple of places where constructor name is checked. refactor them
+ */
+static int GenStateIsConstructorName(const ph7_class *pClass, const SyString *pName) {
+  if (pName->nByte == sizeof("__construct") - 1 &&
+      SyStrncmp(pName->zString, "__construct", pName->nByte) == 0) {
+    return TRUE;
+  }
+  if (pName->nByte == pClass->sName.nByte &&
+      SyStrncmp(pName->zString, pClass->sName.zString, pName->nByte) == 0) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/*
+ * Declare the class attribute for the promoted constructor parameter.
+ * nAttrType is one of PH7_TKWRD_(INT,STRING,OBJECT...) or zero for an untyped attribute.
+ */
+static sxi32 GenStateDeclarePromotedAttr(
+  ph7_gen_state *pGen,
+  ph7_class *pClass,
+  const SyString *pName,  /* Attribute name, without the dollar sign */
+  sxu32 nLine,
+  sxi32 iVisibility,      /* PH7_TKWRD_PUBLIC, PH7_TKWRD_PROTECTED or PH7_TKWRD_PRIVATE */
+  sxu32 nAttrType,
+  int bNullable
+) {
+  ph7_class_attr *pAttr;
+  sxi32 iAttrFlags;
+  sxi32 rc;
+
+  if (PH7_ClassExtractAttribute(pClass, pName->zString, pName->nByte) != 0) {
+    rc = PH7_GenCompileError(pGen, E_ERROR, nLine,
+                             "Can not redeclare '%z::$%z': promoted property conflicts with the existing attribute",
+                             &pClass->sName, pName);
+    return rc;
+  }
+
+  /* propagate fixedtype/nullable to the property attr*/
+  iAttrFlags = 0;
+  if (nAttrType != 0) {
+    iAttrFlags |= PH7_CLASS_ATTR_FIXEDTYPE;
+    if (bNullable) {
+      iAttrFlags |= PH7_CLASS_ATTR_NULLABLE;
+    }
+  }
+
+  pAttr = PH7_NewClassAttr(pGen->pVm, pName, nLine, GetProtectionLevel(iVisibility), iAttrFlags);
+  if (pAttr == 0) {
+    PH7_GenCompileOOM(pGen);
+    return SXERR_ABORT;
+  }
+  if (nAttrType != 0) {
+    /* nType shares storage with nLine, see GenStateCompileClassAttr() */
+    pAttr->nType = nAttrType;
+  }
+
+  rc = PH7_ClassInstallAttr(pClass, pAttr);
+  if (rc != SXRET_OK) {
+    PH7_GenCompileOOM(pGen);
+    return SXERR_ABORT;
+  }
+  return SXRET_OK;
+}
+
+/*
+ * Emit the code which copy promoted parameters into the object:
+ *
+ *   $this->name = $name;
+ *
+ * Operand order: (same as member store) - value first, then the object and the attribute name,
+ * OP_MEMBER turn (obj+name) into reference, followed by the STORE (P2 = 1) writes the value there,
+ * doing the typecast if required
+ *
+ * Must be called  before the method body is compiled otherwise in is an UB
+ */
+static sxi32 GenStateEmitPromotedArgs(ph7_gen_state *pGen, ph7_vm_func *pFunc) {
+  ph7_vm_func_arg *aArg;
+  sxu32 nArg;
+  sxu32 iArg;
+
+  aArg = (ph7_vm_func_arg *)SySetBasePtr(&pFunc->aArgs);
+  nArg = SySetUsed(&pFunc->aArgs);
+
+  for (iArg = 0; iArg < nArg; iArg++) {
+    ph7_vm_func_arg *pArg = &aArg[iArg];
+    sxu32 nIdx = 0;
+
+    if ((pArg->iFlags & VM_FUNC_ARG_PROMOTED) == 0) {
+      continue;
+    }
+
+    /* Attribute name as a string literal. Reuse constobj if possible */
+    if (SXRET_OK != GenStateFindLiteral(pGen, &pArg->sName, &nIdx)) {
+      ph7_value *pObj = PH7_ReserveConstObj(pGen->pVm, &nIdx);
+      if (pObj == 0) {
+        PH7_GenCompileOOM(pGen);
+        return SXERR_ABORT;
+      }
+      PH7_MemObjInitFromString(pGen->pVm, pObj, &pArg->sName);
+      GenStateInstallLiteral(pGen, pObj, nIdx);
+    }
+
+    /* value: $name */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOAD, 0, 0, (void *)pArg->sName.zString, 0, pGen);
+    /* The object: $this */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOAD, 0, 0, (void *)"this", 0, pGen);
+    /* The attribute name  */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, nIdx, 0, 0, pGen);
+    /* get a reference to $this->name. stack: value, reference */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_MEMBER, 0, 0, 0, 0, pGen);
+
+    /* Member store: value stored to the reference, reference popped, stack: value */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_STORE, 0, 1, 0, 0, pGen);
+    /* Pop the stored value, stack: empty */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_POP, 1, 0, 0, 0, pGen);
+  }
+  return SXRET_OK;
+}
+
+/*
  * Collect function arguments one after one.
  * According to the PHP language reference manual.
  * Information may be passed to functions via the argument list, which is a comma-delimited
@@ -4417,7 +4552,12 @@ static sxi32 GenStateProcessArgValue(ph7_gen_state *pGen, ph7_vm_func_arg *pArg,
  * complex agrument values.Please refer to the official documentation for more information
  * on these extension.
  */
-static sxi32 GenStateCollectFuncArgs(ph7_vm_func *pFunc, ph7_gen_state *pGen, SyToken *pEnd) {
+static sxi32 GenStateCollectFuncArgs(
+  ph7_vm_func *pFunc,
+  ph7_gen_state *pGen,
+  SyToken *pEnd,
+  ph7_class *pPromoteTo /* Class to declare promoted properties in. NULL: promotion is not allowed here */
+) {
   ph7_vm_func_arg sArg; /* Current processed argument */
   SyToken /* *pCur,*/ *pIn;  /* Token stream */
   SyBlob sSig;          /* Function signature */
@@ -4425,6 +4565,8 @@ static sxi32 GenStateCollectFuncArgs(ph7_vm_func *pFunc, ph7_gen_state *pGen, Sy
   sxi32 rc;
   sxu32 nKey;
   SyToken *pTypeEnd; /* End of the type hint */
+  sxu32 nAttrType;   /* Declared type of a promoted property (PH7_TKWRD_xxx), zero: untyped */
+  sxi32 iVisibility; /* Visibility keyword of a promoted property */
 
   pIn = pGen->pIn;
   //pCur = 0;
@@ -4442,6 +4584,31 @@ static sxi32 GenStateCollectFuncArgs(ph7_vm_func *pFunc, ph7_gen_state *pGen, Sy
 
     SyZero(&sArg, sizeof(ph7_vm_func_arg));
     SySetInit(&sArg.aByteCode, &pGen->pVm->sAllocator, sizeof(VmInstr));
+    nAttrType = 0;
+    iVisibility = 0;
+
+    /* Constructor property promotion: public|protected|private ?int $name
+     */
+    if (pIn->nType & PH7_TK_KEYWORD) {
+      sxi32 iKeyword = SX_PTR_TO_INT(pIn->pUserData);
+      if (iKeyword == PH7_TKWRD_PUBLIC || iKeyword == PH7_TKWRD_PROTECTED || iKeyword == PH7_TKWRD_PRIVATE) {
+        /* Promote to is NULL when we are dealing with abstract class; means constructor does not have body;
+         * means no bytecode container to insert our init prologue
+         */
+        if (pPromoteTo == 0) {
+          rc = PH7_GenCompileError(pGen, E_ERROR, pIn->nLine,
+                                   "Promoted property is only allowed in a constructor which has a body");
+          return rc;
+        }
+        iVisibility = iKeyword;
+        sArg.iFlags |= VM_FUNC_ARG_PROMOTED;
+        pIn++; /* Jump the visibility keyword */
+        if (pIn >= pEnd) {
+          rc = PH7_GenCompileError(pGen, E_ERROR, pGen->pIn->nLine, "Missing argument after the visibility keyword");
+          return rc;
+        }
+      }
+    }
 
     /* Type hint: either a keyword (int, string, mixed, etc) or a class/enum name
      *  recognise `?` at the beginning of the type and save a special flag on corresponding sArg
@@ -4464,6 +4631,13 @@ static sxi32 GenStateCollectFuncArgs(ph7_vm_func *pFunc, ph7_gen_state *pGen, Sy
       /* Built in types: these are keywords */
       if (pIn->nType & PH7_TK_KEYWORD) {
         nKey = (sxu32)(SX_PTR_TO_INT(pIn->pUserData));
+        /* Type of a promoted property. mixed/void and non-types make it untyped.
+         * An enum jumps to choose_memobj below, bypassing this: it stays untyped, because
+         * the argument is already converted to the enum's base type on the function entry.
+         */
+        if ((nKey & VM_FUNC_RET_MASK) != 0 && (nKey & (PH7_TKWRD_MIXED | PH7_TKWRD_VOID)) == 0) {
+          nAttrType = nKey;
+        }
 choose_memobj:
         if (nKey & PH7_TKWRD_ARRAY) {
           sArg.nType = MEMOBJ_HASHMAP;
@@ -4490,6 +4664,7 @@ choose_memobj:
                               &pIn->sData);
         }
       } else {
+        /* Not a builtin type: it is either class, trait or enum, all of which are classes under the hood*/
         char zFullName[GEN_NAME_MAX];
         SyString sFullName;
         SyString *pName; /* Class/Enum name */
@@ -4539,6 +4714,8 @@ choose_memobj:
         
         /* Ordinary class, not an enum */
         char *zDup;
+        /* A promoted property of a class type is declared as ':object', like an ordinary typed property */
+        nAttrType = PH7_TKWRD_OBJECT;
         /* Argument must be a class instance,record that*/
         zDup = SyMemBackendStrDup(&pGen->pVm->sAllocator, pName->zString, pName->nByte);
         if (zDup) {
@@ -4583,6 +4760,20 @@ choose_memobj:
       return SXERR_ABORT;
     }
     SyStringInitFromBuf(&sArg.sName, zDup, SyStringLength(&pIn->sData));
+
+    if (sArg.iFlags & VM_FUNC_ARG_PROMOTED) {
+      if (sArg.iFlags & VM_FUNC_ARG_BY_REF) {
+        rc = PH7_GenCompileError(pGen, E_ERROR, pIn->nLine,
+                                 "Promoted property '$%z' can not be passed by reference", &sArg.sName);
+        return rc;
+      }
+      rc = GenStateDeclarePromotedAttr(pGen, pPromoteTo, &sArg.sName, pIn->nLine, iVisibility, nAttrType,
+                                       (sArg.iFlags & VM_FUNC_ARG_NULLABLE) != 0);
+      if (rc != SXRET_OK) {
+        return rc;
+      }
+    }
+
     pIn++;
     if (pIn < pEnd) {
       if (pIn->nType & PH7_TK_EQUAL) {
@@ -4711,6 +4902,14 @@ static sxi32 GenStateCompileFuncBody(
   /* Swap bytecode containers */
   pInstrContainer = PH7_VmGetByteCodeContainer(pGen->pVm);
   PH7_VmSetByteCodeContainer(pGen->pVm, &pFunc->aByteCode);
+
+  /* Constructor property promotion: $this->name = $name; for every promoted parameter */
+  rc = GenStateEmitPromotedArgs(&(*pGen), pFunc);
+  if (rc != SXRET_OK) {
+    /* Don't worry about freeing memory, everything will be released shortly */
+    return SXERR_ABORT;
+  }
+
   /* Compile the body */
 
   rc = PH7_CompileBlock(&(*pGen), 0);
@@ -4825,7 +5024,7 @@ static sxi32 GenStateCompileFunc(
 
   if (pGen->pIn < pEnd) {
     /* Collect function arguments */
-    rc = GenStateCollectFuncArgs(pFunc, &(*pGen), pEnd);
+    rc = GenStateCollectFuncArgs(pFunc, &(*pGen), pEnd, 0);
     if (rc == SXERR_ABORT) {
       /* Don't worry about freeing memory, everything will be released shortly */
       return SXERR_ABORT;
@@ -5464,6 +5663,7 @@ static sxi32 GenStateCompileClassMethod(
 ) {
   sxu32 nLine = pGen->pIn->nLine;
   ph7_class_method *pMeth;
+  ph7_class *pPromoteTo; /* Class for promoted constructor properties, NULL if not a constructor */
   sxi32 iFuncFlags;
   SyString *pName;
   SyToken *pEnd;
@@ -5590,7 +5790,9 @@ static sxi32 GenStateCompileClassMethod(
   }
   if (pGen->pIn < pEnd) {
     /* Collect method arguments */
-    rc = GenStateCollectFuncArgs(&pMeth->sFunc, &(*pGen), pEnd);
+    /* Property promotion is allowed in a constructor which has a body only */
+    pPromoteTo = (doBody && GenStateIsConstructorName(pClass, pName)) ? pClass : 0;
+    rc = GenStateCollectFuncArgs(&pMeth->sFunc, &(*pGen), pEnd, pPromoteTo);
     if (rc == SXERR_ABORT) {
       return SXERR_ABORT;
     }
