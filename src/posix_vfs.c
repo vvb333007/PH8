@@ -6,8 +6,7 @@
  * Copyright (C) 2026-present Viacheslav Logunov <vvb333007@gmail.com>
  *
  * Licensed under the Symisc Public License (modified BSD with mandatory
- * source disclosure, clause 3); commercial licensing available from
- * Symisc Systems. Full terms: see LICENSE. Contacts: see CONTACTS.
+ * source disclosure, clause 3); Full terms: see LICENSE. Contacts: see CONTACTS.
  */
 
 #ifndef PH7_DISABLE_BUILTIN_FUNC

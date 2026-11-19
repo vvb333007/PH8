@@ -1,16 +1,19 @@
 /*
- * ----------------------------------------------------------
- * File: ph7.h
- * MD5: b5527f9c7eb410a9f9367a6b03014a65
- * ----------------------------------------------------------
+ * PH7-ESP32 - embeddable PHP bytecode compiler & virtual machine,
+ * ported and maintained for ESP32/FreeRTOS, Linux and Windows(Cygwin).
+ *
+ * Copyright (C) 2011-2012 Symisc Systems <http://ph7.symisc.net/>
+ * Copyright (C) 2026-present Viacheslav Logunov <vvb333007@gmail.com>
+ *
+ * Licensed under the Symisc Public License (modified BSD with mandatory
+ * source disclosure, clause 3); Full terms: see LICENSE. Contacts: see CONTACTS.
  */
-/* This file was automatically generated.  Do not edit (except for compile time directive)! */
+
 #ifndef _PH7_H_
 #define _PH7_H_
 
 /*
  * Copyright (C) 2011, 2012 Symisc Systems. All rights reserved.
- * Copyright (C) 2026, Viacheslav Logunov <vvb333007@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -83,13 +86,13 @@
  * number.
  */
 //#define PH7_VERSION "2.1.4"
-#define PH7_VERSION "2.2.0"
+#define PH7_VERSION "3.0.0"
 /*
  * The PH7_VERSION_NUMBER C preprocessor macro resolves to an integer
  * with the value (X*1000000 + Y*1000 + Z) where X, Y, and Z are the same
  * numbers used in [PH7_VERSION].
  */
-#define PH7_VERSION_NUMBER 2001004
+#define PH7_VERSION_NUMBER 3000000
 /*
  * The PH7_SIG C preprocessor macro evaluates to a string
  * literal which is the public signature of the ph7 engine.
@@ -97,7 +100,7 @@
  * generated Server MIME header as follows:
  *   Server: YourWebServer/x.x PH7/x.x.x \r\n
  */
-#define PH7_SIG "PH7/2.2.0"
+#define PH7_SIG "PH7/"
 /*
  * PH7 identification in the Symisc source tree:
  * Each particular check-in of a particular software released
