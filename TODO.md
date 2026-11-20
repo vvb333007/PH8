@@ -50,6 +50,13 @@ Standard Arduino Core classes: HardwareSerial, SPI, Wire, FS, Print, String and 
 
 Fallback for builtin functions
 
+### 5. Traits
+
+~~Implement traits using existing infrastucture to compile class. Same as with 'enum'. Compiled methods
+are then injected to a class on MountClass;~~
+
+Extended `use {...}` syntax; (may be hard to implement. Do we really need it? all these "insteadof" ?)
+
 ### 6. Reliable values
 
 ~~Implement MEMOBJ_UNREL - a flag saying that the value was converted but resilt is unreliable.~~
@@ -71,7 +78,7 @@ Refactor (array) and (object) casts to use `__toArray`
 
 ~~Go throuhg error messages table, and replace them with `VmThrowException` calls~~
 
-Verify failure branches of VmByteCodeExec by provoking the exception
+Verify failure branches of VmByteCodeExec by provoking the exception; 
 
 Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 
@@ -79,11 +86,16 @@ Verify return code propagation of VmByteCodeExec, especially in VmLocalExec use
 
 ### 8. Types and overloading
 
-  Nullable types in stdlib signatures (`?string`, `?Throwable`) or null will not pass strict checks: null will never match ?type signature when overloading
+  Nullable types in stdlib signatures (`?string`, `?Throwable`) or null will not pass strict checks: null will never match ?type signature when overloading.
+  This is related to how function signatures are built: only type ID is stored, ? is ignored. I.e. function test(int $a, string $b, ?string $c)
+  will get signature of "iss". Idea: use upper/lower case letters to distinguish between normal and nullable type.
 
   "No matching function" message should print argument types, and the list of candidates
 
   Constructor by class name - find places where it is'nt handled (`new`, `parent::`, `method_exists`)
+
+  Union types are not supported: they are conflicting with overloading mechanism; they are conflicting with typecasting and type-guarantee mechanisms of PH8
+
 
 ## 9. VM shutdown
 
@@ -115,35 +127,15 @@ Review Trilogy source code and decide how it can be ported to mbedTLS API
 
 Implement HTTPS using mbedTLS
 
-Implement WebSockets
+Implement WebSockets; Use PH8 model of websockets: script receives STDIN/STDOUT redirected via ws:// framing 
 
-Implement SSE
+Implement SSE: basically we just need to add extra headers processing. Script keeps connection  open until client is alive;
+
 
 ---
 
 ## Smaller tasks
 
-### 0. Introspection API: not a reflection, but similar functionality
-
-
-Full Reflection API is heavy: many classes
-Implement procedural API similar in function to the Reflection
-
-* __has_class(string $name): bool              -->  Does the class exist?
-* __has_interface(string $name): bool          -->  Does the interface exist?
-* __has_enum(string $name): bool               -->  Does the enum exist?
-* __has_method($class, $name)                  -->  Does the class have this method? (Use is_callable() to check whether it can be called.)
-* __has_property($class, $name): int            -->  Does the class have this property? (0 = no, 1 = public, 2 = protected, 3 = private; the sign is inverted if the property is a const.)
-* __fetch_methods($class, bool $include_info = false) -->  List of methods (or an array of detailed records for each method). Own methods only, excluding inherited ones.
-* __fetch_properties($class, bool $include_info = false) -->  List of properties.
-* __fetch_classname(object $object, bool $parent = false) -->  Get the class name of an object.
-* __fetch_parentname(object $class)             -->  Get the parent class name.
-* __child_of(mixed $parent, object $candidate)  -->  Is $candidate a child of $parent?
-* __implements(string $interface, object $candidate) -->  Does $candidate implement the interface?
-* __has_function(string $name)                 -->  Does the function exist?
-* __fetch_function(string $name): array         -->  Get everything the VM knows about a function, including its flags and signature.
-* __fetch_function_list(PHP_BUILTINS|PHP_USER)  -->  List of registered functions.
-* __fetch_constant_list(PHP_BUILTINS|PHP_USER)  -->  List of registered constants.
 
 ### 0. Arrays
 
@@ -165,7 +157,9 @@ Implement:
 
 Refactor `(object)` cast of arrays: instead of wrapping up arrays to stdClass we have to create a new class with given properties in runtime
 
+### Peoperty promotion
 
+~~Implement constructor property promotion~~
 
 ### Magic methods
 
@@ -221,19 +215,7 @@ echo A[1]; // PH7 throws an error here
 ~~Currently do not receive called method name.~~
 
 
-### 6. UNIX-like `fork()` to make a full clone of a VM
 
-Start a new VM by cloning the current VM.
-
-```php
-$pid = fork();
-
-if ($pid == 0) {
-    echo 'Child running!';
-} else {
-    echo 'Child has been spawned, pid=' . $pid;
-}
-```
 ### 7. Background PHP services via FreeRTOS tasks
 
 Start a service from P2HP:

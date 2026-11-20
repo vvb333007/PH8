@@ -8,7 +8,6 @@ This text is an AI translation of original file in Russian.
 - **`list` as the target after `as` in `foreach`:** not supported.
 - **`[]` as the target after `as` in `foreach`:** not supported yet; it is planned.
 - **The `??=` operator:** not supported.
-- **Constructor property promotion:** not supported. Class properties must be declared explicitly.
 
 
 ## 2. PH8 Features That Differ from PHP
