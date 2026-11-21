@@ -31,6 +31,10 @@
 #include <stdint.h>
 #include <ctype.h>
 
+#ifdef ESP32
+#include <hal/gpio_ll.h>
+#endif
+
 
 /* Templates and boilerplates.
  All the remplates are made of IMPLEMENT.. and Impl macros. There are ,any of them
@@ -1456,7 +1460,7 @@ Impl(i2cWriteReadNonStop, pCtx, nArg, apArg) {
     ph7_result_bool(pCtx, 0);
     return PH7_OK;
   }
-  uint32_t nRead = 0;
+  size_t nRead = 0;
   if (i2cWriteReadNonStop(iBus, iAddress, (const uint8_t *)zData, (size_t)nLen, pBuf, (size_t)nSize, (uint32_t)nTimeout, &nRead) == ESP_OK)
     ph7_result_string(pCtx, (const char *)pBuf, (int)nRead);
   else
@@ -3418,7 +3422,8 @@ IMPLEMENT_N(gpio_input_disable, int,
 #if defined( __CYGWIN__) || defined(__linux__)
   fprintf(stderr,"gpio_input_disable(%d)\r\n",a0);
 #else
-  ph7_result_int(pCtx, (int)gpio_input_disable((gpio_num_t)a0));
+  gpio_ll_input_disable(&GPIO,(gpio_num_t)a0); // <-- void expression, a macro
+  ph7_result_int(pCtx, 1);
 #endif
 )
 
@@ -4137,7 +4142,7 @@ static struct {
 
   const char *zExtension;          /* Extension name */
   const ph7_builtin_func *pFuncs;  /* Funclist or NULL */
-  char iBit;                       /* -1 or bit number; */
+  signed char iBit;                       /* -1 or bit number; */
 
 } aExt[] = {
 
