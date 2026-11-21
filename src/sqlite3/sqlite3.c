@@ -1,3 +1,4 @@
+#if PH7_ENABLE_SQLITE3
 /******************************************************************************
 ** This file is an amalgamation of many separate C source files from SQLite
 ** version 3.54.1.  By combining all the individual C code files into this
@@ -271218,3 +271219,4 @@ SQLITE_API int sqlite3_stmt_init(
 SQLITE_API const char *sqlite3_sourceid(void){ return SQLITE_SOURCE_ID; }
 #endif /* SQLITE_AMALGAMATION */
 /************************** End of sqlite3.c ******************************/
+#endif //#if PH7_ENABLE_SQLITE3
