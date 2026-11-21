@@ -11,6 +11,9 @@
 
 #include "ph7int.h"
 
+/* TODO: refactor;
+ */
+
 /* This file implement built-in constants for the PH7 engine.
  * Generic constants: many PH8 built-in constants resolve to the same number. These are grouped here as
  * anonymous constants

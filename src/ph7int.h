@@ -1272,6 +1272,40 @@ struct ph7_builtin_constant {
   const char *zName;    /* Constant name */
   ProcConstant xExpand; /* C routine responsible of expanding constant value*/
 };
+
+#if 0
+struct ph7_builtin_constant {
+
+  char const *zName;
+
+#define Int   0
+#define Uint  1
+#define Float 2  
+#define Func  3  
+
+  int iType;
+
+  union {
+    int          iInt;
+    unsigned int uInt;
+    ProcConstant xExpand; /* C routine responsible of expanding constant value*/
+  };
+
+  float Real;
+
+};
+/*
+  { "E_ERROR",   Int,   .iInt = 1 },
+  { "E_WARNING", Int,   .iInt = 2 },
+  { "E_PARSE",   Int,   .iInt = 4 },
+  { "M_PI",      Float, .Real = M_PI },
+  { "__FILE__",  Func,  .xExpand = PH7_CONST_File },
+*/
+#endif
+
+
+
+
 /* Forward reference */
 typedef struct ph7_class_method ph7_class_method;
 typedef struct ph7_class_attr ph7_class_attr;

@@ -9,6 +9,7 @@
  * source disclosure, clause 3); Full terms: see LICENSE. Contacts: see CONTACTS.
  */
 
+#if PH7_ENABLE_SQLITE3
 /*
  * SQLite wrapper for PH8
  *
@@ -953,3 +954,4 @@ int ph7_sqlite_init(ph7_vm *pVm, ph7_sqlite **ppState) {
 
   return PH7_OK;
 }
+#endif //#if PH7_ENABLE_SQLITE3

@@ -8847,14 +8847,6 @@ static int pregx_grep_cb(ph7_value *pKey, ph7_value *pVal, void *pUser) {
 }
 
 
-/* REGEXP machinery. It has bugs which are rooted in inability of the engine to pass arguemtnts
- * by reference to an FFI. Only arrays are passed by reference, so `int &$cnt` arguments to preg_ family functions
- * result in a value on the stack, not a refrence. For that reason preg_replace() is not able to return number of replacements
- * made so far.
- */
-
-
-
 /* 
  * int preg_match(
  *     string $pattern,
@@ -8908,10 +8900,11 @@ static int PH7_builtin_preg_match(ph7_context *pCtx, int nArg, ph7_value **apArg
         return PH7_OK;
     }
 
-    /* Store matches to an array */
+    /* Store matches to an array.
+     * We do not use ph7_value_to_ref(pCtx->pVm, apArg[2]) here because arrays are always passed by reference
+     */
     if (nArg > 2) {
-        if (!pregx_prepare_out(pCtx, apArg[2],
-                "third argument must be defined as an array (e.g. '$matches = []')")) {
+        if (!pregx_prepare_out(pCtx, apArg[2], "third argument must be defined as an array (e.g. '$matches = []')")) {
             ph7_result_bool(pCtx, 0);
             return PH7_OK;
         }
