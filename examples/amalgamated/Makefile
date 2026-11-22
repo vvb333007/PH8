@@ -11,15 +11,19 @@ COMMON_SRC := amalgam.c
 INTER_SRC := $(COMMON_SRC) ph7_interp.c
 INTER_OBJ := $(patsubst %.c,$(OBJDIR)/%.o,$(INTER_SRC))
 
+SQLITE3_OBJ := ../../src/sqlite3/sqlite3.o
+
+$(SQLITE3_OBJ): ../../src/sqlite3/sqlite3.c
+>$(MAKE) -C ../../src/sqlite3
+
 TARGETS := inter
 
 .PHONY: all
 
 all: $(TARGETS)
 
-inter: $(INTER_OBJ)
->$(CC) $(CFLAGS)  $^ ../../src/sqlite3/sqlite3.o -o $@
-
+inter: $(INTER_OBJ) $(SQLITE3_OBJ)
+>$(CC) $(CFLAGS) $^ -o $@
 
 $(OBJDIR)/%.o: %.c | $(OBJDIR)
 >$(CC) $(CFLAGS) -c $< -o $@
