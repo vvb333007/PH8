@@ -1671,6 +1671,7 @@ enum ph7_vm_op {
   PH7_OP_NEQ,            /* Not equal '!=' */
   PH7_OP_TEQ,            /* Type equal '===' */
   PH7_OP_TNE,            /* Type not equal '!==' */
+  PH7_OP_CMP,            /* Spaceship operator <=> */
   PH7_OP_BAND,           /* Bitwise and '&' */
   PH7_OP_BXOR,           /* Bitwise xor '^' */
   PH7_OP_BOR,            /* Bitwise or '|' */
@@ -1769,6 +1770,7 @@ enum ph7_expr_id {
   EXPR_OP_NE,         /* Not equal != <> */
   EXPR_OP_TEQ,        /* Type equal === */
   EXPR_OP_TNE,        /* Type not equal !== */
+  EXPR_OP_SPACESHIP,  /* Spaceship operator <=> */
   EXPR_OP_SEQ,        /* String equal 'eq' */
   EXPR_OP_SNE,        /* String not equal 'ne' */
   EXPR_OP_BAND,       /* Biwise and '&' */
@@ -2087,7 +2089,7 @@ PH7_PRIVATE sxi32 PH7_CompileSimpleString(ph7_gen_state *pGen, sxi32 iCompileFla
 PH7_PRIVATE sxi32 PH7_CompileString(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileArray(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileList(ph7_gen_state *pGen, sxi32 iCompileFlag);
-PH7_PRIVATE sxi32 PH7_CompileAnnonFunc(ph7_gen_state *pGen, sxi32 iCompileFlag);
+PH7_PRIVATE sxi32 PH7_CompileAnonFunc(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileAnonClass(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileMatch(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_InitCodeGenerator(ph7_vm *pVm, ProcConsumer xErr, void *pErrData);
