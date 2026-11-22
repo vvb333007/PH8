@@ -273,11 +273,49 @@ static sxi32 MemObjStringValue(SyBlob *pOut, ph7_value *pObj, sxu8 bStrictBool) 
       }
     }
   } else if (pObj->iFlags & MEMOBJ_HASHMAP) {
+#if 1
+    /* 
+     * Casting array to string: append values to an output buffer; values which are not in [0..255]
+     * range are clamped to the valid range, plus UNREL flag is issued
+    */
 
+    ph7_hashmap_node *pNode;
+    ph7_hashmap *pMap;
+    ph7_value *pVal;
+    sxu32 n;
+
+    /* Point to the internal representation that describe the input hashmap */
+    pMap = (ph7_hashmap *)pObj->x.pOther;
+
+    /* Run through values, clamp if needed and append to the blob */
+    pNode = pMap->pFirst;
+
+    rc = SXRET_OK;
+    for (n = 0; n < pMap->nEntry; ++n) {
+      pVal = (ph7_value *)SySetAt(&pMap->pVm->aMemObj, pNode->nValIdx);
+
+      if (pVal->iFlags & MEMOBJ_INT) {
+
+        /* if node is integer, add one byte */
+        unsigned char c = (unsigned char )pVal->x.iVal; // TODO: check if value is out of range
+        SyBlobAppend(pOut, &c, 1);
+
+      } else if (pVal->iFlags & MEMOBJ_STRING) {
+
+        /* if node is string, add whole string so ['a','b', 'cde'] will yield 'abcde' */
+        SyBlobAppend(pOut, (const char *)SyBlobData(&pVal->sBlob), SyBlobLength(&pVal->sBlob));
+
+      } else
+        rc = SXERR_NOMATCH;
+
+      /* Point to the next entry */
+      pNode = pNode->pPrev;
+    }
+#else
     SyBlobAppend(&(*pOut), "Array", sizeof("Array") - 1);
-    PH7_HashmapUnref((ph7_hashmap *)pObj->x.pOther); // TODO: check why
-
     rc = SXERR_NOMATCH; /* no matching representation; can not convert. */
+#endif
+  PH7_HashmapUnref((ph7_hashmap *)pObj->x.pOther);
 
   } else if (pObj->iFlags & MEMOBJ_OBJ) {
 
