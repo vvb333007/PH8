@@ -559,7 +559,10 @@ static sxi32 TokenizePHP(SyStream *pStream, SyToken *pToken, void *pUserData, vo
           } else if (pStream->zText[0] == '=') {
             /* Current operator: <= */
             pStream->zText++;
-            /* TODO: add support for a spaceship operator '<=>' */
+            if (pStream->zText[0] == '>') {
+              /* Current operator: <= */
+              pStream->zText++;
+            }
           }
         }
         break;
