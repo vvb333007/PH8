@@ -12656,9 +12656,16 @@ static int vm_builtin_json_encode(ph7_context *pCtx, int nArg, ph7_value **apArg
   sJson.pCtx = pCtx;
   sJson.isFirst = 1;
   sJson.iFlags = 0;
+  /* Check if source is an associative array; if it is - force JSON_FORCE_OBJECT 
+   * TICKET: https://github.com/symisc/PH7/issues/26
+   * TICKET: https://github.com/symisc/PH7/issues/23
+  */
+  if (apArg[0]->iFlags & MEMOBJ_HASHMAP) {
+    sJson.iFlags |= JSON_FORCE_OBJECT;
+  }
+  /* User-supplied flags? */  
   if (nArg > 1 && ph7_value_is_int(apArg[1])) {
-    /* Extract option flags */
-    sJson.iFlags = ph7_value_to_int(apArg[1]);
+    sJson.iFlags |= ph7_value_to_int(apArg[1]);
   }
   /* Perform the encoding operation */
   VmJsonEncode(apArg[0], &sJson);
