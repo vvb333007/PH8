@@ -282,6 +282,7 @@ static const ph7_expr_op aOpTable[] = {
   /* Precedence 11,non-associative */
   { { "==", sizeof(char) * 2 }, EXPR_OP_EQ, 11, EXPR_OP_NON_ASSOC, PH7_OP_EQ },
   { { "!=", sizeof(char) * 2 }, EXPR_OP_NE, 11, EXPR_OP_NON_ASSOC, PH7_OP_NEQ },
+  { { "<=>", sizeof(char) * 3 }, EXPR_OP_SPACESHIP, 11, EXPR_OP_NON_ASSOC, PH7_OP_CMP },
 
   { { "eq", sizeof(char) * 2 }, EXPR_OP_SEQ, 11, EXPR_OP_NON_ASSOC, PH7_OP_SEQ }, /* IMP-0137-EQ: Symisc eXtension */
   { { "ne", sizeof(char) * 2 }, EXPR_OP_SNE, 11, EXPR_OP_NON_ASSOC, PH7_OP_SNE }, /* IMP-0138-NE: Symisc eXtension */
@@ -686,13 +687,13 @@ static SyToken *ExprDelimitArrowBody(SyToken *pIn, SyToken *pEnd) {
  * };
  * // This is our range of numbers
  * $numbers = range(1, 5);
- * // Use the Annonymous function as a callback here to 
+ * // Use the Anonymous function as a callback here to 
  * // double the size of each element in our 
  * // range
  * $new_numbers = array_map($double, $numbers);
  * print implode(' ', $new_numbers);
  */
-static sxi32 ExprAssembleAnnon(ph7_gen_state *pGen, SyToken **ppCur, SyToken *pEnd) {
+static sxi32 ExprAssembleAnon(ph7_gen_state *pGen, SyToken **ppCur, SyToken *pEnd) {
   SyToken *pIn = *ppCur;
   sxu32 nLine;
   sxi32 rc;
@@ -1008,20 +1009,20 @@ static sxi32 ExprExtractNode(ph7_gen_state *pGen, ph7_expr_node **ppNode
         }
       }
     } else if (nKeyword == PH7_TKWRD_FUNCTION) {
-      /* Annonymous function */
+      /* Anonymous function */
       if (&pCur[1] >= pGen->pEnd) {
         /* Assume a literal */
         ExprAssembleLiteral(&pCur, pGen->pEnd);
         pNode->xCode = PH7_CompileLiteral;
       } else {
         /* Assemble annonymous functions body */
-        rc = ExprAssembleAnnon(&(*pGen), &pCur, pGen->pEnd);
+        rc = ExprAssembleAnon(&(*pGen), &pCur, pGen->pEnd);
         if (rc != SXRET_OK) {
           SyMemBackendPoolFree(&pGen->pVm->sAllocator, pNode);
           return rc;
         }
-        //puts("Gonna compile it with PH7_CompileAnnonFunc");
-        pNode->xCode = PH7_CompileAnnonFunc;
+        //puts("Gonna compile it with PH7_CompileAnonFunc");
+        pNode->xCode = PH7_CompileAnonFunc;
       }
     } else if (nKeyword == PH7_TKWRD_CLASS && pPrev && pPrev->pOp && pPrev->pOp->iOp == EXPR_OP_NEW) {
       /* Anonymous class [i.e: new class(1,2) extends Base { ... }]: a terminal node.
