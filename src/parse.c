@@ -791,6 +791,59 @@ Synchronize:
   return rc;
 }
 /*
+ * Collect and assemble the tokens of an anonymous class:
+ *
+ *   new class [(arguments)] [extends Base] [implements Interface, ...] { body }
+ *
+ * On entry *ppCur points to the 'class' keyword which follows the 'new' operator.
+ * On success *ppCur points to the token right after the closing brace of the body.
+ * The whole construct becomes one terminal node of the expression tree, the same
+ * way an anonymous function does, so the ';' and ',' inside the body can not break
+ * the expression apart. The node is compiled by PH7_CompileAnonClass().
+ * When errors,PH7 take care of generating the appropriate error message.
+ */
+static sxi32 ExprAssembleAnonClass(ph7_gen_state *pGen, SyToken **ppCur, SyToken *pEnd) {
+  SyToken *pIn = *ppCur;
+  sxu32 nLine = pIn->nLine;
+  sxi32 rc;
+  pIn++; /* Jump the 'class' keyword */
+  if (pIn < pEnd && (pIn->nType & PH7_TK_LPAREN) /*'('*/) {
+    /* Constructor arguments */
+    pIn++; /* Jump the leading parenthesis '(' */
+    PH7_DelimitNestedTokens(pIn, pEnd, PH7_TK_LPAREN /*'('*/, PH7_TK_RPAREN /*')'*/, &pIn);
+    if (pIn >= pEnd) {
+      rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "new class: missing closing parenthesis ')'");
+      if (rc != SXERR_ABORT) {
+        rc = SXERR_SYNTAX;
+      }
+      return rc;
+    }
+    pIn++; /* Jump the trailing parenthesis ')' */
+  }
+  /* Skip the optional 'extends' and 'implements' clauses: the body starts at the first '{' */
+  while (pIn < pEnd && (pIn->nType & (PH7_TK_OCB /*'{'*/ | PH7_TK_SEMI /*';'*/)) == 0) {
+    pIn++;
+  }
+  if (pIn >= pEnd || (pIn->nType & PH7_TK_OCB) == 0) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "new class: expecting '{' after the class header");
+    if (rc != SXERR_ABORT) {
+      rc = SXERR_SYNTAX;
+    }
+    return rc;
+  }
+  pIn++; /* Jump the leading curly brace '{' */
+  PH7_DelimitNestedTokens(pIn, pEnd, PH7_TK_OCB /*'{'*/, PH7_TK_CCB /*'}'*/, &pIn);
+  if (pIn >= pEnd) {
+    rc = PH7_GenCompileError(&(*pGen), E_ERROR, nLine, "new class: missing closing brace '}'");
+    if (rc != SXERR_ABORT) {
+      rc = SXERR_SYNTAX;
+    }
+    return rc;
+  }
+  *ppCur = &pIn[1]; /* Jump the closing brace */
+  return SXRET_OK;
+}
+/*
  * Return TRUE if the keyword 'match' at pCur starts a match expression:  match ( ... ) { ... }
  * Anything else is a literal, so $obj->match(), Foo::match() and a function named match() still work.
  */
@@ -970,6 +1023,16 @@ static sxi32 ExprExtractNode(ph7_gen_state *pGen, ph7_expr_node **ppNode
         //puts("Gonna compile it with PH7_CompileAnnonFunc");
         pNode->xCode = PH7_CompileAnnonFunc;
       }
+    } else if (nKeyword == PH7_TKWRD_CLASS && pPrev && pPrev->pOp && pPrev->pOp->iOp == EXPR_OP_NEW) {
+      /* Anonymous class [i.e: new class(1,2) extends Base { ... }]: a terminal node.
+       * The 'new' operator was extracted just before and takes this node as its operand.
+       */
+      rc = ExprAssembleAnonClass(&(*pGen), &pCur, pGen->pEnd);
+      if (rc != SXRET_OK) {
+        SyMemBackendPoolFree(&pGen->pVm->sAllocator, pNode);
+        return rc;
+      }
+      pNode->xCode = PH7_CompileAnonClass;
     } else if (nKeyword == PH7_TKWRD_MATCH && ExprIsMatchExpression(pCur, pGen->pEnd, pPrev)) {
       /* match expression: a terminal node, the brackets inside are balanced */
       rc = ExprAssembleMatch(&(*pGen), &pCur, pGen->pEnd);
@@ -1551,11 +1614,14 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
         /* New */
         if (apNode[iLeft]->pOp == 0) {
           ProcNodeConstruct xCons = apNode[iLeft]->xCode;
-          if (xCons != PH7_CompileVariable && xCons != PH7_CompileLiteral && xCons != PH7_CompileSimpleString) {
+          if (xCons != PH7_CompileVariable && 
+              xCons != PH7_CompileLiteral && 
+              xCons != PH7_CompileAnonClass && 
+              xCons != PH7_CompileSimpleString) {
             pToken = apNode[iLeft]->pStart;
             /* Syntax error */
             rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine,
-                                     "'%z': Unexpected token '%z', expecting literal, variable or constructor call",
+                                     "'%z': Unexpected token '%z', expecting literal, 'class', variable,  or constructor call",
                                      &pNode->pOp->sOp, &pToken->sData);
             if (rc != SXERR_ABORT) {
               rc = SXERR_SYNTAX;

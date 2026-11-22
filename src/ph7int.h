@@ -196,6 +196,7 @@ struct SySet {
 #define SySetGetUserData(S) ((S)->pUserData)
 /*
  * A variable length containers for generic data.
+ * 4+4+4+4+4=20 bytes
  */
 struct SyBlob {
   SyMemBackend *pAllocator; /* Memory backend */
@@ -760,17 +761,20 @@ struct SHA1Context {
  * [i.e: string, int, float, resource, object, bool, null] as ph7_values structures.
  * Each ph7_values struct may cache multiple representations (string, integer etc.)
  * of the same value.
+ *
+ * 8+8+4+4+20+4=48 bytes per ph7_value!!
+ * 8+8+4+16+2=38 bytes per ph7_value!!
  */
 struct ph7_value {
-  ph7_real rVal; /* Real value */
+  ph7_real rVal; /* Real value: 8 */  
   union {
-    sxi64 iVal;   /* Integer value */
+    sxi64 iVal;   /* Integer value: 8 */
     void *pOther; /* Other values (Object, Array, Resource, Namespace, etc.) */
   } x;
-  sxi32 iFlags; /* Control flags (see below) */
-  ph7_vm *pVm;  /* Virtual machine that own this instance */
-  SyBlob sBlob; /* String values */
-  sxu32 nIdx;   /* Index number of this entry in the global object allocator */
+  sxi32 iFlags; /* Control flags (see below) 4 */
+  ph7_vm *pVm;  /* Virtual machine that own this instance 4 */ // TODO: CITO: remove this
+  SyBlob sBlob; /* String values 20 / 16*/
+  sxu32 nIdx;   /* Index number of this entry in the global object allocator 4 / 2*/
 };
 
 /* Check if ph7_value is a constant 
@@ -1335,6 +1339,7 @@ struct ph7_class {
 #define PH7_CLASS_TRAIT     0x040
 #define PH7_CLASS_MOUNTED   0x020  /* Class is already mounted */
 #define PH7_CLASS_TRAIT     0x040  /* Class is a trait, can not be instantiated */
+#define PH7_CLASS_ANON      0x080  /* Anonymous class: new class { ... } */
 
 
 /* Class attribute/methods/constants protection levels */
@@ -2083,6 +2088,7 @@ PH7_PRIVATE sxi32 PH7_CompileString(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileArray(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileList(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileAnnonFunc(ph7_gen_state *pGen, sxi32 iCompileFlag);
+PH7_PRIVATE sxi32 PH7_CompileAnonClass(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_CompileMatch(ph7_gen_state *pGen, sxi32 iCompileFlag);
 PH7_PRIVATE sxi32 PH7_InitCodeGenerator(ph7_vm *pVm, ProcConsumer xErr, void *pErrData);
 PH7_PRIVATE sxi32 PH7_ResetCodeGenerator(ph7_vm *pVm, ProcConsumer xErr, void *pErrData);
