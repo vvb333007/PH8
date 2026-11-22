@@ -1430,8 +1430,8 @@ static sxi32 GenStateCompileFunc(ph7_gen_state *pGen, SyString *pName, sxi32 iFl
  * Note that the implementation of annoynmous function and closure under
  * PH7 is completely different from the one used by the zend engine.
  */
-PH7_PRIVATE sxi32 PH7_CompileAnnonFunc(ph7_gen_state *pGen, sxi32 iCompileFlag) {
-  ph7_vm_func *pAnnonFunc; /* Annonymous function body */
+PH7_PRIVATE sxi32 PH7_CompileAnonFunc(ph7_gen_state *pGen, sxi32 iCompileFlag) {
+  ph7_vm_func *pAnonFunc; /* Anonymous function body */
   char zName[512];         /* Unique lambda name */
   static int iCnt = 1;     /* There is no worry about thread-safety here,because only
                 * one thread is allowed to compile the script.
@@ -1464,14 +1464,14 @@ PH7_PRIVATE sxi32 PH7_CompileAnnonFunc(ph7_gen_state *pGen, sxi32 iCompileFlag) 
   PH7_MemObjInitFromString(pGen->pVm, pObj, &sName);
   /* Compile the lambda body */
 
-  rc = GenStateCompileFunc(&(*pGen), &sName, 0, TRUE, &pAnnonFunc);
+  rc = GenStateCompileFunc(&(*pGen), &sName, 0, TRUE, &pAnonFunc);
 //puts("Here2");
   if (rc == SXERR_ABORT) {
     return SXERR_ABORT;
   }
-  if (pAnnonFunc->iFlags & VM_FUNC_CLOSURE) {
+  if (pAnonFunc->iFlags & VM_FUNC_CLOSURE) {
     /* Emit the load closure instruction */
-    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOAD_CLOSURE, 0, 0, pAnnonFunc, 0, pGen);
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOAD_CLOSURE, 0, 0, pAnonFunc, 0, pGen);
   } else {
     /* Emit the load constant instruction */
     PH7_VmEmitInstr(pGen->pVm, PH7_OP_LOADC, 0, nIdx, 0, 0, pGen);
@@ -4958,7 +4958,7 @@ static sxi32 GenStateCompileFuncBody(
   return SXRET_OK;
 }
 /*
- * Compile a PHP function whether is a Standard or Annonymous function.
+ * Compile a PHP function whether is a Standard or Anonymous function.
  * According to the PHP language reference manual.
  *  Function names follow the same rules as other labels in PHP. A valid function name
  *  starts with a letter or underscore, followed by any number of letters, numbers, or
@@ -8351,7 +8351,7 @@ static sxi32 PH7_CompileExpr(
   iNest = 0;
   while (pEnd < pGen->pEnd) {
     if (pEnd->nType & PH7_TK_OCB /* '{' */) {
-      /* Ticket 1433-30: Annonymous/Closure functions body */
+      /* Ticket 1433-30: Anonymous/Closure functions body */
       iNest++;
     } else if (pEnd->nType & PH7_TK_CCB /* '}' */) {
       iNest--;
@@ -8947,20 +8947,20 @@ PH7_PRIVATE sxi32 PH7_CompileScript(
     while ((pCodeGen->pRawIn < pCodeGen->pRawEnd) && (pCodeGen->pRawIn->nType != PH7_TOKEN_PHP)) {
       //fprintf(stderr,"pCodeGen->pRawIn->nType == %d\n",pCodeGen->pRawIn->nType);
       /* Consume the raw chunk without any processing */
-      pRawObj = PH7_ReserveConstObj(&(*pVm), &nObjIdx);
+      pRawObj = PH7_ReserveConstObj(pVm, &nObjIdx);
       if (pRawObj == 0) {
         rc = SXERR_MEM;
         break;
       }
       /* Mark as constant and emit the load constant instruction */
       PH7_MemObjInitFromString(pVm, pRawObj, &pCodeGen->pRawIn->sData);
-      PH7_VmEmitInstr(&(*pVm), PH7_OP_LOADC, 0, nObjIdx, 0, 0, NULL);
+      PH7_VmEmitInstr(pVm, PH7_OP_LOADC, 0, nObjIdx, 0, 0, NULL);
       ++nRawObj;
       pCodeGen->pRawIn++; /* Next chunk */
     }
     if (nRawObj > 0) {
       /* Emit the consume instruction */
-      PH7_VmEmitInstr(&(*pVm), PH7_OP_CONSUME, nRawObj, 0, 0, 0, NULL);
+      PH7_VmEmitInstr(pVm, PH7_OP_CONSUME, nRawObj, 0, 0, 0, NULL);
     }
   }
 
@@ -9001,7 +9001,7 @@ PH7_PRIVATE sxi32 PH7_InitCodeGenerator(
   /* Zero the structure */
   SyZero(pGen, sizeof(ph7_gen_state));
   /* Initial state */
-  pGen->pVm = &(*pVm);
+  pGen->pVm = pVm;
   pGen->xErr = xErr;
 
   pGen->pErrData = pErrData;
@@ -9018,7 +9018,7 @@ PH7_PRIVATE sxi32 PH7_InitCodeGenerator(
   SyBlobInit(&pGen->sNs.sName, &pVm->sAllocator);
   SySetInit(&pGen->sNs.aUse, &pVm->sAllocator, sizeof(ph7_ns_use));
   /* Create the global scope */
-  GenStateInitBlock(pGen, &pGen->sGlobal, GEN_BLOCK_GLOBAL, PH7_VmInstrLength(&(*pVm)), 0);
+  GenStateInitBlock(pGen, &pGen->sGlobal, GEN_BLOCK_GLOBAL, PH7_VmInstrLength(pVm), 0);
   /* Point to the global scope */
   pGen->pCurrent = &pGen->sGlobal;
   return SXRET_OK;

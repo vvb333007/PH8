@@ -105,7 +105,7 @@ PH7_PRIVATE ph7_class_method *PH7_NewClassMethod(ph7_vm *pVm, ph7_class *pClass,
     }
     pNamePtr = &pMeth->sVmName;
     /* Generate a random string */
-    PH7_VmRandomString(&(*pVm), zSalt, sizeof(zSalt));
+    PH7_VmRandomString(pVm, zSalt, sizeof(zSalt));
     pNamePtr->nByte = SyBufferFormat(zName, nByte, "[__%z@%z_%.*s]", &pClass->sName, pName, sizeof(zSalt), zSalt);
     pNamePtr->zString = zName;
 //    fprintf(stderr,"Method %s %x, %x, %x \r\n",zName, iProtection,iFlags,iFuncFlags);
@@ -129,7 +129,7 @@ PH7_PRIVATE ph7_class_method *PH7_NewClassMethod(ph7_vm *pVm, ph7_class *pClass,
   pMeth->iProtection = iProtection;
   pMeth->iFlags = iFlags;
   pMeth->nLine = nLine;
-  PH7_VmInitFuncState(&(*pVm), &pMeth->sFunc, &zName[sizeof(char) * 4 /*[__@*/ + SyStringLength(&pClass->sName)],
+  PH7_VmInitFuncState(pVm, &pMeth->sFunc, &zName[sizeof(char) * 4 /*[__@*/ + SyStringLength(&pClass->sName)],
                       pName->nByte, iFuncFlags | VM_FUNC_CLASS_METHOD, pClass);
   return pMeth;
 }
@@ -496,13 +496,13 @@ static ph7_class_instance *NewClassInstance(ph7_vm *pVm, ph7_class *pClass) {
 PH7_PRIVATE ph7_class_instance *PH7_NewClassInstance(ph7_vm *pVm, ph7_class *pClass) {
   ph7_class_instance *pNew;
   sxi32 rc;
-  pNew = NewClassInstance(&(*pVm), &(*pClass));
+  pNew = NewClassInstance(pVm, &(*pClass));
   if (pNew == 0) {
     return 0;
   }
   /* Associate a private VM frame with this class instance, instantiate class attributes
   */
-  rc = PH7_VmCreateClassInstanceFrame(&(*pVm), pNew);
+  rc = PH7_VmCreateClassInstanceFrame(pVm, pNew);
   if (rc != SXRET_OK) {
     SyMemBackendPoolFree(&pVm->sAllocator, pNew);
     return 0;
@@ -1046,7 +1046,7 @@ PH7_PRIVATE ph7_value *PH7_ClassInstanceExtractAttrValue(ph7_class_instance *pTh
  *     int(991)
  *  }
  * You have noticed that PH7 allow class attributes [i.e: $a,$c,$d in the example above]
- * have any complex expression (even function calls/Annonymous functions) as their default
+ * have any complex expression (even function calls/Anonymous functions) as their default
  * value unlike the standard PHP engine.
  * This is a very powerful feature that you have to look at. 
  */

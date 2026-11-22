@@ -5804,10 +5804,10 @@ PH7_PRIVATE sxi32 PH7_RegisterIORoutine(ph7_vm *pVm) {
   sxu32 n = 0;
   /* Register the functions defined above */
   for (n = 0; n < SX_ARRAYSIZE(aVfsFunc); ++n) {
-    ph7_create_function(&(*pVm), aVfsFunc[n].zName, aVfsFunc[n].xFunc, (void *)pVm->pEngine->pVfs);
+    ph7_create_function(pVm, aVfsFunc[n].zName, aVfsFunc[n].xFunc, (void *)pVm->pEngine->pVfs);
   }
   for (n = 0; n < SX_ARRAYSIZE(aIOFunc); ++n) {
-    ph7_create_function(&(*pVm), aIOFunc[n].zName, aIOFunc[n].xFunc, pVm);
+    ph7_create_function(pVm, aIOFunc[n].zName, aIOFunc[n].xFunc, pVm);
   }
 #ifndef PH7_DISABLE_DISK_IO
   /* Register the file stream if available */

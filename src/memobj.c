@@ -132,7 +132,7 @@ sxi32 MemObjCallClassCastMethod(
     return SXERR_NOTFOUND;
   }
   /* Invoke the desired method */
-  PH7_VmCallClassMethod(&(*pVm), &(*pThis), pMethod, &(*pResult), 0, 0);
+  PH7_VmCallClassMethod(pVm, &(*pThis), pMethod, &(*pResult), 0, 0);
   /* Method successfully called,pResult should hold the return value */
   return SXRET_OK;
 }

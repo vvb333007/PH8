@@ -906,7 +906,7 @@ int ph7_vm_dump_v2(ph7_vm *pVm, int (*xConsumer)(const void *, unsigned int, voi
   }
 #endif
   /* Dump VM instructions */
-  rc = PH7_VmDump(&(*pVm), xConsumer, pUserData);
+  rc = PH7_VmDump(pVm, xConsumer, pUserData);
   return rc;
 }
 /*
@@ -929,7 +929,7 @@ int ph7_vm_config(ph7_vm *pVm, int iConfigOp, ...) {
 #endif
   /* Confiugure the virtual machine */
   va_start(ap, iConfigOp);
-  rc = PH7_VmConfigure(&(*pVm), iConfigOp, ap);
+  rc = PH7_VmConfigure(pVm, iConfigOp, ap);
   va_end(ap);
 #if PH7_ENABLE_THREADS
   /* Leave VM mutex */
@@ -957,7 +957,7 @@ int ph7_vm_exec(ph7_vm *pVm, int *pExitStatus) {
   }
 #endif
   /* Execute PH7 byte-code */
-  rc = PH7_VmByteCodeExec(&(*pVm));
+  rc = PH7_VmByteCodeExec(pVm);
   if (pExitStatus) {
     /* Exit status */
     *pExitStatus = pVm->iExitStatus;
@@ -1031,7 +1031,7 @@ int ph7_vm_reset(ph7_vm *pVm) {
     return PH7_ABORT; /* Another thread have released this instance */
   }
 #endif
-  rc = PH7_VmReset(&(*pVm));
+  rc = PH7_VmReset(pVm);
 #if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
@@ -1075,7 +1075,7 @@ int ph7_vm_release(ph7_vm *pVm) {
   }
 
   pEngine = pVm->pEngine;
-  rc = PH7_VmRelease(&(*pVm));
+  rc = PH7_VmRelease(pVm);
 #if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
@@ -1131,7 +1131,7 @@ int ph7_create_function(ph7_vm *pVm, const char *zName, int (*xFunc)(ph7_context
   }
 #endif
   /* Install the foreign function */
-  rc = PH7_VmInstallForeignFunction(&(*pVm), &sName, xFunc, pUserData);
+  rc = PH7_VmInstallForeignFunction(pVm, &sName, xFunc, pUserData);
 #if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
@@ -1200,7 +1200,7 @@ int ph7_create_constant(ph7_vm *pVm, const char *zName, void (*xExpand)(ph7_valu
   }
 #endif
   /* Perform the registration */
-  rc = PH7_VmRegisterConstant(&(*pVm), &sName, xExpand, pUserData);
+  rc = PH7_VmRegisterConstant(pVm, &sName, xExpand, pUserData);
 #if PH7_ENABLE_THREADS
   /* Leave VM mutex */
   SyMutexLeave(sMPGlobal.pMutexMethods, pVm->pMutex); /* NO-OP if sMPGlobal.nThreadingLevel != PH7_THREAD_LEVEL_MULTI */
@@ -1269,7 +1269,7 @@ ph7_value *ph7_new_array(ph7_vm *pVm) {
     return 0;
   }
   /* Create a new hashmap first */
-  pMap = PH7_NewHashmap(&(*pVm), 0, 0);
+  pMap = PH7_NewHashmap(pVm, 0, 0);
   if (pMap == 0) {
     return 0;
   }

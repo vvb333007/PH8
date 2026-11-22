@@ -9573,11 +9573,11 @@ static const ph7_builtin_func aBuiltInFunc[] = {
 PH7_PRIVATE void PH7_RegisterBuiltInFunction(ph7_vm *pVm) {
   sxu32 n;
   for (n = 0; n < SX_ARRAYSIZE(aBuiltInFunc); ++n) {
-    ph7_create_function(&(*pVm), aBuiltInFunc[n].zName, aBuiltInFunc[n].xFunc, 0);
+    ph7_create_function(pVm, aBuiltInFunc[n].zName, aBuiltInFunc[n].xFunc, 0);
   }
   /* Register hashmap functions [i.e: array_merge(),sort(),count(),array_diff(),...] */
-  PH7_RegisterHashmapFunctions(&(*pVm));
+  PH7_RegisterHashmapFunctions(pVm);
   /* Register IO functions [i.e: fread(),fwrite(),chdir(),mkdir(),file(),...] */
-  PH7_RegisterIORoutine(&(*pVm));
+  PH7_RegisterIORoutine(pVm);
 }
 

@@ -1259,7 +1259,7 @@ PH7_PRIVATE ph7_hashmap *PH7_NewHashmap(
   /* Zero the structure */
   SyZero(pMap, sizeof(ph7_hashmap));
   /* Fill in the structure */
-  pMap->pVm = &(*pVm);
+  pMap->pVm = pVm;
   pMap->iRef = 1;
   /* Default hash functions */
   pMap->xIntHash = xIntHash ? xIntHash : IntHash;
@@ -1305,17 +1305,17 @@ PH7_PRIVATE sxi32 PH7_HashmapCreateSuper(ph7_vm *pVm) {
   sxi32 rc;
   sxu32 n;
   /* Allocate a new hashmap for the $GLOBALS array */
-  pMap = PH7_NewHashmap(&(*pVm), 0, 0);
+  pMap = PH7_NewHashmap(pVm, 0, 0);
   if (pMap == 0) {
     return SXERR_MEM;
   }
   pVm->pGlobal = pMap;
   /* Reserve a ph7_value for the $GLOBALS array*/
-  pObj = PH7_ReserveMemObj(&(*pVm));
+  pObj = PH7_ReserveMemObj(pVm);
   if (pObj == 0) {
     return SXERR_MEM;
   }
-  PH7_MemObjInitFromArray(&(*pVm), pObj, pMap);
+  PH7_MemObjInitFromArray(pVm, pObj, pMap);
   /* Record object index */
   pVm->nGlobalIdx = pObj->nIdx;
   /* Install the special $GLOBALS array */
@@ -1327,17 +1327,17 @@ PH7_PRIVATE sxi32 PH7_HashmapCreateSuper(ph7_vm *pVm) {
   for (n = 0; n < SX_ARRAYSIZE(azSuper); n++) {
     ph7_value *pSuper;
     /* Request an empty array */
-    pSuper = ph7_new_array(&(*pVm));
+    pSuper = ph7_new_array(pVm);
     if (pSuper == 0) {
       return SXERR_MEM;
     }
     /* Install */
-    rc = ph7_vm_config(&(*pVm), PH7_VM_CONFIG_CREATE_SUPER, azSuper[n] /* Super-global name*/, pSuper /* Super-global value */);
+    rc = ph7_vm_config(pVm, PH7_VM_CONFIG_CREATE_SUPER, azSuper[n] /* Super-global name*/, pSuper /* Super-global value */);
     if (rc != SXRET_OK) {
       return rc;
     }
     /* Release the value now it have been installed */
-    ph7_release_value(&(*pVm), pSuper);
+    ph7_release_value(pVm, pSuper);
   }
   /* Set some $_SERVER entries */
   pFile = (SyString *)SySetPeek(&pVm->aFiles);
@@ -5567,7 +5567,7 @@ static const ph7_builtin_func aHashmapFunc[] = {
 PH7_PRIVATE void PH7_RegisterHashmapFunctions(ph7_vm *pVm) {
   sxu32 n;
   for (n = 0; n < SX_ARRAYSIZE(aHashmapFunc); n++) {
-    ph7_create_function(&(*pVm), aHashmapFunc[n].zName, aHashmapFunc[n].xFunc, 0);
+    ph7_create_function(pVm, aHashmapFunc[n].zName, aHashmapFunc[n].xFunc, 0);
   }
 }
 /*
