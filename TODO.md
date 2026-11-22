@@ -174,6 +174,14 @@ implement __toArray() magic method
 
 Implement `$a = $b ?: $c;`
 
+
+### 2. '<=>' Saceship operator
+
+~~Implement `$a = $b <=> $c;`~~
+
+
+
+
 ### 2. User constants caching:
 
 
