@@ -3022,6 +3022,38 @@ static sxi32 VmByteCodeExec(
         break;
 
       /*
+ * JELVIS: P1 P2 *
+ *
+ * Elvis operator ( EXPR ?: EXPR ) support. Take the jump if the top value is
+ * truth (converts to TRUE). Unlike JNZ the top value is NOT converted to boolean:
+ * the truth test is done on a temporary copy, so the original value stays on the
+ * stack and becomes the result of the whole expression.
+ * Pop the top most entry in the stack if P1 is zero.
+ * TODO: Should we perform bool test in place instead of tunning through Load/CVT?
+ */
+      case PH7_OP_JELVIS:
+        {
+          ph7_value sTmp;
+          sxi32 iTruth;
+
+          STACK_UNDERFLOW_GOTO(pTos);
+
+          PH7_MemObjInit(pVm, &sTmp);
+          PH7_MemObjLoad(pTos, &sTmp);
+          PH7_MemObjToBool(&sTmp);
+          iTruth = (sxi32)sTmp.x.iVal;
+          PH7_MemObjRelease(&sTmp);
+
+          if (iTruth)
+            pc = pInstr->iP2 - 1;
+
+          if (!pInstr->iP1)
+            VmPopOperand(&pTos, 1);
+
+          break;
+        }
+
+      /*
  * NOOP: * * *
  *
  * Do nothing. This instruction is often useful as a jump
@@ -7098,6 +7130,7 @@ static char const * aOpNames[] = {
     [PH7_OP_JZ] = "JZ",
     [PH7_OP_JNZ] = "JNZ",
     [PH7_OP_JNN] = "JNN",
+    [PH7_OP_JELVIS] = "JELVIS",
     [PH7_OP_POP] = "POP",
     [PH7_OP_CAT] = "CAT",
     [PH7_OP_CVT_INT] = "CVT.INT",

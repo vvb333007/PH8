@@ -414,9 +414,9 @@ In Zend PHP, compliance with `never` is checked at compile time, although static
 
 ## 7. Operators
 
-### 7.1. The `?:` (Elvis) and `??=` Operators Are Not Supported
+### 7.1. The `??=` Operator Is Not Supported
 
-Use the regular ternary operator `? a : b` and the null coalescing operator `??` instead.
+Use the regular null coalescing operator `??` instead.
 
 ### 7.2. The `?->` (Nullsafe) Operator
 

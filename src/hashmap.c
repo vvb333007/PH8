@@ -5498,68 +5498,86 @@ static int ph7_hashmap_walk_recursive(ph7_context *pCtx, int nArg, ph7_value **a
  * Table of hashmap functions.
  */
 static const ph7_builtin_func aHashmapFunc[] = {
-  { "count", ph7_hashmap_count },
-  { "sizeof", ph7_hashmap_count },
-  { "array_key_exists", ph7_hashmap_key_exists },
-  { "array_pop", ph7_hashmap_pop },
-  { "array_push", ph7_hashmap_push },
-  { "array_shift", ph7_hashmap_shift },
-  /* array_unshift() is implemented in a stdlib as a native PHP function */
-  { "array_product", ph7_hashmap_product },
-  { "array_sum", ph7_hashmap_sum },
-  { "array_keys", ph7_hashmap_keys },
-  { "array_values", ph7_hashmap_values },
-  { "array_same", ph7_hashmap_same }, /* Symisc eXtension */
-  { "array_merge", ph7_hashmap_merge },
-  { "array_slice", ph7_hashmap_slice },
-  { "array_splice", ph7_hashmap_splice },
-  { "array_search", ph7_hashmap_search },
-  { "array_diff", ph7_hashmap_diff },
-  { "array_udiff", ph7_hashmap_udiff },
-  { "array_diff_assoc", ph7_hashmap_diff_assoc },
-  { "array_diff_uassoc", ph7_hashmap_diff_uassoc },
-  { "array_diff_key", ph7_hashmap_diff_key },
-  { "array_intersect", ph7_hashmap_intersect },
-  { "array_intersect_assoc", ph7_hashmap_intersect_assoc },
-  { "array_uintersect", ph7_hashmap_uintersect },
-  { "array_intersect_key", ph7_hashmap_intersect_key },
+
+  { "array_chunk", ph7_hashmap_chunk },
+  { "array_combine", ph7_hashmap_combine },
   { "array_copy", ph7_hashmap_copy },
+  { "array_diff", ph7_hashmap_diff },
+  { "array_diff_assoc", ph7_hashmap_diff_assoc },
+  { "array_diff_key", ph7_hashmap_diff_key },
+  { "array_diff_uassoc", ph7_hashmap_diff_uassoc },
   { "array_erase", ph7_hashmap_erase },
   { "array_fill", ph7_hashmap_fill },
   { "array_fill_keys", ph7_hashmap_fill_keys },
-  { "array_combine", ph7_hashmap_combine },
-  { "array_reverse", ph7_hashmap_reverse },
-  { "array_unique", ph7_hashmap_unique },
-  { "array_flip", ph7_hashmap_flip },
-  { "array_rand", ph7_hashmap_rand },
-  { "array_chunk", ph7_hashmap_chunk },
-  { "array_pad", ph7_hashmap_pad },
-  { "array_replace", ph7_hashmap_replace },
   { "array_filter", ph7_hashmap_filter },
+//{ "array_find", ph7_hashmap_find }, // TODO:
+//{ "array_find_key", ph7_hashmap_find_key }, // TODO:
+
+  { "array_flip", ph7_hashmap_flip },
+  { "array_intersect", ph7_hashmap_intersect },
+  { "array_intersect_assoc", ph7_hashmap_intersect_assoc },
+  { "array_intersect_key", ph7_hashmap_intersect_key },
+//{ "array_intersect_uassoc", ph7_hashmap_intersect_uassoc }, // TODO:
+//{ "array_intersect_ukey", ph7_hashmap_intersect_ukey }, // TODO:
+//{ "array_is_list", ph7_hashmap_is_list }, // TODO:
+
+  { "array_key_exists", ph7_hashmap_key_exists },
+  { "array_keys", ph7_hashmap_keys },
+//{ "array_key_first", ph7_hashmap_key_first }, // TODO:
+//{ "array_key_last", ph7_hashmap_key_last }, // TODO:
+//{ "array_last", ph7_hashmap_last }, // TODO:
   { "array_map", ph7_hashmap_map },
+  { "array_merge", ph7_hashmap_merge },
+//{ "array_merge_recursive", ph7_hashmap_merge_recursive }, // TODO:
+//{ "array_multislot", ph7_hashmap_multislot }, // TODO:
+  { "array_pad", ph7_hashmap_pad },
+  { "array_pop", ph7_hashmap_pop },
+  { "array_product", ph7_hashmap_product },
+  { "array_push", ph7_hashmap_push },
+  { "array_rand", ph7_hashmap_rand },
   { "array_reduce", ph7_hashmap_reduce },
+  { "array_replace", ph7_hashmap_replace },
+//{ "array_replace_recursive", ph7_hashmap_replace_recursive }, // TODO:
+  { "array_reverse", ph7_hashmap_reverse },
+  { "array_same", ph7_hashmap_same }, /* Symisc eXtension */
+  { "array_search", ph7_hashmap_search },
+  { "array_shift", ph7_hashmap_shift },
+  { "array_slice", ph7_hashmap_slice },
+  { "array_splice", ph7_hashmap_splice },
+  { "array_sum", ph7_hashmap_sum },
+  { "array_udiff", ph7_hashmap_udiff },
+//{ "array_udiff_assoc", ph7_hashmap_udiff_assoc }, // TODO:
+//{ "array_udiff_uassoc", ph7_hashmap_udiff_uassoc }, // TODO:
+  { "array_uintersect", ph7_hashmap_uintersect },
+//{ "array_uintersect_assoc", ph7_hashmap_uintersect_assoc }, // TODO:
+//{ "array_uintersect_uassoc", ph7_hashmap_uintersect_uassoc }, // TODO:
+  { "array_unique", ph7_hashmap_unique },
+/* array_unshift() is implemented in a stdlib as a native PHP function */
+  { "array_values", ph7_hashmap_values },
   { "array_walk", ph7_hashmap_walk },
   { "array_walk_recursive", ph7_hashmap_walk_recursive },
-  { "in_array", ph7_hashmap_in_array },
-  { "sort", ph7_hashmap_sort },
-  { "asort", ph7_hashmap_asort },
   { "arsort", ph7_hashmap_arsort },
-  { "ksort", ph7_hashmap_ksort },
-  { "krsort", ph7_hashmap_krsort },
-  { "rsort", ph7_hashmap_rsort },
-  { "usort", ph7_hashmap_usort },
-  { "uasort", ph7_hashmap_uasort },
-  { "uksort", ph7_hashmap_uksort },
-  { "shuffle", ph7_hashmap_shuffle },
-  { "range", ph7_hashmap_range },
+  { "asort", ph7_hashmap_asort },
+  { "count", ph7_hashmap_count },
   { "current", ph7_hashmap_current },
   { "each", ph7_hashmap_each },
-  { "pos", ph7_hashmap_current },
-  { "next", ph7_hashmap_next },
-  { "prev", ph7_hashmap_prev },
   { "end", ph7_hashmap_end },
+  { "in_array", ph7_hashmap_in_array },
+  { "key", ph7_hashmap_simple_key },
+  { "krsort", ph7_hashmap_krsort },
+  { "ksort", ph7_hashmap_ksort },
+  { "next", ph7_hashmap_next },
+  { "pos", ph7_hashmap_current },
+  { "prev", ph7_hashmap_prev },
+  { "range", ph7_hashmap_range },
   { "reset", ph7_hashmap_reset },
-  { "key", ph7_hashmap_simple_key }
+  { "rsort", ph7_hashmap_rsort },
+  { "shuffle", ph7_hashmap_shuffle },
+  { "sizeof", ph7_hashmap_count },
+  { "sort", ph7_hashmap_sort },
+  { "uasort", ph7_hashmap_uasort },
+  { "uksort", ph7_hashmap_uksort },
+  { "usort", ph7_hashmap_usort },
 };
 /*
  * Register the built-in hashmap functions defined above.

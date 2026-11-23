@@ -1049,6 +1049,7 @@ struct ph7_expr_node {
 };
 /* Node Construct flags */
 #define EXPR_NODE_PRE_INCR 0x01 /* Pre-icrement/decrement [i.e: ++$i,--$j] node */
+#define EXPR_NODE_ELVIS    0x02 /* Elvis operator node [i.e: $a ?: $b]: pLeft holds the tested value, pRight the fallback, pCond is NULL */
 /*
  * A block of instructions is recorded in an instance of the following structure.
  * This structure is used only during compile-time and have no meaning
@@ -1727,6 +1728,7 @@ enum ph7_vm_op {
   PH7_OP_MEMBERNS, /* ?-> */
 
   PH7_OP_JNN,
+  PH7_OP_JELVIS,   /* Jump if the top value is truthy, keep the value as is (Elvis operator ?:) */
 
   PH7_OP_CVT_RELIABLE,     /* (reliable)$x cast (memobj flag control only) */
   PH7_OP_CVT_UNRELIABLE,   /* (unreliable)$x cast (memobj flag control only) */

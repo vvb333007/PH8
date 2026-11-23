@@ -8122,13 +8122,36 @@ static sxi32 GenStateEmitExprCode(
   }
   if (pNode->pOp->iOp == EXPR_OP_QUESTY) {
     sxu32 nJz, nJmp;
+    nJz = nJmp = 0; /* cc -O6 warning */
     /* Ternary operator require special handling */
+    if (pNode->iFlags & EXPR_NODE_ELVIS) {
+      /* Elvis operator ( EXPR ?: EXPR ): tested value is also the result when it is 'true',
+       * so it is evaluated only once and kept on the stack by JELVIS:
+       *   <value> JELVIS(1, end:, 0),  POP(1,0,0)  <fallback>  end:
+       */
+      rc = GenStateEmitExprCode(&(*pGen), pNode->pLeft, iFlags);
+      if (rc != SXRET_OK) {
+        return rc;
+      }
+      PH7_VmEmitInstr(pGen->pVm, PH7_OP_JELVIS, 1 /* Keep the value on the stack */, 0, 0, &nJmp, pGen);
+      /* Value is falsy: discard it and compute the fallback */
+      PH7_VmEmitInstr(pGen->pVm, PH7_OP_POP, 1, 0, 0, 0, pGen);
+      rc = GenStateEmitExprCode(&(*pGen), pNode->pRight, iFlags);
+      if (rc != SXRET_OK) {
+        return rc;
+      }
+      /* Resolve the jump destination: the first instruction after the fallback */
+      pInstr = PH7_VmGetInstr(pGen->pVm, nJmp);
+      if (pInstr) {
+        pInstr->iP2 = PH7_VmInstrLength(pGen->pVm);
+      }
+      return SXRET_OK;
+    }
     /* Phase#1: Compile the condition */
     rc = GenStateEmitExprCode(&(*pGen), pNode->pCond, iFlags);
     if (rc != SXRET_OK) {
       return rc;
     }
-    nJz = nJmp = 0; /* cc -O6 warning */
     /* Phase#2: Emit the false jump */
     PH7_VmEmitInstr(pGen->pVm, PH7_OP_JZ, 0, 0, 0, &nJz, pGen);
     if (pNode->pLeft) {

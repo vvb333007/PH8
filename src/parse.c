@@ -1783,6 +1783,7 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
     if (pNode->pOp && pNode->pOp->iOp == EXPR_OP_QUESTY && pNode->pLeft == 0) {
 
       sxi32 iNest = 1;
+      sxi32 bElvis = FALSE; /* TRUE: 'then' part is omitted, ie. EXPR ?: EXPR */
 
       if (iLeft < 0 || !NODE_ISTERM(iLeft)) {
         /* Missing condition */
@@ -1796,7 +1797,8 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
       iRight = iCur + 1;
       while (iRight < nToken) {
         if (apNode[iRight]) {
-          if (apNode[iRight]->pOp && apNode[iRight]->pOp->iOp == EXPR_OP_QUESTY && apNode[iRight]->pCond == 0) {
+          if (apNode[iRight]->pOp && apNode[iRight]->pOp->iOp == EXPR_OP_QUESTY && apNode[iRight]->pCond == 0 &&
+              (apNode[iRight]->iFlags & EXPR_NODE_ELVIS) == 0) {
             /* Increment nesting level */
             ++iNest;
           } else if (apNode[iRight]->pStart->nType & PH7_TK_COLON /*:*/) {
@@ -1818,14 +1820,9 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
         /* Link the node to the tree */
         pNode->pLeft = apNode[iCur + 1];
       } else {
-/* TODO: support for Elvis ( EXPR ?: EXPR) operator */        
-        rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "'%z': Missing 'then' expression", &pNode->pOp->sOp);
-
-        if (rc != SXERR_ABORT) {
-          rc = SXERR_SYNTAX;
-        }
-        return rc;
-
+        /* Empty 'then' part: this is the Elvis operator ( EXPR ?: EXPR ).
+         * The ':' node sits right after '?', it is dropped below together with the 'then' slot (see below) */
+        bElvis = TRUE;
       }
       apNode[iCur + 1] = 0;
       if (iRight + 1 < nToken) {
@@ -1844,8 +1841,15 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
         }
         return rc;
       }
-      /* Point to the condition */
-      pNode->pCond = apNode[iLeft];
+      if (bElvis) {
+        /* Elvis: the tested value goes to pLeft, so the node is a valid term (NODE_ISTERM) for the
+         * enclosing operators; pCond stays NULL. */
+        pNode->pLeft = apNode[iLeft];
+        pNode->iFlags |= EXPR_NODE_ELVIS;
+      } else {
+        /* Point to the condition */
+        pNode->pCond = apNode[iLeft];
+      }
       apNode[iLeft] = 0;
       break;
     }
