@@ -8134,6 +8134,7 @@ static sxi32 GenStateEmitExprCode(
         return rc;
       }
       PH7_VmEmitInstr(pGen->pVm, PH7_OP_JELVIS, 1 /* Keep the value on the stack */, 0, 0, &nJmp, pGen);
+
       /* Value is falsy: discard it and compute the fallback */
       PH7_VmEmitInstr(pGen->pVm, PH7_OP_POP, 1, 0, 0, 0, pGen);
       rc = GenStateEmitExprCode(&(*pGen), pNode->pRight, iFlags);
