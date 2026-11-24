@@ -1950,7 +1950,9 @@ enum json_err_code {
   JSON_ERROR_SYNTAX,         /* Syntax error. */
   JSON_ERROR_UTF8            /* Malformed UTF-8 characters */
 };
+
 /* The following constants can be combined to form options for json_encode(). */
+
 #define JSON_HEX_TAG 0x01            /* All < and > are converted to \u003C and \u003E. */
 #define JSON_HEX_AMP 0x02            /* All &s are converted to \u0026. */
 #define JSON_HEX_APOS 0x04           /* All ' are converted to \u0027. */

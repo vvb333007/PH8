@@ -1785,6 +1785,7 @@ static sxi32 ExprMakeTree(ph7_gen_state *pGen, ph7_expr_node **apNode, sxi32 nTo
       sxi32 iNest = 1;
       sxi32 bElvis = FALSE; /* TRUE: 'then' part is omitted, ie. EXPR ?: EXPR */
 
+
       if (iLeft < 0 || !NODE_ISTERM(iLeft)) {
         /* Missing condition */
         rc = PH7_GenCompileError(pGen, E_ERROR, pNode->pStart->nLine, "'%z': Syntax error", &pNode->pOp->sOp);
