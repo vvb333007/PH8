@@ -456,6 +456,7 @@ static sxi32 TokenizePHP(SyStream *pStream, SyToken *pToken, void *pUserData, vo
         }
         break;
       case '&':
+
         pToken->nType |= PH7_TK_AMPER;
         if (pStream->zText < pStream->zEnd) {
           if (pStream->zText[0] == '&') {

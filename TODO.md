@@ -172,7 +172,7 @@ implement __toArray() magic method
 
 ### 1. '?:' Elvis operator support
 
-Implement `$a = $b ?: $c;`
+~~Implement `$a = $b ?: $c;`~~
 
 
 ### 2. '<=>' Saceship operator
@@ -342,10 +342,10 @@ Do fallback only if there is only 1 candidate~~
 
 ~~Implement callable type~~
 
-### 19.  ?? operator 
+### 19.  ~~?? operator ~~
 
 
-( ~~?? as a null coalesce OP~~, and ??= null coalesce assignment)
+( ~~?? as a null coalesce OP~~, and ~~??= null coalesce assignment~~)
 
 ### 20.  ?-> nullsafe operator  
 
@@ -356,6 +356,7 @@ Do fallback only if there is only 1 candidate~~
 
 
 This is required in order to minimize expensive OP_CALL operations on FFI math functions:
+
 abs()       -> OP_ABS
 ceil()      -> OP_CEIL
 floor()     -> OP_FLOOR

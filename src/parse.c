@@ -251,6 +251,7 @@ static const ph7_expr_op aOpTable[] = {
   /* Precedence 7,non-associative */
   { { "instanceof", sizeof("instanceof") - 1 }, EXPR_OP_INSTOF, 7, EXPR_OP_NON_ASSOC, PH7_OP_IS_A },
 
+
 #if PH7_ENABLE_MATH_FUNC
 #if 0
    /* mathlib operators, non-associative */

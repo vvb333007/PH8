@@ -1963,6 +1963,7 @@ enum json_err_code {
 #define JSON_PRETTY_PRINT 0x80       /* Use whitespace in returned data to format it.*/
 #define JSON_UNESCAPED_SLASHES 0x100 /* Don't escape '/' */
 #define JSON_UNESCAPED_UNICODE 0x200 /* Not used */
+
 /* memobj.c function prototypes */
 PH7_PRIVATE sxi32 PH7_MemObjDump(SyBlob *pOut, ph7_value *pObj, int ShowType, int nTab, int nDepth, int isRef);
 PH7_PRIVATE const char *PH7_MemObjTypeDump(ph7_value *pVal);

@@ -7154,6 +7154,7 @@ static char const * aOpNames[] = {
     [PH7_OP_DONE] = "RET",
     [PH7_OP_HALT] = "HALT",
 
+
     /* Output */
     [PH7_OP_CONSUME] = "ECHO",
 
