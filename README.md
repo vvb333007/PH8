@@ -34,7 +34,7 @@ Memory footprint: requires about 100KiB of memory for the Engine plus ~180 KiB p
 6. Typed class properties implemented
 7. Function return types; `:never` return type; `callable` type;
 8. Enums
-9. Anonymous classes
+9. Namespaces and Anonymous classes
 10. Traits
 11. Class property promotion
 12. Operators: ?-> , ??, ??=, ?:, <=>  (nullsafe, null coalesce/store, elvis and a spaceship)
