@@ -597,6 +597,7 @@ PH7_PRIVATE sxi32 PH7_MemObjToHashmap(ph7_value *pObj) {
  * TODO: casting of an array to an object must be done in a special way: properties must be created
  */
 PH7_PRIVATE sxi32 PH7_MemObjToObject(ph7_value *pObj) {
+
   if ((pObj->iFlags & MEMOBJ_OBJ) == 0) {
     ph7_class_instance *pStd;
     ph7_class_method *pCons;

@@ -3064,6 +3064,39 @@ static sxi32 VmByteCodeExec(
       case PH7_OP_NULLC: 
         break;
       /*
+ * NULLCE: * * *
+ *
+ * Null coalescing assignment ( $a ??= EXPR ). The value is on the top of the stack, the
+ * receiver (it was found to be null by JNN) is next on the stack. Store the value into
+ * the receiver, pop the value. The stored value is left on the stack as the result.
+ */
+      case PH7_OP_NULLCE:
+        {
+          ph7_value *pNos = &pTos[-1];
+          ph7_value *pObj;
+          sxu32 nIdx;
+
+          STACK_UNDERFLOW_GOTO(pNos);
+
+          nIdx = pNos->nIdx;
+          if (nIdx == SXU32_HIGH) {
+
+            VM_EXCEPTION_GOTO("__typeerror",11,"'??=': can not assign: expression on the left is a constant [PC: %08x]", pc)
+
+          } else if ((pObj = (ph7_value *)SySetAt(&pVm->aMemObj, nIdx)) != 0) {
+            if (pObj->iFlags & MEMOBJ_FIXEDTYPE) {
+              /* Typed property: convert the value to the type of the receiver */
+              PH7_MemObjCast(pTos, pObj->iFlags);
+            }
+            PH7_MemObjStore(pTos, pObj);
+          }
+          /* The result of the expression is the stored value, not an l-value anymore */
+          PH7_MemObjStore(pTos, pNos);
+          pNos->nIdx = SXU32_HIGH;
+          VmPopOperand(&pTos, 1);
+          break;
+        }
+      /*
  * POP: P1 * *
  *
  * Pop P1 elements from the operand stack.
@@ -7117,32 +7150,55 @@ PH7_PRIVATE sxi32 PH7_VmOutputConsumeAp(
  */
 static char const * aOpNames[] = {
 
-    [PH7_OP_DONE] = "DONE",
+    /* Execution control */
+    [PH7_OP_DONE] = "RET",
     [PH7_OP_HALT] = "HALT",
-    [PH7_OP_LOAD] = "LOAD",
-    [PH7_OP_LOADC] = "LOAD.C",
-    [PH7_OP_LOAD_MAP] = "LOAD.MAP",
-    [PH7_OP_LOAD_LIST] = "LOAD.LIST",
-    [PH7_OP_LOAD_IDX] = "LOAD.IDX",
-    [PH7_OP_LOAD_CLOSURE] = "LOAD.CL",
+
+    /* Output */
+    [PH7_OP_CONSUME] = "ECHO",
+
+    /* Put value on the stack */
+    [PH7_OP_LOAD] = "PUSH.VAR",
+    [PH7_OP_LOADC] = "PUSH.CONST",
+    [PH7_OP_LOAD_MAP] = "PUSH.MAP",
+    [PH7_OP_LOAD_LIST] = "PUSH.LIST",
+    [PH7_OP_LOAD_IDX] = "PUSH.IDX",
+    [PH7_OP_LOAD_CLOSURE] = "PUSH.CLOSURE",
+    [PH7_OP_LOAD_REF] = "PUSH.REF",
+    [PH7_OP_LOAD_EXCEPTION] = "PUSH.EXC",
+
+    /* Pop values from the stack. */
+    [PH7_OP_POP] = "POP",
+    [PH7_OP_POP_EXCEPTION]= "POP.EXC",
+
+
+    /* Noops */
     [PH7_OP_NULLC] = "NULC",
     [PH7_OP_NOOP] = "NOOP",
+
+    /* Branching */
     [PH7_OP_JMP] = "JMP",
     [PH7_OP_JZ] = "JZ",
     [PH7_OP_JNZ] = "JNZ",
-    [PH7_OP_JNN] = "JNN",
-    [PH7_OP_JELVIS] = "JELVIS",
-    [PH7_OP_POP] = "POP",
-    [PH7_OP_CAT] = "CAT",
-    [PH7_OP_CVT_INT] = "CVT.INT",
-    [PH7_OP_CVT_STR] = "CVT.STR",
-    [PH7_OP_CVT_REAL] = "CVT.REAL",
-    [PH7_OP_CVT_CALLABLE] = "CVT.CALL",
+    [PH7_OP_JNN] = "JNN",        // Jump Not Null
+    [PH7_OP_JELVIS] = "JELVIS",  // Jump which is used in `?:` operator
+
+    
+    /* Function call */
     [PH7_OP_CALL] = "CALL",
+
+    /* Operators */
+    [PH7_OP_CAT] = "CAT",
     [PH7_OP_UMINUS] = "NEG",
     [PH7_OP_UPLUS] = "UPLUS",
     [PH7_OP_BITNOT] = "NOT.B",
     [PH7_OP_LNOT] = "NOT.L",
+    [PH7_OP_BAND] = "AND.B",
+    [PH7_OP_BXOR] = "XOR.B",
+    [PH7_OP_BOR] = "OR.B",
+    [PH7_OP_LAND] = "AND.L",
+    [PH7_OP_LOR] = "OR.L",
+    [PH7_OP_LXOR] = "XOR.L",
     [PH7_OP_MUL] = "MUL",
     [PH7_OP_POW] = "POW",
     [PH7_OP_DIV] = "DIV",
@@ -7151,6 +7207,17 @@ static char const * aOpNames[] = {
     [PH7_OP_SUB] = "SUB",
     [PH7_OP_SHL] = "SHL",
     [PH7_OP_SHR] = "SHR",
+    [PH7_OP_INCR] = "INC",
+    [PH7_OP_DECR] = "DEC",
+
+    /* Objects (operators) */
+    [PH7_OP_NEW] = "NEW",
+    [PH7_OP_CLONE] = "CLONE",
+    [PH7_OP_IS_A] = "IS.A",    // 'instanceof' operatoor
+
+    /* Comparisions; TODO: flags register? */
+    [PH7_OP_SEQ] = "EQ.S",
+    [PH7_OP_SNE] = "NEQ.S",
     [PH7_OP_LT] = "LT",
     [PH7_OP_LE] = "LE",
     [PH7_OP_GT] = "GT",
@@ -7160,29 +7227,32 @@ static char const * aOpNames[] = {
     [PH7_OP_TEQ] = "EQ.T",
     [PH7_OP_TNE] = "NEQ.T",
     [PH7_OP_CMP] = "CMP",
-    [PH7_OP_BAND] = "AND.B",
-    [PH7_OP_BXOR] = "XOR.B",
-    [PH7_OP_BOR] = "OR.B",
-    [PH7_OP_LAND] = "AND.L",
-    [PH7_OP_LOR] = "OR.L",
-    [PH7_OP_LXOR] = "XOR.L",
-    [PH7_OP_STORE] = "STORE",
-    [PH7_OP_STORE_IDX] = "STORE.IDX",
-    [PH7_OP_STORE_IDX_REF] = "STORE.IDX.R",
+
+    /* Reserved */
     [PH7_OP_PULL] = "STACK.PULL",
     [PH7_OP_SWAP] = "STACK.SWAP",
-    [PH7_OP_YIELD] = "STACK.YIELD",
+    [PH7_OP_YIELD] = "YIELD",
+
+    /* Type casts */
     [PH7_OP_CVT_BOOL] = "CVT.BOOL",
     [PH7_OP_CVT_NULL] = "CVT.NULL",
     [PH7_OP_CVT_ARRAY] = "CVT.ARRAY",
     [PH7_OP_CVT_OBJ] = "CVT.OBJ",
     [PH7_OP_CVT_NUMC] = "CVT.NUMC",
-    [PH7_OP_INCR] = "INC",
-    [PH7_OP_DECR] = "DEC",
-    [PH7_OP_SEQ] = "EQ.S",
-    [PH7_OP_SNE] = "NEQ.S",
-    [PH7_OP_NEW] = "NEW",
-    [PH7_OP_CLONE] = "CLONE",
+    [PH7_OP_CVT_INT] = "CVT.INT",
+    [PH7_OP_CVT_STR] = "CVT.STR",
+    [PH7_OP_CVT_REAL] = "CVT.REAL",
+    [PH7_OP_CVT_CALLABLE] = "CVT.CALL",
+    [PH7_OP_CVT_RELIABLE] = "CVT.REL",
+    [PH7_OP_CVT_UNRELIABLE] = "CVT.UNREL",
+    [PH7_OP_RELIABLE] = "MSR.RELIABLE",
+
+
+    /* Store value from the TOS to a variable */
+    [PH7_OP_STORE] = "STORE",
+    [PH7_OP_STORE_IDX] = "STORE.IDX",
+    [PH7_OP_STORE_REF] = "STORE.REF",
+    [PH7_OP_STORE_IDX_REF] = "STORE.IDX.REF",
     [PH7_OP_ADD_STORE] = "ADD.STORE",
     [PH7_OP_SUB_STORE] = "SUB.STORE",
     [PH7_OP_MUL_STORE] = "MUL.STORE",
@@ -7195,22 +7265,25 @@ static char const * aOpNames[] = {
     [PH7_OP_BAND_STORE] = "AND.B.STORE",
     [PH7_OP_BOR_STORE] = "OR.B.STORE",
     [PH7_OP_BXOR_STORE] = "XOR.B.STORE",
-    [PH7_OP_CONSUME] = "ECHO",
-    [PH7_OP_LOAD_REF] = "LOAD.&",
-    [PH7_OP_STORE_REF] = "STORE.&",
+    [PH7_OP_NULLCE] = "NULC.STORE",  /* ??= */
+
+
+    /* Method/Attribute resolver */
     [PH7_OP_MEMBER] = "MEMBER",
+
+    /* Global vars */
     [PH7_OP_UPLINK] = "UPLINK",
+
+    /* Error suppression '@', ignored by the VM for now */
     [PH7_OP_ERR_CTRL] = "ERR.CTRL",
-    [PH7_OP_IS_A] = "IS.A",
-    [PH7_OP_SWITCH] = "SWITCH",
-    [PH7_OP_LOAD_EXCEPTION] = "LOAD.EXC",
-    [PH7_OP_POP_EXCEPTION]= "POP.EXC",
+    
+    /* Throw an exception */
     [PH7_OP_THROW] = "THROW",
-    [PH7_OP_FOREACH_INIT] = "4EACH_INIT",
-    [PH7_OP_FOREACH_STEP] = "4EACH_STEP",
-    [PH7_OP_CVT_RELIABLE] = "CVT.REL",
-    [PH7_OP_CVT_UNRELIABLE] = "CVT.UNREL",
-    [PH7_OP_RELIABLE] = "MSR.RELIABLE",
+
+    /* switch(), match() and foreach() opcodes */
+    [PH7_OP_SWITCH] = "SWITCH",
+    [PH7_OP_FOREACH_INIT] = "FOREACH.INIT",
+    [PH7_OP_FOREACH_STEP] = "FOREACH.STEP",
 
 };
 

@@ -328,6 +328,7 @@ static const ph7_expr_op aOpTable[] = {
   { { "|=", sizeof(char) * 2 }, EXPR_OP_OR_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_BOR_STORE },
   { { "^=", sizeof(char) * 2 }, EXPR_OP_XOR_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_BXOR_STORE },
   { { "**=", sizeof(char) * 3 }, EXPR_OP_POW_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_POW_STORE },
+  { { "??=", sizeof(char) * 3 }, EXPR_OP_NULLCE, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_NULLCE },
   { { "<<=", sizeof(char) * 3 }, EXPR_OP_SHL_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_SHL_STORE },
   { { ">>=", sizeof(char) * 3 }, EXPR_OP_SHR_ASSIGN, 18, EXPR_OP_ASSOC_RIGHT, PH7_OP_SHR_STORE },
   /* Precedence 19,left-associative */

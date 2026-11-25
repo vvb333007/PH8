@@ -8120,9 +8120,48 @@ static sxi32 GenStateEmitExprCode(
   default:
     break;
   }
+  if (pNode->pOp->iOp == EXPR_OP_NULLCE) {
+    sxu32 nJnn;
+    nJnn = 0;
+    /* Null coalescing assignment: $a ??= expr.
+     * Combined operators have their tree reversed: pLeft is the value, pRight is the receiver.
+     * The receiver must be evaluated first (and only once), the value only when the receiver is null:
+     *   VALUE1  JNN(1, end:, 0)  VALUE2  NULLC.STORE  end:
+     * Stack: [receiver] -> JNN jumps with the receiver as the result of the whole expression,
+     *        otherwise [receiver, value] -> NULLC.STORE stores the value and leaves it as the result
+     */
+
+    /* 1. Load the receiver. Missing array entries and variables are created (as for '+=') */
+    rc = GenStateEmitExprCode(&(*pGen), pNode->pRight, iFlags | EXPR_FLAG_LOAD_IDX_STORE);
+    if (rc != SXRET_OK) {
+      return rc;
+    }
+
+    /* 2. Not null: skip the assignment, keep the value on the stack */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_JNN, 1, 0, 0, &nJnn, pGen);
+
+    /* 3. Compile the value */
+    rc = GenStateEmitExprCode(&(*pGen), pNode->pLeft, iFlags & ~EXPR_FLAG_LOAD_IDX_STORE);
+    if (rc != SXRET_OK) {
+      return rc;
+    }
+
+    /* 4. Store */
+    PH7_VmEmitInstr(pGen->pVm, PH7_OP_NULLCE, 0, 0, 0, 0, pGen);
+
+    /* 5. Resolve jump destination: the first instruction after the store */
+    pInstr = PH7_VmGetInstr(pGen->pVm, nJnn);
+    if (pInstr)
+      pInstr->iP2 = PH7_VmInstrLength(pGen->pVm);
+    else {
+      //TODO:
+    }
+    
+    return SXRET_OK;
+  }
   if (pNode->pOp->iOp == EXPR_OP_QUESTY) {
     sxu32 nJz, nJmp;
-    nJz = nJmp = 0; /* cc -O6 warning */
+    nJz = nJmp = 0; /* cc warning */
     /* Ternary operator require special handling */
     if (pNode->iFlags & EXPR_NODE_ELVIS) {
       /* Elvis operator ( EXPR ?: EXPR ): tested value is also the result when it is 'true',
@@ -8260,7 +8299,10 @@ static sxi32 GenStateEmitExprCode(
     } else if (iVmOp == PH7_OP_NULLC) {
       /* Emit the true jump so we can short-circuit the null coalesce */
       PH7_VmEmitInstr(pGen->pVm, PH7_OP_JNN, 1 /* Keep the value on the stack */, 0, 0, &nJmpIdx, pGen);
-    } else if (pNode->pOp->iPrec == 19 /* Combined binary operators [i.e: =,'.=','+=',*=' ...] precedence */) {
+      /* Left operand is null: discard it, the right operand becomes the result.
+       * Without this POP the null stays on the stack under the result (stack leak) */
+      PH7_VmEmitInstr(pGen->pVm, PH7_OP_POP, 1, 0, 0, 0, pGen);
+    } else if (pNode->pOp->iPrec == 18 /* Combined binary operators [i.e: =,'.=','+=',*=' ...] precedence */) {
       iFlags |= EXPR_FLAG_LOAD_IDX_STORE;
     }
     rc = GenStateEmitExprCode(&(*pGen), pNode->pRight, iFlags | GenStateNameHint(pNode->pRight, iRightHint));
