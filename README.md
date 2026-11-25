@@ -11,19 +11,18 @@ Compiles and runs on ESP32-family, Linux and Windows (Cygwin).
 Memory footprint: requires about 100KiB of memory for the Engine plus ~180 KiB per virtual machine;
 
 
-To play on Windows:
+### Compile and run: Windows (Cygwin) or Linux
 
   * Make sure you have Cygwin installed
   * Clone the PH8 repository
   * Go to PH8/src/examples/linux_windows_example/
-  * execute `make`. You should get `inter.exe`
+  * execute `make`. You should get `inter.exe` or `inter` (on Linux)
   * Optional: Copy `PH8/Libraries/ext` to the `inter.exe` directory - this is an extension library (Arduino API, ESP-IDF API, SQLite3 API)
   * Optional: Copy  `PH8/examples/test_files/*.php` to the `inter.exe` directory - these are examples
   * Execute `inter.exe` with a PHP file as an argument: 'inter.exe SCRIPTAME.PHP'
 
 
-
-###Partial list of what has been done so far (PH8 vs PH7):
+### Partial list of what has been done so far (PH8 vs PH7):
 
 1. Buggy function overloading mechanism is fixed; score-based resolution is added; mixed typed and untyped function arguments can be used in overloaded functions; functions can not be declared twice;
 2. Exceptions can be thrown by the engine in some cases (e.g. division by zero, unknown function/method call and so on); new Exception/Error classes; Exceptions can be thrown by builtins as well
