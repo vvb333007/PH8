@@ -13,14 +13,15 @@ INTER_OBJ := $(patsubst %.c,$(OBJDIR)/%.o,$(INTER_SRC))
 
 SQLITE3_OBJ := ../../src/sqlite3/sqlite3.o
 
-$(SQLITE3_OBJ): ../../src/sqlite3/sqlite3.c
->$(MAKE) -C ../../src/sqlite3
 
 TARGETS := inter
 
 .PHONY: all
 
 all: $(TARGETS)
+
+$(SQLITE3_OBJ): ../../src/sqlite3/sqlite3.c
+>$(MAKE) -C ../../src/sqlite3
 
 inter: $(INTER_OBJ) $(SQLITE3_OBJ)
 >$(CC) $(CFLAGS) $^ -o $@

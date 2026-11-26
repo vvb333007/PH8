@@ -1,56 +1,28 @@
-# 
-# 
-.RECIPEPREFIX := >
+CC      = gcc
+SRCDIR  = ../../src
+CFLAGS  = -O2 -Wall -I$(SRCDIR)
+LIBPH8  = $(SRCDIR)/libph8.a
+LDLIBS  = -lpthread -lm
 
-# Compiler
-#CC      := i686-w64-mingw32-gcc
-CC := gcc
+TARGET  = inter
 
-# Directories
-OBJDIR  := .
+.PHONY: all clean FORCE
 
-# Flags
-# -DFIXEDTYPELOG=1
-# -DEVEL=1
-# -DADDREFLOG=1
-# -FRAMELOG=1
+all: $(TARGET)
 
+$(TARGET): ph7_interp.o $(LIBPH8)
+	$(CC) -o $@ ph7_interp.o $(LIBPH8) $(LDLIBS)
 
-CFLAGS  :=  -MMD -MP -Wall -Wextra -O0 -g  -DDEVEL=1 -DPH7_ENABLE_SQLITE3=0 -DPH7_ENABLE_REGEX=1 -DPH7_ENABLE_THREADS=0 -DADDREFLOG=0 -DPH7_ENABLE_MATH_FUNC=1 -I../../src -I../../src/cygwin -I../../src/sqlite3 
+ph7_interp.o: ph7_interp.c
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
+# Build (or refresh) the library first; its own Makefile decides what to do.
+$(LIBPH8): FORCE
+	$(MAKE) -C $(SRCDIR)
 
-# Common sources
-COMMON_SRC := ../../src/sqlite3.c  ../../src/httpd/httpd.c ../../src/httpd/picohttpparser.c ../../src/cygwin/freertos_shim.c ../../src/api.c ../../src/builtin.c ../../src/compile.c ../../src/constant.c ../../src/hashmap.c ../../src/lex.c ../../src/lib.c ../../src/memobj.c ../../src/oo.c ../../src/parse.c ../../src/vfs.c ../../src/vm.c ../../src/regexp.c ../../src/posix_vfs.c ../../src/esp32/builtins.c 
-#COMMON_SRC := ../../src/httpd/httpd.c ../../src/httpd/picohttpparser.c ../../src/cygwin/freertos_shim.c ../../src/api.c ../../src/builtin.c ../../src/compile.c ../../src/constant.c ../../src/hashmap.c ../../src/lex.c ../../src/lib.c ../../src/memobj.c ../../src/oo.c ../../src/parse.c ../../src/vfs.c ../../src/vm.c ../../src/regexp.c ../../src/posix_vfs.c ../../src/esp32/builtins.c ../../src/esp32/constants.c  
-#COMMON_SRC := amalgam.c
-
-INTER_SRC := $(COMMON_SRC) ph7_interp.c
-INTER_OBJ := $(patsubst %.c,$(OBJDIR)/%.o,$(INTER_SRC))
-
-
-# Target executable
-TARGETS := inter
-
-.PHONY: all
-
-all: $(TARGETS)
-
-inter: $(INTER_OBJ)
->$(CC) $(CFLAGS)  $^ -lm -o $@
-
-
-$(OBJDIR)/%.o: %.c | $(OBJDIR)
->$(CC) $(CFLAGS) -c $< -o $@
-
-$(OBJDIR):
->mkdir -p $(OBJDIR)
+FORCE:
 
 clean:
->rm -f ../../src/*.[od] ../../src/esp32/*.[od] ../../src/cygwin/*.[od]  *.[od]
+	rm -f *.[od] $(TARGET) $(TARGET).exe
 
-
-
-
-
-
-
+-include ph7_interp.d
