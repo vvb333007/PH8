@@ -15,4 +15,6 @@ typedef uint32_t     TickType_t;
 
 /* The host "tick" is 1 ms. */
 #define pdMS_TO_TICKS(ms) ((TickType_t)(ms))
+
+#include "portmacro.h"   /* portMUX_TYPE, portENTER/EXIT_CRITICAL */
 #endif
