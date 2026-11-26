@@ -5,8 +5,8 @@ Text marked as ~~this~~ means that it is done.
 ## Milestones
 
 VMs can be cloned (shared code, private data), required for fork().
-Refactor memory subsystem. Now it is a malloc() for everything
 PH7_VmCallUserFunction must be optimized (no mallocs).
+`resource` type: add a refcounter to it; add a resource type descriptor; refactor existing code: make resource users to examine resource type; refcounter allows for sql connections and statements to be GC'ed instead of being kept on the list
 
 ---
 
