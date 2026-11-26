@@ -23,7 +23,7 @@
 #define HAS_PH7_RegisterExtension 1  /* PH7_RegisterExtension is provided by the code. Affects amalgamation build only (see examples/amalgamated/) */
 
 #include "ph7int.h"
-//#include "builtins.h"
+#include "freertos/FreeRTOS.h"
 
 #include <stdio.h>
 #include <stdlib.h>
