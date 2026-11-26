@@ -274,19 +274,16 @@
 typedef struct esp32_fake_timer hw_timer_t;
 typedef struct esp32_fake_uart  uart_t;
 typedef struct esp32_fake_spi   spi_t;
-/* No locking on Cygwin */
-# define ESP32_LOCK()
-# define ESP32_UNLOCK()
+
 #else
 /* ESP32 Build: */
 # if !SOC_GPTIMER_SUPPORTED || !SOC_UART_SUPPORTED || !SOC_GPSPI_SUPPORTED
 #  error "hardware timers, UART and GP-SPI are required (soc/soc_caps.h)"
 # endif
-/* Tables lock. */
-static portMUX_TYPE HandleLock = portMUX_INITIALIZER_UNLOCKED;
-# define ESP32_LOCK()    portENTER_CRITICAL(&HandleLock)
-# define ESP32_UNLOCK()  portEXIT_CRITICAL(&HandleLock)
+
 #endif
+
+
 
 #define ESP32_TIMER_MAX   (SOC_TIMER_GROUPS * SOC_TIMER_GROUP_TIMERS_PER_GROUP)
 #define ESP32_UART_MAX    (SOC_UART_NUM)
@@ -296,13 +293,15 @@ static portMUX_TYPE HandleLock = portMUX_INITIALIZER_UNLOCKED;
 #define ESP32_SPI_MAX     (SOC_SPI_PERIPH_NUM + 1)
 
 /* Generic slot operations.ht_ -> handle table */
+/* Tables lock. */
+static portMUX_TYPE HandleLock = portMUX_INITIALIZER_UNLOCKED;
 
 /* Reserve a free slot, return its index or -1 if there are no free slots
  * Slot Number is choosen automatically
  */
 static int ht_reserve(void **apTable, int nCount) {
   int i, iFound = -1;
-  ESP32_LOCK();
+  portENTER_CRITICAL(&HandleLock);
   for (i = 0; i < nCount; i++) {
     if (apTable[i] == NULL) {
       apTable[i] = HT_PENDING;
@@ -310,7 +309,7 @@ static int ht_reserve(void **apTable, int nCount) {
       break;
     }
   }
-  ESP32_UNLOCK();
+  portEXIT_CRITICAL(&HandleLock);
   return iFound;
 }
 
@@ -328,7 +327,7 @@ static int ht_open(void **apTable, int nCount, int iIdx, void **ppPrev) {
 
   if (iIdx >= 0 && iIdx < nCount) {
 
-    ESP32_LOCK();
+    portENTER_CRITICAL(&HandleLock);
     if (apTable[iIdx] != HT_PENDING) {
 
       *ppPrev = apTable[iIdx];
@@ -336,7 +335,7 @@ static int ht_open(void **apTable, int nCount, int iIdx, void **ppPrev) {
       bOk = 1;
 
     }
-    ESP32_UNLOCK();
+    portEXIT_CRITICAL(&HandleLock);
   }
   return bOk;
 }
@@ -349,9 +348,9 @@ static void *ht_get(void **apTable, int nCount, int iIdx) {
 
   if (iIdx >= 0 && iIdx < nCount) {
 
-    ESP32_LOCK();
+    portENTER_CRITICAL(&HandleLock);
     pHandle = apTable[iIdx];
-    ESP32_UNLOCK();
+    portEXIT_CRITICAL(&HandleLock);
 
     if (pHandle == HT_PENDING)
       pHandle = NULL;
@@ -365,22 +364,22 @@ static void *ht_get(void **apTable, int nCount, int iIdx) {
 static void *ht_get_for_close(void **apTable, int nCount, int iIdx) {
   void *pHandle = NULL;
   if (iIdx >= 0 && iIdx < nCount) {
-    ESP32_LOCK();
+    portENTER_CRITICAL(&HandleLock);
     pHandle = apTable[iIdx];
     if (pHandle != NULL && pHandle != HT_PENDING)
       apTable[iIdx] = HT_PENDING;
     else
       pHandle = NULL;
-    ESP32_UNLOCK();
+    portEXIT_CRITICAL(&HandleLock);
   }
   return pHandle;
 }
 
 /* Store the handle into a reserved/opened/taken slot. NULL frees the slot */
 static void ht_commit(void **apTable, int iIdx, void *pHandle) {
-  ESP32_LOCK();
+  portENTER_CRITICAL(&HandleLock);
   apTable[iIdx] = pHandle;
-  ESP32_UNLOCK();
+  portEXIT_CRITICAL(&HandleLock);
 }
 
 /* The tables */
