@@ -17,6 +17,9 @@
  *   and wakes up one of N remaining tasks ( "workers"). Workers handle the connection: send static files or execute PHP scripts
  *   All tasks  are created once and never deleted (no task create/delete per connection).
  *
+ * IMPORTANT: there are one more reason to keep tasks running:
+ * https://github.com/espressif/esp-idf/issues/19480 until Espressif fixes that
+ *
  *   Transport is behind ph8_conn (and corresponding methods ->read/->write/->close). This abstraction added in order to
  *   add SSL support. Rigght now only "plain" HTTP connections are supported (no HTTPS yet). Functions that handle plain connections
  *   all have _plain in their name (e.g. conn_init_plain() )
